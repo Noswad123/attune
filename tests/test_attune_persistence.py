@@ -306,7 +306,7 @@ class TestValidation:
         def bug(*args):
             raise RecursionError("programming bug")
 
-        monkeypatch.setattr(persistence, "_document", bug)
+        monkeypatch.setattr(persistence, "build_document", bug)
         with pytest.raises(RecursionError, match="programming bug"):
             persistence.read_document(text)
 
