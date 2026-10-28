@@ -1,250 +1,372 @@
-# HyprMod
+# Attune
 
-A native GTK4/libadwaita settings app for [Hyprland](https://hyprland.org) — tweak any option, see it change live, save when you're happy.
+## Overview
 
-[![CI](https://github.com/BlueManCZ/hyprmod/actions/workflows/ci.yml/badge.svg)](https://github.com/BlueManCZ/hyprmod/actions/workflows/ci.yml)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![AUR](https://img.shields.io/aur/version/hyprmod?label=AUR)](https://aur.archlinux.org/packages/hyprmod)
+Attune is a personal, focused GTK4/libadwaita appearance editor for
+[Hyprland](https://hyprland.org), forked from
+[BlueManCZ/hyprmod](https://github.com/BlueManCZ/hyprmod) at `b475087`.
+It previews supported changes through compositor IPC and writes compositor
+configuration only after review.
+The internal Python namespace remains `hyprmod` intentionally; the public launch
+command is `attune`.
 
-<p>
-  <img src="data/screenshots/monitors.png" width="49%" alt="Monitor configuration page with a multi-monitor layout preview">
-  <img src="data/screenshots/curves.png" width="49%" alt="Bezier curve editor with control points and live animation preview">
-</p>
+This fork retains the upstream attribution, including Copyright (C) 2026
+Ivo Šmerek, and the **GPL-3.0-or-later** license. See [LICENSE](LICENSE).
+Historical upstream releases remain in [CHANGELOG.md](CHANGELOG.md).
 
-## 🎬 Wall of Video Fame
+### Current scope
 
-Huge thanks to the creators below — without you, HyprMod would reach far fewer people. ❤️
+- General visual options: inner/outer gaps, border size, active/inactive border colors.
+- Decoration, animations, and bezier curves.
+- Monitor configuration with live preview confirmation.
+- Pending Changes with an exact output diff and a separate reviewed-save action.
+- Read-only output and integration information in Settings.
+- Read-only Health with compositor/errors/displays, managed-output ownership,
+  validator discovery, backup-candidate availability, and scalar saved/runtime drift.
+- Previewable redacted diagnostics copying and explicit output/folder opening.
+- Backups browser with read-only hash/canonical inspection and comparison, plus
+  separately reviewed disk-only restoration of existing owned output.
+- Explicit preservation-first recovery for foreign/invalid text, using a separate
+  acknowledgment and verified private evidence before replacement.
 
-<a href="https://youtu.be/PF3qgfR0XP0" target="_blank">
-  <img src="https://img.youtube.com/vi/PF3qgfR0XP0/maxresdefault.jpg" alt="Finally a Settings App for Hyprland — by saneAspect" width="24%">
-</a>
-<a href="https://youtu.be/tvjYWT2LOMk" target="_blank">
-  <img src="https://img.youtube.com/vi/tvjYWT2LOMk/maxresdefault.jpg" alt="New GUI Settings For Hyprland!! Game Changer! | HyprMod — by TheBlackDon" width="24%">
-</a>
-<a href="https://youtu.be/61M_uI4kTo0" target="_blank">
-  <img src="https://img.youtube.com/vi/61M_uI4kTo0/maxresdefault.jpg" alt="Hyprmod: The Game-Changing Settings Tool Every Hyprland Beginner Needs — by Mattscreative" width="24%">
-</a>
-<a href="https://youtu.be/8CzY9Qihip8" target="_blank">
-  <img src="https://img.youtube.com/vi/8CzY9Qihip8/maxresdefault.jpg" alt="FIZERAM uma CENTRAL DE CONFIG PRO HYPRLAND (e tá insano de bom kkk) — by Raell Tech" width="24%">
-</a>
+Bindings, workspaces, layouts, rules, autostart, environment, plugins, and other
+hand-authored behavior stay outside the GUI. There are no profiles or profile CLI,
+automatic saves, startup reloads, main Lua parsing, configuration migrations, or
+automatic include insertion in the focused application. Launching does not silently
+register a desktop entry.
 
-## ⚡ Highlights
+**First milestone: one `attune.lua` containing both monitor and appearance overrides.**
+A shared-appearance/machine-specific-monitor split is future work, not delivered.
+Its accepted design is recorded in
+[ADR 0001](docs/decisions/0001-shared-local-ownership.md); the proposed two-file
+layout, installation registry, and transaction journal are not available yet.
 
-- **Live preview** — changes apply instantly to your running compositor
-- **Your config stays untouched** — HyprMod writes only to its own `hyprland-gui.conf`
-- **Undo with Ctrl+Z** — step back one change at a time
-- **Profiles** — save, name, and share complete configurations as `.conf` files
+### Roadmap
 
-## ✨ Features
+See [ROADMAP.md](ROADMAP.md) for the phased backlog and acceptance criteria:
+validate the foundation, add diagnostics and recovery, separate shared/local
+settings, then introduce constrained presets, Wisp entry points, and a CARAMEL
+appearance overview. M1 diagnostics and M2 disk inspection/restoration/recovery
+are implemented. Shared/local ownership design is recorded; scoped models and
+format validation are next, without activating split writes. Explicit live
+application and routing rollout remain gated by manual acceptance.
+Unchecked roadmap items are not yet available features.
 
-- **Lua config support** — migrate and edit `hyprland.lua` directly (Hyprland 0.55+)
-- Bezier curve editor with live animation preview
-- Monitor layout editor with VRR, 10-bit detection, and advanced HDR controls with safe defaults
-- Keybind editor with interactive key capture, including mouse-drag (`bindm`) binds
-- Window rules, layer rules, and workspace rules editors with live preview
-- Autostart (`exec` / `exec-once`) and environment variable management
-- Pending Changes page — review every unsaved edit before saving
-- Cursor theme picker with live preview
-- Config DNA — a unique visual fingerprint per profile
-- Global search across all options (Ctrl+F)
+## API / Interfaces
 
-## ⌨️ Command line
+### Local source setup and launch
 
-Switch profiles without opening the window. Handy to bind to a Hyprland keybind or call from a script.
+Use this checkout, not the upstream curl installer or an upstream `hyprmod` package.
+`install.sh` is deliberately disabled: every invocation prints guidance and exits
+nonzero without installing, uninstalling, downloading, or registering anything.
 
-```bash
-hyprmod profile list            # show saved profiles (active marked with *)
-hyprmod profile apply Gaming    # switch to a profile by name (case-insensitive)
-hyprmod profile next            # cycle to the next profile (alphabetical, wraps around)
-hyprmod profile previous        # cycle to the previous one (alias: prev)
-```
+Requirements: Python 3.12+, `uv`, GTK4, libadwaita, Cairo, GObject introspection
+development support, and Lua (`luac` or `lua` on PATH for save validation).
+PyGObject and pycairo are resolved by the project environment but need native
+libraries to build and run. On CachyOS/Arch, relevant native packages include
+`gtk4`, `libadwaita`, `cairo`, `gobject-introspection`, and `lua`.
+A running compatible Hyprland Lua session is needed for full live preview and
+persistent integration; offline operation cannot verify compositor behavior.
 
-## 📦 Installation
-
-> HyprMod is in active development and not yet packaged for most distributions.
-
-Requires Python 3.12+, GTK4, and libadwaita.
-
-The one-line installer works on any distribution.
-
-```bash
-curl -LsSf https://raw.githubusercontent.com/BlueManCZ/hyprmod/main/install.sh | sh
-```
-
-To uninstall:
+From the checkout on this CachyOS machine:
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/BlueManCZ/hyprmod/main/install.sh | sh -s -- --uninstall
+cd /home/jdawson/Projects/attune
+uv sync --python /usr/bin/python3
+uv run attune
 ```
 
-### 📦 pkgit
-
-If you use [`pkgit`](https://git.symlinx.net/pkgit/about/), you can install `hyprmod` directly with:
+The project environment has already been created locally. To launch it without
+uv on PATH:
 
 ```bash
-pkgit -i https://github.com/BlueManCZ/hyprmod
+~/Projects/attune/.venv/bin/attune
 ```
 
-### Distribution packages
-
-**Arch Linux** — [`hyprmod`](https://aur.archlinux.org/packages/hyprmod) on the AUR:
+To copy that development launcher into `~/.local/bin`:
 
 ```bash
-yay -S hyprmod
+make install
+attune
 ```
 
-**Gentoo** — via the [`edgets`](https://github.com/BlueManCZ/edgets) overlay:
+`make` and `make install-dev` do the same installation. This copies the console
+entrypoint, not a standalone application: keep this checkout and its `.venv` in
+place. Python source edits remain visible through the editable environment.
+Installation does not register a desktop entry or change Hyprland configuration.
+Override the destination with `make install BINDIR=/path/to/bin` if needed.
+
+If the environment has not been prepared, run `make build` first. This uses
+`uv sync --locked --python /usr/bin/python3`; `UV`, `PYTHON`, and `VENV` are
+overridable. With the temporary uv executable available here:
 
 ```bash
-emerge -a hyprmod
+make build UV=/tmp/opencode/uv/uv
+make install
 ```
 
-**NixOS / home-manager** — via the flake:
+Use the system interpreter through a uv-managed project environment, not a system
+`pip` installation. The `uv` currently available for this machine's setup is
+temporary at `/tmp/opencode/uv/uv`, not a permanent installation. If `uv` is not on
+PATH, substitute that absolute path in both commands while it exists. Arrange a
+permanent uv installation separately if desired; this project does not bootstrap it.
 
-Add the input to your `flake.nix`:
+Normal launch does not register a launcher. The entrypoint retains explicit
+`--install` / `--uninstall` desktop-integration actions for deliberate use, but
+they are not part of this local-source workflow. There is no profile command.
 
-```nix
-inputs = {
-  nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
+### Read-only Health
 
-  hyprmod = {
-    url = "github:BlueManCZ/hyprmod";
-    inputs.nixpkgs.follows = "nixpkgs-unstable";
-  };
-};
-```
+Select **Health** in the sidebar. The first visit collects observations; **Refresh**
+requests another snapshot. There is no background polling or automatic repair.
+Each check shows its own status and details, with the observation time above.
+If a refresh fails, an earlier snapshot remains visible and is labeled stale.
 
-Then add the package to `home.packages` or `environment.systemPackages`:
+The collector queries `hyprctl -j version`, `configerrors`, `monitors`, and
+allowlisted `getoption KEY` requests for saved scalar drift. It inspects the
+dedicated Attune output, locates a Lua validator without running it,
+and counts candidate backup files. It does not execute Lua, create configuration
+or state directories, reload Hyprland, or apply settings. File presence does not
+prove runtime loading; backup candidates are not verified as restorable.
 
-```nix
-# home-manager module
-{ inputs, pkgs, ... }: {
-  home.packages = [
-    inputs.hyprmod.packages.${pkgs.stdenv.hostPlatform.system}.default
-  ];
-}
+Refresh runs outside the GTK thread in a supervised child process. Queries have
+two-second deadlines and bounded output; the whole collector has a ten-second
+deadline. Closing its window requests cancellation without waiting on the UI
+thread. Responses may be explicitly truncated to keep the view bounded.
 
-# NixOS module
-{ inputs, pkgs, ... }: {
-  environment.systemPackages = [
-    inputs.hyprmod.packages.${pkgs.stdenv.hostPlatform.system}.default
-  ];
-}
-```
+If a foreign or invalid managed file prevents editor startup, choose **Open Health**
+from the recovery screen. **Back** returns to **Try Again** without weakening the
+foreign-file overwrite guard. Copy/export, saved/runtime drift comparison, and
+output-opening actions are available in both views:
 
-Make sure `inputs` reaches your module via `specialArgs` (NixOS) or
-`extraSpecialArgs` (home-manager).
+- **Preview Report** shows a frozen, redacted summary. **Copy Report** copies exactly
+  that preview; Cancel copies nothing. Raw errors, paths, configuration, display
+  identities, and drift values are omitted. Inspect before sharing: the remaining
+  software versions/counts/timestamps are not guaranteed to be anonymous. Export is
+  clipboard-only; no report file is created. A retained stale observation is labeled.
+- **Saved / Runtime Drift** compares supported scalar values from canonical owned
+  output, normalizing numbers, booleans, gap shorthand, vectors, and gradients.
+  There is a shared two-second/32-query budget; unsupported or unobserved entries
+  are explicitly unknown. It does not compare monitor/animation definitions or
+  Beziers, infer authored fallbacks, establish that output is loaded, or repair
+  differences. Last-save metadata is not recorded and is not inferred from mtime.
+- **Open Output** uses the configured `text/plain` application, not the Lua MIME
+  association. **Open Folder** uses the directory handler. Both use asynchronous
+  native URI dispatch after checking the target type. Missing files/folders or
+  applications produce an error without creating anything. Your default editor
+  and file manager are part of the local OS trust boundary.
 
-<details>
-<summary>Overlay usage (makes <code>pkgs.hyprmod</code> available everywhere)</summary>
+### Backups and reviewed disk restoration
 
-```nix
-# Once, where you configure nixpkgs:
-{ inputs, ... }: {
-  nixpkgs.overlays = [ inputs.hyprmod.overlays.default ];
-}
+Select **Backups** in the sidebar, or the **Backups** button on the startup recovery
+screen. The first visit loads the configured backup directory; **Refresh** requests
+another observation. Missing directories remain missing and show an empty result.
+Backups appear only after prior nonempty output has been backed up by a save.
 
-# Then anywhere pkgs is in scope:
-{ pkgs, ... }: {
-  home.packages = [ pkgs.hyprmod ];
-}
-```
+Rows show full hash identities, canonical counts, byte sizes, and filesystem
+modification times. Ordering is lexical by hash, not save history, and modification
+time is not a last-save timestamp. **Valid** means the bytes match the filename's
+SHA-256 and Attune's canonical format; it is not proof of Lua syntax, compositor
+acceptance, or safe restoration. Invalid/unavailable rows explain their condition
+and cannot be selected for comparison.
 
-</details>
+Choose **Compare** on a valid row to view **BACKUP -> CURRENT**. Selection re-reads
+and verifies the backup rather than trusting the earlier row. Readable foreign or
+invalid current output is labeled and compared as raw UTF-8 without executing it
+or making it writable. A missing current file in an accessible parent compares
+against empty content; inaccessible, dangling, binary, or nonregular targets show
+an error. Differences are local inspection, not a restore proposal or live state.
 
-<details>
-<summary>Minimal full flake example</summary>
+Inspection and diff computation run in supervised child processes with ten-second
+deadlines and cancellation on closure. Listing examines at most 1,000 directory
+entries, 64 hash-named candidates, and 16 MiB of file data, with 1 MiB per file.
+Comparison admits 256 KiB/10,000 lines per side. Rendered diffs are capped at
+256 KiB/4,000 lines and 4,096 bytes per row. Omissions, oversized inputs, and
+truncated results are explicitly labeled; line counts cover admitted full inputs.
+These limits can prevent showing the full diff of a long canonical data-record line.
 
-```nix
-{
-  inputs = {
-    nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
-    home-manager = {
-      url = "github:nix-community/home-manager";
-      inputs.nixpkgs.follows = "nixpkgs-unstable";
-    };
-    hyprmod = {
-    url = "github:BlueManCZ/hyprmod";
+Only one list/compare/preparation operation runs per page. Refresh clears the prior diff;
+failed refresh retains stale rows with comparison disabled. No polling, restoration,
+deletion, export, Lua validation/execution, compositor commands, or configuration
+changes occur through the inspection-only Compare action.
 
-      inputs.nixpkgs.follows = "nixpkgs-unstable";
-    };
-  };
+**Review Restoration** is a separate action on valid rows:
 
-  outputs = { self, nixpkgs-unstable, home-manager, hyprmod, ... }: {
-    nixosConfigurations.mymachine = nixpkgs-unstable.lib.nixosSystem {
-      system = "x86_64-linux";
-      modules = [
-        { nixpkgs.overlays = [ hyprmod.overlays.default ]; }
-        home-manager.nixosModules.home-manager
-        {
-          home-manager.users.alice = { pkgs, ... }: {
-            home.packages = [ pkgs.hyprmod ];
-          };
-        }
-        ./configuration.nix
-      ];
-    };
-  };
-}
-```
+1. Finish or discard pending editor changes and resolve any monitor preview.
+2. Choose Review Restoration. Read-only preparation validates both the backup and
+   current output, compile-checks Lua without executing it, and binds exact bytes,
+   hashes, source root, and lexical/resolved destination into an immutable draft.
+3. Inspect the complete **CURRENT -> BACKUP** diff. This is the reverse direction
+   from inspection. Cancel writes nothing. Oversized restoration reviews are
+   refused rather than truncated.
+4. Only **Restore Reviewed Output** enters the protected writer. It rechecks the
+   draft, source, current bytes, and destination; backs up the previous output;
+   and atomically replaces the resolved file while preserving Stow links.
+5. After success, note the rollback backup path and restart Attune before editing.
+   The old cached editor is disabled, not silently marked saved. Health, Backups,
+   and Settings remain available. An uncertain write outcome also locks the editor
+   and requires inspection/restart. An unchanged result writes nothing.
 
-</details>
+Restoration currently requires existing, nonempty canonical owned output. It
+refuses foreign, missing, empty, invalid, and unsafe targets. Every attempt consumes
+the draft; changed files/paths or errors require a fresh review. No restore CLI or
+general foreign-file overwrite exception is exposed. The explicit recovery path
+below is separate from ordinary saves and restoration.
 
-<details>
-<summary>Build or run from a local checkout</summary>
+**Disk-only does not guarantee unchanged live state:** Attune sends no reload or
+live-apply commands, but Hyprland may auto-reload a watched file after replacement.
+Explicit live preview/application remains separate roadmap work.
 
-```bash
-git clone https://github.com/BlueManCZ/hyprmod.git
-cd hyprmod
+Preparation is supervised with a 30-second deadline. Each side is limited to
+256 KiB/10,000 lines; the complete review to 256 KiB/4,000 lines. Commit runs on a
+non-daemon worker, never a timeout-killed process. Lock acquisition has a five-second
+limit and each compile check a ten-second limit; these are not a hard total bound
+for arbitrary filesystem I/O. Closure is held until the commit outcome, without
+joining on GTK. Failures before replacement may still leave a lock or rollback
+file; they are not described as transactional cleanup of all side effects.
 
-nix build .#hyprmod        # build
-nix run   .#hyprmod        # run without installing
-nix shell .#hyprmod        # shell with hyprmod on PATH
-```
+### Preservation-first text recovery
 
-</details>
+When current `attune.lua` is foreign or has invalid Attune data, **Review Recovery**
+is distinct from Compare and Review Restoration. It is available on valid backup
+rows, including in startup recovery. Owned output must use ordinary restoration;
+recovery does not silently run after another action fails.
 
-For the step-by-step release update procedure and hash regeneration reference, see [NIX.md](NIX.md).
+1. Choose Review Recovery. Read-only preparation verifies the selected canonical
+   backup and captures the exact current text without executing or compiling it.
+2. Inspect the complete **CURRENT -> RECOVERY BACKUP** review, including source and
+   current hashes, resolved destination, original status, and preservation path.
+3. Acknowledge replacement and possible watched-file auto-reload. Only then can
+   **Preserve and Recover Reviewed Output** start the protected writer.
+4. Before replacement, Attune exclusively creates or verifies the exact original
+   bytes under `$XDG_STATE_HOME/attune/preserved/<sha256>.bin`, with private owned
+   `0700` directories and a `0600` file. It verifies bytes/hash and synchronizes
+   the evidence file and directory. Unsafe permissions or preservation failure
+   prevent output replacement; existing user permissions are not silently changed.
+5. Success reports the preserved-original path. Keep it for manual inspection;
+   it is not a canonical backup or a promise of safe executable rollback. Restart
+   Attune before editing. Uncertain outcomes also invalidate the cached editor.
 
-<details>
-<summary>Drive the install yourself</summary>
+Recovery shares restoration's dirty/monitor gates, one-use review, source/path
+rechecks, direct non-daemon writer, and close protection. Cancel before commit
+writes nothing. Failures may leave private evidence or state files even where no
+output replacement occurred. Ordinary saves still reject foreign/invalid content.
 
-```bash
-# with uv
-uv tool install git+https://github.com/BlueManCZ/hyprmod.git
-hyprmod --install     # places .desktop + icon under ~/.local/share
+This version only supports existing nonempty UTF-8 text within 256 KiB/10,000 lines,
+with a complete review fitting 256 KiB/4,000 lines. Binary/control content, missing,
+empty, oversized, unsafe, or main-config-alias targets fail closed. Only the
+canonical candidate is compile-checked; the original is preserved as raw evidence.
+No live-apply/reload commands or general recovery CLI are added. Hyprland's own
+watcher may nevertheless auto-reload the replacement.
 
-# or with pipx
-pipx install git+https://github.com/BlueManCZ/hyprmod.git
-hyprmod --install
-```
+### Output contract
 
-To remove: `hyprmod --uninstall`, then `uv tool uninstall hyprmod` or `pipx uninstall hyprmod`. `hyprmod --install` is idempotent and runs automatically on first launch if no desktop entry is visible yet.
-</details>
+The GUI's fixed default output is `$XDG_CONFIG_HOME/hypr/attune.lua`, falling back
+to `~/.config/hypr/attune.lua`. Settings does not offer path editing.
 
-Running from a checkout? See [CONTRIBUTING.md](CONTRIBUTING.md).
+- Only a dedicated `attune.lua` is writable; the resolved destination must also
+  be named `attune.lua`, never the main configuration.
+- Empty provisioned files are supported. Nonempty files must have Attune's
+  canonical `-- Generated by Attune` header, base64 JSON data record, and exact
+  generated Lua body. Reading reconstructs the data without executing Lua.
+- Manual changes to the generated file, including added comments, are refused.
+  Keep hand-authored Lua elsewhere; do not add it to this file.
+- Existing file and parent-directory symlinks are preserved by writing the
+  resolved destination. Dangling/cyclic links, hardlinked targets, and non-regular
+  files are refused. The parent directory must already exist.
+- Previous nonempty canonical content is backed up under
+  `$XDG_STATE_HOME/attune/backups` (default `~/.local/state/attune/backups`) as
+  `<sha256-of-previous-bytes>.lua`. Backups must stay outside Git working trees;
+  a new or empty file has no previous-content backup.
 
-## 🗺️ Roadmap
+## Data Flow
 
-**Next**
-- Automatic backups on save, with a history browser
-- Translations (gettext)
+1. Startup reads Attune's managed data and samples supported live options. It does
+   not parse the hand-authored main Lua configuration or reload the compositor.
+2. Interactive edits can immediately change compositor state via IPC, without
+   writing any config file. Undo/discard operate on captured session baselines.
+3. **Ctrl+S opens Pending Changes**, not a disk write. Review the exact diff,
+   including previously managed values that will be emitted.
+4. Choose **Save Reviewed Changes**. The save rechecks the draft, saved bytes,
+   and resolved destination, validates ownership and Lua syntax, backs up previous
+   nonempty content, and atomically replaces the resolved file.
+5. Only a successful write updates UI save baselines. Persistent loading remains
+   an explicit configuration decision described below.
 
-**Later**
-- Pages for the hypr* ecosystem — hyprpaper, hypridle, hyprlock
-- Plugin manager (`hyprpm`)
+## Edge Cases
 
-**Out of scope** — Wi-Fi, Bluetooth, printing, default apps, and GTK theming belong in a desktop control center, not a Hyprland settings app. See [#15](https://github.com/BlueManCZ/hyprmod/issues/15) for the reasoning.
+- **Live preview is not persistence.** Unsaved edits can still alter the desktop.
+  Saving does not itself force a compositor reload; do not equate the saved file
+  with the current runtime state.
+- **Removing an override:** the preview uses the schema default, not your
+  hand-authored fallback for scalar options. Animation and monitor removals leave
+  the current live state alone. After saving the removal, explicitly reload your own
+  Hyprland configuration to restore the authored baseline. Reloading can also
+  discard other unsaved IPC changes and run reload-time configuration behavior.
+- Keep or revert a pending monitor preview before leaving the monitor page or
+  saving. Closure, including SIGINT/SIGTERM, is held until that preview is resolved
+  so its rollback timer can finish. Accepting a preview is not a disk save.
+- **Save Preset** writes the curve library under `$XDG_CONFIG_HOME/attune`
+  immediately. Applying those points to compositor configuration is a separate
+  pending change requiring review. Undo/discard restores the compositor draft,
+  not the separately saved preset library.
+- A changed draft, disk file, or resolved symlink destination invalidates the
+  review. Review again rather than expecting a stale snapshot to save.
+- Lua validation is **compile-only** (`luac -p`, or `lua -E` with `load`). It does
+  not execute the generated chunk and is not full Hyprland semantic validation.
+  A missing validator, syntax failure, or backup failure prevents replacement.
+- Advisory locking and destination/content rechecks reduce accidental stale
+  writes; they do not guarantee safety against hostile filesystem races.
+- If ownership checks reject a file, preserve it and inspect it outside Attune.
+  Do not strip the checks or paste hand-authored Lua into a generated file.
 
-## 🤝 Contributing
+## Example usage
 
-PRs are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, the checks CI runs, and scope notes. For larger changes, please open an issue first so we can discuss the approach.
+### First reviewed save, then manual integration
 
-<a href="https://www.star-history.com/?repos=BlueManCZ%2Fhyprmod&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=BlueManCZ/hyprmod&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=BlueManCZ/hyprmod&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=BlueManCZ/hyprmod&type=date&legend=top-left" />
- </picture>
-</a>
+1. Launch from the checkout, adjust a supported visual option, press Ctrl+S,
+   inspect the diff, and select **Save Reviewed Changes**.
+2. Only after the file exists, explicitly add the following to your own Hyprland
+   Lua entrypoint, at the end or after the appearance/monitor defaults it should
+   override:
+
+   ```lua
+   require("attune")
+   ```
+
+   This example assumes the Hyprland config directory is on the Lua module path
+   and resolves `attune` to the dedicated file. Match your configuration's module
+   path and auto-reload setup; do not assume `require` will find an arbitrary
+   symlink target. The UI guidance also permits `dofile` with the absolute path
+   to the managed file when that better matches your configuration.
+3. Deliberately reload and check Hyprland's behavior/errors. Ensure future saves
+   are loaded by your chosen reload setup; atomic writes and module loading are
+   not a promise of automatic reload.
+
+These are instructions only. No entrypoint/include edits or live UI verification
+against the desktop were performed. Isolated GTK smoke tests cover startup, page
+navigation, edit/review/save/reopen, and foreign-file recovery with compositor
+IPC disabled. Live monitor/HDR and animation preview still need manual acceptance.
+
+### Optional dotfiles / Stow ownership
+
+You may explicitly provision a dedicated source file named `attune.lua` in your
+dotfiles and use Stow to expose it at the default config path. An empty source
+file is supported for the first save. Provision the source before creating the
+link: dangling targets are refused. Review/save will update the resolved source
+file while preserving the symlink, so inspect that dotfiles change yourself.
+Keep state backups outside the repository. Stow setup and adding the Lua load
+line are separate user opt-ins, never automatic Attune setup steps.
+
+## Related files
+
+- [ADR 0001](docs/decisions/0001-shared-local-ownership.md): selected future ownership,
+  loader, transaction, and migration design; not current behavior.
+- [ROADMAP.md](ROADMAP.md): priorities, milestones, and acceptance criteria.
+- [CONTRIBUTING.md](CONTRIBUTING.md): development commands and verification policy.
+- [docs/architecture.md](docs/architecture.md): current interfaces and persistence boundary.
+- [docs/validation.md](docs/validation.md): verification evidence and outstanding live acceptance.
+- `hyprmod/core/focused_ui.py`: supported pages/options and review snapshot type.
+- `hyprmod/core/persistence.py`: canonical reader, validation, backups, atomic save.
+- `hyprmod/window.py`, `hyprmod/pages/pending.py`: review and save orchestration.
+- `hyprmod/main.py`: public entrypoint; internal module names are retained.

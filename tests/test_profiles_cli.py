@@ -165,17 +165,10 @@ def test_unknown_command_exits_with_error(argv, capsys):
     assert "invalid choice" in capsys.readouterr().err
 
 
-def test_main_routes_positional_to_cli(monkeypatch):
-    """A mistyped command reaches the CLI parser, not the GTK app."""
+def test_main_rejects_dormant_profile_cli(monkeypatch, capsys):
+    """Attune never exposes the retained upstream profile write path."""
     from hyprmod import main as main_module
 
-    seen = {}
-
-    def fake_run(argv):
-        seen["argv"] = argv
-        return 0
-
-    monkeypatch.setattr(main_module.cli, "run", fake_run)
-    monkeypatch.setattr("sys.argv", ["hyprmod", "profilee", "prev"])
-    assert main_module.main() == 0
-    assert seen["argv"] == ["profilee", "prev"]
+    monkeypatch.setattr("sys.argv", ["attune", "profile", "prev"])
+    assert main_module.main() == 2
+    assert "no profile CLI" in capsys.readouterr().err

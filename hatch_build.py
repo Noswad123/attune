@@ -4,7 +4,7 @@ Two jobs: compile the GSettings schema, and mirror repo-root data files
 (``.desktop`` entry, AppStream metainfo) into ``hyprmod/data/`` so they
 ship inside the wheel. The repo-root ``data/`` tree stays canonical for
 distro packagers; the build hook just makes the same files available to
-``hyprmod --install`` for pipx/uv users.
+``attune --install`` for pipx/uv users.
 """
 
 import subprocess

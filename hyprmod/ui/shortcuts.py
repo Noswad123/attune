@@ -26,7 +26,7 @@ SHORTCUTS_UI = """<?xml version="1.0" encoding="UTF-8"?>
             <child>
               <object class="GtkShortcutsShortcut">
                 <property name="accelerator">&lt;Control&gt;s</property>
-                <property name="title" translatable="yes">Save changes</property>
+                <property name="title" translatable="yes">Review pending changes</property>
               </object>
             </child>
             <child>

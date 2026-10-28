@@ -1,58 +1,37 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>io.github.bluemancz.hyprmod</id>
-  <launchable type="desktop-id">io.github.bluemancz.hyprmod.desktop</launchable>
+  <id>io.github.jdawson.Attune</id>
+  <launchable type="desktop-id">io.github.jdawson.Attune.desktop</launchable>
 
-  <name>HyprMod</name>
+  <name>Attune</name>
   <summary>Native settings app for Hyprland</summary>
 
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
 
-  <developer id="io.github.bluemancz">
-    <name>Ivo Šmerek</name>
+  <developer id="io.github.jdawson">
+    <name>jdawson</name>
   </developer>
-
-  <update_contact>ivo97_AT_centrum.cz</update_contact>
 
   <description>
     <p>
-      HyprMod is a native GTK4/libadwaita settings app for Hyprland.
-      Every change applies instantly to the running compositor, and
-      your hand-crafted config stays untouched — HyprMod writes only
-      to its own managed config file.
+      Attune is a native GTK4/libadwaita settings app for Hyprland,
+      forked from HyprMod by Ivo Šmerek.
+      Preview appearance, display, and motion changes through compositor IPC,
+      then review an exact diff before saving dedicated Lua overrides.
+      Hand-authored bindings, startup behavior, and rules stay outside the editor.
     </p>
     <p>Features:</p>
     <ul>
-      <li>Live preview — changes apply instantly, no reload needed</li>
+      <li>Live preview of supported visual settings</li>
       <li>Monitor configuration with layout preview; VRR, HDR, and 10-bit detection</li>
       <li>Bezier curve editor with draggable control points and live animation preview</li>
-      <li>Keybind editor with interactive key capture, including mouse-drag binds</li>
-      <li>Window rules and layer rules editors with live preview</li>
-      <li>Autostart and environment variable management</li>
-      <li>Pending Changes page — review every unsaved edit before saving</li>
-      <li>Cursor theme picker with live previews</li>
-      <li>Profiles — save, name, and switch between complete configurations</li>
-      <li>Config DNA — every profile gets a unique visual fingerprint</li>
-      <li>Global search across all options (Ctrl+F)</li>
+      <li>Pending Changes with an explicit reviewed-save action</li>
+      <li>Dotfiles-safe saves with symlink preservation and previous-output backups</li>
+      <li>Search supported visual options with Ctrl+F</li>
       <li>Undo with Ctrl+Z</li>
     </ul>
   </description>
-
-  <url type="homepage">https://github.com/BlueManCZ/hyprmod</url>
-  <url type="bugtracker">https://github.com/BlueManCZ/hyprmod/issues</url>
-  <url type="vcs-browser">https://github.com/BlueManCZ/hyprmod</url>
-
-  <screenshots>
-    <screenshot type="default">
-      <image>https://raw.githubusercontent.com/BlueManCZ/hyprmod/main/data/screenshots/monitors.png</image>
-      <caption>Monitor configuration with multi-monitor layout preview</caption>
-    </screenshot>
-    <screenshot>
-      <image>https://raw.githubusercontent.com/BlueManCZ/hyprmod/main/data/screenshots/curves.png</image>
-      <caption>Bezier curve editor with live animation preview</caption>
-    </screenshot>
-  </screenshots>
 
   <categories>
     <category>Settings</category>
@@ -66,9 +45,10 @@
     <keyword>wayland</keyword>
     <keyword>configuration</keyword>
     <keyword>monitors</keyword>
-    <keyword>keybinds</keyword>
+    <keyword>appearance</keyword>
   </keywords>
 
+  <!-- Release history inherited from upstream HyprMod. -->
   <releases>
     <release version="0.5.0" date="2026-10-07">
       <description>
@@ -138,7 +118,7 @@
   </releases>
 
   <provides>
-    <binary>hyprmod</binary>
+    <binary>attune</binary>
   </provides>
 
   <content_rating type="oars-1.1" />

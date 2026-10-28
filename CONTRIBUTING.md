@@ -1,31 +1,43 @@
-# Contributing to HyprMod
+# Contributing to Attune
 
-Thanks for your interest in contributing! HyprMod is a growing project and PRs are welcome.
+Attune is a personal fork of [BlueManCZ/hyprmod](https://github.com/BlueManCZ/hyprmod)
+at `b475087`. See [README.md](README.md) for supported scope and
+[docs/architecture.md](docs/architecture.md) for the persistence boundary.
+Keep upstream attribution and GPL-3.0-or-later licensing intact. Public commands
+use `attune`; internal imports, lint targets, and tests still use `hyprmod`.
 
 ## Development setup
 
-System dependencies (Debian/Ubuntu names; adapt for your distro):
+Use a local checkout, Python 3.12+, and uv. Native requirements include GTK4,
+libadwaita, Cairo, GObject introspection development support, and Lua (`luac` or
+`lua` on PATH). Debian/Ubuntu build dependency names (as used by CI):
 
 ```
 libcairo2-dev libgirepository-2.0-dev libgtk-4-dev libadwaita-1-dev gir1.2-gnomedesktop-4.0
 ```
 
-Then:
+CI also installs `lua5.4` and uses `xvfb` for tests. On CachyOS/Arch, relevant
+native packages include `gtk4`, `libadwaita`, `cairo`, `gobject-introspection`,
+and `lua`. See the README for the temporary `/tmp/opencode/uv/uv` executable
+when uv is not on PATH; it is not permanently installed.
+
+For this CachyOS checkout:
 
 ```bash
-git clone https://github.com/BlueManCZ/hyprmod.git
-cd hyprmod
-uv sync
-uv run hyprmod
+cd /home/jdawson/Projects/attune
+uv sync --python /usr/bin/python3
+uv run attune
 ```
 
 Requires Python 3.12+ and a running Hyprland instance for full manual testing.
 
-Use `uv` for everything. Never `pip`, never the system Python.
+Use uv's project environment, not system `pip`. Selecting `/usr/bin/python3`
+with uv on this machine is intentional. Do not use the disabled `install.sh`,
+the upstream curl installer, or launcher registration as part of normal setup.
 
 ## Before submitting a PR
 
-Run the same four checks that CI runs:
+Run the four checks corresponding to CI, retaining internal paths:
 
 ```bash
 uv run ruff check --fix hyprmod/ tests/
@@ -34,13 +46,36 @@ uv run pyright hyprmod/ tests/
 uv run pytest tests/ -v
 ```
 
-All four must pass before your PR can be merged. Run them before every push, not just once at the end. Don't lean on CI to catch formatting, lint, or type errors after the fact.
+All four should pass before a push or reporting a code task complete. Don't lean
+on CI to catch formatting, lint, or type errors after the fact. CI uses
+`ruff check` and `ruff format --check` without modifying files, and runs pytest
+under `xvfb-run -a`; the commands above apply local lint/format fixes.
+If execution is prohibited or dependencies are unavailable, report the checks as
+not run and explain why. Never imply a passing suite from source inspection.
 
-For UI changes, also run `uv run hyprmod` against a live Hyprland and exercise the page you touched. Whole classes of bug (empty dialogs, stale state on first render, exceptions escaping GTK callbacks) only surface at runtime, and the checks above will not catch them. In the PR, say what you verified by hand.
+For UI changes, also run `uv run attune` against a live Hyprland and exercise the
+page you touched, only with explicit permission to launch and alter compositor
+state. Whole classes of bug (empty dialogs, stale state on first render,
+exceptions escaping GTK callbacks) only surface at runtime. Report exactly what
+you verified by hand, or state that live UI behavior was not verified.
+
+An opt-in widget smoke suite runs with compositor IPC disabled. Start
+`gtk4-broadwayd :8` in a separate terminal, then run:
+
+```bash
+ATTUNE_GUI_SMOKE=1 GDK_BACKEND=broadway BROADWAY_DISPLAY=:8 GSK_RENDERER=cairo \
+  uv run pytest tests/test_gui_smoke.py -v
+```
+
+Stop the Broadway daemon when finished. These tests cover page construction,
+review/save/reopen, and foreign-file recovery, not live monitor/HDR correctness.
+The suite isolates HOME and XDG paths; never remove those test safety fixtures.
 
 New pure logic under `core/` should ship with tests in `tests/`, following the existing class-based style. GTK page and widget code does not need unit tests.
 
-Add a bullet to `CHANGELOG.md` under `## [Unreleased]` for any user-visible change, referencing the PR or issue number.
+Add a bullet to `CHANGELOG.md` under `## [Unreleased]` for user-visible changes.
+Reference a real fork issue/PR when one exists; do not invent numbers or require
+an upstream issue for personal-fork work. Preserve historical upstream entries.
 
 Then re-read your own diff with these in mind:
 
@@ -88,13 +123,24 @@ Things to avoid:
 
 ## Scope
 
-- Check the [Roadmap](README.md#-roadmap) before proposing new features.
-- For larger changes, open an issue first so we can discuss the approach.
-- System settings (Wi-Fi, Bluetooth, theming, printing, etc.) are out of scope; see [#15](https://github.com/BlueManCZ/hyprmod/issues/15).
+- Follow the [current scope](README.md#current-scope). Keep hand-authored
+  bindings, workspaces, rules, autostart, environment, and other behavior outside
+  the focused GUI. Inherited modules/tests do not imply supported GUI features.
+- This milestone emits one dedicated `attune.lua` for monitors and appearance.
+  Shared/machine splitting is future work, not an existing interface.
+- Follow [ADR 0001](docs/decisions/0001-shared-local-ownership.md) for M3 development.
+  Model/codec work must not activate the proposed split layout, registry, journal,
+  or migration as a side effect. Existing v1 persistence remains the default.
+- Do not bypass review, parse/execute main Lua to discover defaults, insert
+  includes, enable auto-save/startup reload, or silently register desktop files.
+- Discuss larger changes with the fork owner; an upstream issue is not required.
+- System settings (Wi-Fi, Bluetooth, printing, etc.) remain out of scope.
 
 ## The `hyprland-*` library stack
 
-Parsing, IPC, schema, and state logic live in separate repositories under [BlueManCZ](https://github.com/BlueManCZ):
+The inherited parsing, IPC, schema, and state stack uses separate repositories
+under [BlueManCZ](https://github.com/BlueManCZ). Attune's restricted generated-file
+reader/writer lives locally in `hyprmod/core/persistence.py`:
 
 - [`hyprland-config`](https://github.com/BlueManCZ/hyprland-config) — round-trip parser
 - [`hyprland-socket`](https://github.com/BlueManCZ/hyprland-socket) — typed IPC client
@@ -103,9 +149,11 @@ Parsing, IPC, schema, and state logic live in separate repositories under [BlueM
 - [`hyprland-monitors`](https://github.com/BlueManCZ/hyprland-monitors) — scale/geometry/EDID utilities
 - [`hyprland-events`](https://github.com/BlueManCZ/hyprland-events) — typed event dispatch
 
-If your change belongs in one of those libraries (parsing, IPC, schema data, etc.), please open the PR in that repository instead.
+Keep library changes separate from fork-specific behavior. Consider an upstream
+report or PR for a reproducible library bug, but do not route personal-fork scope
+requests to upstream by default.
 
-If you need a new field, behavior, or type from one of them inside hyprmod:
+If you need a new field, behavior, or type from a library inside Attune:
 
 1. Add it upstream first.
 2. Bump the pin in `pyproject.toml`.
@@ -117,7 +165,9 @@ Don't guess Hyprland's runtime behavior. Assumptions about the Lua or IPC API (w
 
 ## Reporting bugs
 
-Open a [GitHub issue](https://github.com/BlueManCZ/hyprmod/issues) and include:
+Report fork issues to the fork owner or in this fork's tracker, if available.
+Do not send Attune-specific reports automatically to the upstream HyprMod tracker.
+Include:
 
 - Hyprland version (`hyprctl version`)
 - Steps to reproduce

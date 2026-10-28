@@ -1,9 +1,74 @@
 # Changelog
 
-All notable changes to HyprMod will be documented in this file.
+Notable changes to Attune are documented here. Releases through 0.5.0 below
+are retained upstream HyprMod history, not a list of this fork's supported features.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+
+- M3.1 architecture decision for future shared appearance/local display ownership,
+  scoped v2 data, journaled transactions, and explicit migration handoff. This is
+  a design record only; current output, loaders, and routing are unchanged.
+- Distinct acknowledged preservation-first recovery of foreign/invalid text from a
+  validated backup. Exact original bytes are privately preserved and synchronized
+  before replacement; ordinary save/restoration guards remain unchanged.
+- Separate complete restoration review for existing owned output, with immutable
+  source/destination-bound drafts, compile-only validation, rollback backups,
+  protected disk writes, and editor locking after restored or uncertain outcomes.
+- Read-only Backups browser in normal and recovery navigation, with bounded
+  hash/canonical inspection, descriptive filesystem metadata, and precomputed
+  backup-to-current diffs. Invalid, missing, foreign, oversized, and truncated
+  results remain explicit; no restore or live-apply controls are provided.
+- Health diagnostics preview/copy with an allowlisted redacted summary and frozen
+  copy contents, plus explicit asynchronous plain-text editor and folder actions.
+- Bounded saved/runtime scalar drift observations with type-aware normalization,
+  partial/unknown results, and no automatic correction or inference of file loading.
+- Read-only Health page with bounded asynchronous observations for compositor
+  version, configuration errors, effective displays, output ownership, validator
+  discovery, and backup candidates. Invalid output retains recovery-screen Health
+  access. Refreshes support cancellation and preserve stale results on failure.
+- Project roadmap with phased diagnostics, recovery, configuration ownership,
+  presets, Wisp, and CARAMEL milestones and explicit acceptance criteria.
+- Makefile development build and install targets. `make install` copies the
+  editable environment's launcher into `~/.local/bin` without desktop registration.
+- Attune personal fork of BlueManCZ/hyprmod at `b475087`, retaining upstream
+  attribution and GPL-3.0-or-later licensing. The public command is `attune`;
+  the internal `hyprmod` namespace is intentionally retained.
+- Focused appearance/general visual, decoration, animation/bezier, and monitor
+  editing, with Pending Changes review and read-only integration settings.
+- Restricted persistence in `hyprmod/core/persistence.py`: one dedicated
+  `attune.lua` for monitors and appearance, canonical ownership/data records read
+  without Lua execution, compile-only syntax checks, resolved-destination-bound
+  review, symlink-preserving writes, and hash-named backups outside Git.
+- Local-source setup, explicit manual Lua integration instructions, development
+  guidance, and an architecture reference. Shared/machine output splitting is
+  future work, not part of this milestone.
+
+### Changed
+
+- Ordinary saves now also invalidate cached editor state on possibly-written
+  persistence failures rather than leaving an already-written draft editable.
+- Moved the development checkout to `~/Projects/attune`, rebuilt its environment,
+  and refreshed the installed development launcher for the new path.
+- Editor saves and restoration now share the protected persistence transaction,
+  including finite/cancellable lock waits and exclusive rollback-file creation.
+- Restoration invalidates managed-data caches so recovery retries cannot reuse
+  pre-restoration disk values. Live apply/reload and foreign-output replacement
+  remain excluded; watched files may still be auto-reloaded by Hyprland.
+- Deeply nested malformed owned-record JSON now becomes a validation error so
+  recovery remains available rather than leaking a decoder recursion failure.
+- The focused application leaves hand-authored behavior outside the GUI, with no
+  profiles CLI, auto-save, main Lua parsing, automatic include insertion,
+  migrations, startup reload, or silent desktop registration.
+- Ctrl+S opens review; only Save Reviewed Changes persists output. Removing an
+  override previews a schema default; reloading the authored config after saving
+  is needed to restore its baseline.
+- Disabled the inherited network `install.sh`. It now exits nonzero with local
+  uv setup guidance instead of installing upstream HyprMod.
 
 ## [0.5.0] - 2026-10-07
 

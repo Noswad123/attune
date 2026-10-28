@@ -4,19 +4,8 @@ from collections.abc import Callable
 
 from gi.repository import Adw, Gtk
 
-from hyprmod.ui.icons import (
-    AUTOSTART_ICON,
-    BINDS_ICON,
-    ENV_VARS_ICON,
-    LAYER_RULES_ICON,
-    LAYOUTS_ICON,
-    MONITORS_ICON,
-    PLUGINS_ICON,
-    PROFILES_ICON,
-    SETTINGS_ICON,
-    WINDOW_RULES_ICON,
-    WORKSPACES_ICON,
-)
+from hyprmod.core.focused_ui import SCHEMA_PAGES
+from hyprmod.ui.icons import MONITORS_ICON, SETTINGS_ICON
 
 
 class SidebarRow(Adw.ActionRow):
@@ -44,11 +33,8 @@ class SidebarRow(Adw.ActionRow):
 class Sidebar:
     """Builds and manages the sidebar navigation pane.
 
-    The sidebar is organised by user task rather than by ``hyprland.conf``
-    section: *Look & Feel*, *Input*, *Display*, *Window Management*,
-    *Startup*, *Advanced*. Profiles and Settings are pinned at the bottom;
-    Pending Changes lives in each page's header bar as a chip rather than
-    in the navigation list, so the badge is visible from anywhere.
+    Appearance, motion, and displays are the only editor categories.
+    Pending Changes, Health, Backups, and read-only Settings are pinned at the bottom.
 
     The search entry hides by default and slides in below the header when
     the toolbar's search button is toggled (or Ctrl+F is pressed). Keeps
@@ -104,7 +90,7 @@ class Sidebar:
         self.nav_page = self._build()
 
     def _build(self) -> Adw.NavigationPage:
-        nav_page = Adw.NavigationPage(title="HyprMod")
+        nav_page = Adw.NavigationPage(title="Attune")
         toolbar = Adw.ToolbarView()
         header = Adw.HeaderBar()
         header.set_show_title(True)
@@ -119,20 +105,29 @@ class Sidebar:
         scrolled.set_vexpand(True)
         content.append(scrolled)
 
-        # Pinned utilities below the scrolled area: Profiles and Settings.
-        # Pending Changes used to live here but is now a chip in every page
-        # header — it's status, not navigation, and the count belongs near
-        # the dirty banner where the user acts on it.
+        # Review and integration information remain visible while scrolling.
         self._pinned_list = Gtk.ListBox()
         self._pinned_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
         self._pinned_list.add_css_class("navigation-sidebar")
         self._pinned_list.connect("row-selected", self._on_row_selected)
 
-        profiles_row = SidebarRow(group_id="profiles", title="Profiles")
-        profiles_row.set_activatable(True)
-        profiles_row.add_prefix(Gtk.Image.new_from_icon_name(PROFILES_ICON))
-        self._pinned_list.append(profiles_row)
-        self._rows_by_id["profiles"] = profiles_row
+        pending_row = SidebarRow(group_id="pending", title="Pending Changes")
+        pending_row.set_activatable(True)
+        pending_row.add_prefix(Gtk.Image.new_from_icon_name("document-edit-symbolic"))
+        self._pinned_list.append(pending_row)
+        self._rows_by_id["pending"] = pending_row
+
+        health_row = SidebarRow(group_id="health", title="Health")
+        health_row.set_activatable(True)
+        health_row.add_prefix(Gtk.Image.new_from_icon_name("dialog-information-symbolic"))
+        self._pinned_list.append(health_row)
+        self._rows_by_id["health"] = health_row
+
+        backups_row = SidebarRow(group_id="backups", title="Backups")
+        backups_row.set_activatable(True)
+        backups_row.add_prefix(Gtk.Image.new_from_icon_name("document-open-recent-symbolic"))
+        self._pinned_list.append(backups_row)
+        self._rows_by_id["backups"] = backups_row
 
         settings_row = SidebarRow(group_id="settings", title="Settings")
         settings_row.set_activatable(True)
@@ -191,40 +186,12 @@ class Sidebar:
                 return
             add_row(listbox, group_id, group["label"], group.get("icon"))
 
-        look_and_feel = new_category("Look & Feel")
-        add_schema_row(look_and_feel, "general")
-        add_schema_row(look_and_feel, "decoration")
-        add_schema_row(look_and_feel, "animations")
-        add_schema_row(look_and_feel, "cursor")
+        appearance = new_category("Appearance & Motion")
+        for group_id in SCHEMA_PAGES:
+            add_schema_row(appearance, group_id)
 
-        input_cat = new_category("Input")
-        add_row(input_cat, "binds", "Keybinds", BINDS_ICON)
-        add_schema_row(input_cat, "input")
-        add_schema_row(input_cat, "gestures")
-
-        display = new_category("Display")
+        display = new_category("Displays")
         add_row(display, "monitors", "Monitors", MONITORS_ICON)
-        add_row(display, "workspaces", "Workspaces", WORKSPACES_ICON)
-
-        windowing = new_category("Window Management")
-        # Dwindle/Master/Scrolling are merged into a single Layouts page
-        # with a ViewSwitcher — see ``pages/layouts.py``. The schema groups
-        # are hidden via ``parent_page: "layouts"`` so they still
-        # contribute option keys to ``_key_to_group`` (for badges) and
-        # remain searchable.
-        add_row(windowing, "layouts", "Layouts", LAYOUTS_ICON)
-        add_row(windowing, "window_rules", "Window Rules", WINDOW_RULES_ICON)
-        add_row(windowing, "layer_rules", "Layer Rules", LAYER_RULES_ICON)
-
-        startup = new_category("Startup")
-        add_row(startup, "autostart", "Autostart", AUTOSTART_ICON)
-        add_row(startup, "env_vars", "Env Variables", ENV_VARS_ICON)
-
-        advanced = new_category("Advanced")
-        add_schema_row(advanced, "xwayland")
-        add_schema_row(advanced, "ecosystem")
-        add_schema_row(advanced, "misc")
-        add_row(advanced, "plugins", "Plugin Settings", PLUGINS_ICON)
 
         # Pinned list goes last so select_first() picks schema rows
         self._lists.append(self._pinned_list)

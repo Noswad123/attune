@@ -6,7 +6,7 @@ from pathlib import Path
 
 from hyprland_config import HYPRLAND_NATIVE_CURVES, BezierData, atomic_write
 
-from hyprmod.core.config import HYPRMOD_DIR
+from hyprmod.core import config
 from hyprmod.data.bezier_presets import BUILTIN_PRESETS
 
 
@@ -146,6 +146,10 @@ class BezierCurveStore:
 
 
 @functools.cache
+def _store_for_path(path: Path) -> BezierCurveStore:
+    return BezierCurveStore(path)
+
+
 def get_curve_store() -> BezierCurveStore:
-    """Return the singleton BezierCurveStore, creating it on the first call."""
-    return BezierCurveStore(HYPRMOD_DIR / "user_curves.json")
+    """Keep one store per active preset path, including isolated test homes."""
+    return _store_for_path(config.HYPRMOD_DIR / "user_curves.json")

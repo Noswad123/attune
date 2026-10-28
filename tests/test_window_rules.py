@@ -747,7 +747,7 @@ class TestMatchesHyprmod:
     def test_substring_class_matches(self):
         # Hyprland's regex matcher uses search semantics, not full match
         # — a partial pattern inside the app id should still trigger.
-        rule = _rule_with_matchers(Matcher("class", "hyprmod"))
+        rule = _rule_with_matchers(Matcher("class", "Attune"))
         assert matches_hyprmod(rule)
 
     def test_initial_class_matches(self):

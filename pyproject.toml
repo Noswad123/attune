@@ -1,5 +1,5 @@
 [project]
-name = "hyprmod"
+name = "attune"
 version = "0.5.0"
 description = "A native GTK4/libadwaita settings app for Hyprland"
 license = "GPL-3.0-or-later"
@@ -26,13 +26,16 @@ dev = [
 ]
 
 [project.scripts]
-hyprmod = "hyprmod.main:main"
+attune = "hyprmod.main:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.hooks.custom]
+
+[tool.hatch.build.targets.wheel]
+packages = ["hyprmod"]
 
 [tool.pyright]
 include = ["hyprmod", "tests"]

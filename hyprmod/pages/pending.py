@@ -3,33 +3,24 @@
 Walks every section page's ``iter_pending_changes()`` plus the
 window-level option diff, and renders a unified diff between the
 on-disk config and the next-save serialization so users can verify
-what's about to land in hyprmod's managed config.
+what's about to land in Attune's managed config.
 """
 
 import logging
 from html import escape as html_escape
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from gi.repository import Adw, GLib, Gtk
 from hyprland_config import ParseError, value_to_conf
 
-from hyprmod.core import config, schema
+from hyprmod.core import schema
+from hyprmod.core.focused_ui import ReviewSnapshot
 from hyprmod.core.pending import ChangeKind, PendingChange
 from hyprmod.core.state import OptionState
 from hyprmod.ui import clear_children, make_page_layout
 from hyprmod.ui.diff import ConfigDiffWidget
 from hyprmod.ui.empty_state import EmptyState
-from hyprmod.ui.icons import (
-    AUTOSTART_ICON,
-    BINDS_ICON,
-    ENV_VARS_ICON,
-    FALLBACK_ICON,
-    LAYER_RULES_ICON,
-    LAYOUTS_ICON,
-    MONITORS_ICON,
-    WINDOW_RULES_ICON,
-)
+from hyprmod.ui.icons import FALLBACK_ICON, MONITORS_ICON
 
 log = logging.getLogger(__name__)
 
@@ -41,13 +32,7 @@ if TYPE_CHECKING:
 _CATEGORY_ORDER = (
     "Options",
     "Animations",
-    "Keybinds",
     "Monitors",
-    "Cursor",
-    "Autostart",
-    "Env Variables",
-    "Window Rules",
-    "Layer Rules",
 )
 
 # Visual label and CSS class for each kind of change.
@@ -70,23 +55,17 @@ class PendingChangesPage:
         self._groups_box: Gtk.Box | None = None
         self._diff: ConfigDiffWidget | None = None
         self._diff_group: Adw.PreferencesGroup | None = None
+        self._reviewed: ReviewSnapshot | None = None
+        self._save_button: Gtk.Button | None = None
+        self._review_error: Gtk.Label | None = None
         # Coalesce many quick "dirty" pings (e.g. typing in a spinbutton) into
         # a single rebuild. Without this the page rebuilds at signal speed
         # which is wasteful and can fight scroll position recovery.
         self._refresh_pending = False
         # Map sidebar group_id -> icon name, sourced from the same schema the
         # sidebar uses, so each row's icon mirrors its source page exactly.
-        # Also seed the hardcoded sidebar pages (binds/monitors) so that
-        # schema groups routed onto those pages (e.g. ``monitor_globals``
-        # which has ``parent_page: "monitors"``) still resolve correctly.
         self._group_icons: dict[str, str] = {
-            "binds": BINDS_ICON,
             "monitors": MONITORS_ICON,
-            "autostart": AUTOSTART_ICON,
-            "env_vars": ENV_VARS_ICON,
-            "window_rules": WINDOW_RULES_ICON,
-            "layer_rules": LAYER_RULES_ICON,
-            "layouts": LAYOUTS_ICON,
         }
         for g in schema.get_groups(window._schema):
             icon = g.get("icon")
@@ -136,6 +115,17 @@ class PendingChangesPage:
         self._diff_group = diff_group
         content_box.append(diff_group)
 
+        self._review_error = Gtk.Label(xalign=0, wrap=True)
+        self._review_error.add_css_class("error")
+        self._review_error.set_visible(False)
+        content_box.append(self._review_error)
+        self._save_button = Gtk.Button(label="Save Reviewed Changes")
+        self._save_button.add_css_class("suggested-action")
+        self._save_button.set_halign(Gtk.Align.END)
+        self._save_button.set_sensitive(False)
+        self._save_button.connect("clicked", self._on_save_reviewed)
+        content_box.append(self._save_button)
+
         self.refresh()
         return toolbar
 
@@ -143,6 +133,9 @@ class PendingChangesPage:
 
     def schedule_refresh(self) -> None:
         """Coalesce repeated change pings into a single idle-time rebuild."""
+        self._reviewed = None
+        if self._save_button is not None:
+            self._save_button.set_sensitive(False)
         if self._refresh_pending:
             return
         self._refresh_pending = True
@@ -277,15 +270,24 @@ class PendingChangesPage:
     def _render_diff(self) -> None:
         if self._diff is None or self._diff_group is None:
             return
-        path = config.managed_path()
-        old_text = self._read_saved_config_text()
+        self._reviewed = None
+        if self._save_button is not None:
+            self._save_button.set_sensitive(False)
+        if self._review_error is not None:
+            self._review_error.set_visible(False)
         try:
-            new_text = self._compose_resulting_config()
-        except ParseError:
-            # Log so dev builds surface bugs in build_content / collect; the
-            # diff falls through to "no changes" which is harmless visually.
+            snapshot = self._window.review_snapshot()
+        except (OSError, UnicodeError, ValueError, ParseError) as exc:
             log.exception("Failed to compose pending-changes diff preview")
-            new_text = old_text
+            self._diff_group.set_visible(False)
+            if self._review_error is not None:
+                self._review_error.set_label(
+                    f"Cannot review this output. Saving is disabled: {exc}"
+                )
+                self._review_error.set_visible(True)
+            return
+        path = snapshot.path
+        old_text, new_text = snapshot.saved_text, snapshot.proposed_text
         # Hide the whole "Config diff preview" group when there's nothing to
         # show — the standalone empty placeholder inside the diff widget is
         # redundant when the parent group is collapsed.
@@ -300,25 +302,13 @@ class PendingChangesPage:
             new_label=f"{path} (next save)",
             title=f"{path.name}",
         )
+        self._reviewed = snapshot
+        if self._save_button is not None:
+            self._save_button.set_sensitive(True)
 
-    def _read_saved_config_text(self) -> str:
-        path = config.managed_path()
-        try:
-            return Path(path).read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            return ""
-
-    def _compose_resulting_config(self) -> str:
-        """Build the next-save config content, in whatever format will hit disk.
-
-        Mirrors the production save path (collect + serialize) but never writes.
-        """
-        win = self._window
-        return config.to_managed_text(
-            win.app_state.get_all_live_values(),
-            win.collect_save_sections(),
-            hyprland_version=win.hypr.version,
-        )
+    def _on_save_reviewed(self, _button: Gtk.Button) -> None:
+        if self._reviewed is not None:
+            self._window.save_reviewed(self._reviewed)
 
     # ── Change collection ──
 

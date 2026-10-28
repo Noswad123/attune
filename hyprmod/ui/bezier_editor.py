@@ -5,10 +5,11 @@ and context-sensitive actions into a complete editing experience.
 """
 
 from gi.repository import Adw, Gtk
+from hyprland_socket import HyprlandError
 
 from hyprmod.data.bezier_data import get_curve_store
 from hyprmod.data.bezier_presets import BUILTIN_PRESETS
-from hyprmod.ui import confirm
+from hyprmod.ui import confirm, try_with_toast
 from hyprmod.ui.bezier_canvas import AnimationPreview, BezierCanvas
 from hyprmod.ui.signals import SignalBlocker
 
@@ -244,10 +245,12 @@ class BezierEditor(Gtk.Box):
         bar.append(self._revert_btn)
 
         # Save — for custom curves: update in place
-        self._save_btn = Gtk.Button(label="Save")
+        self._save_btn = Gtk.Button(label="Save Preset")
         self._save_btn.add_css_class("suggested-action")
         self._save_btn.add_css_class("pill")
-        self._save_btn.set_tooltip_text("Save changes")
+        self._save_btn.set_tooltip_text(
+            "Save preset points. Compositor changes need pending review."
+        )
         self._save_btn.connect("clicked", lambda _b: self._do_update())
         bar.append(self._save_btn)
 
@@ -318,7 +321,7 @@ class BezierEditor(Gtk.Box):
         """Show a dialog to enter a name for the new curve."""
         dialog = Adw.AlertDialog()
         dialog.set_heading("Save as Custom Curve")
-        dialog.set_body("Enter a name for your curve.")
+        dialog.set_body("Save to the preset library now. Compositor changes remain pending review.")
         dialog.add_response("cancel", "Cancel")
         dialog.add_response("save", "Save")
         dialog.set_response_appearance("save", Adw.ResponseAppearance.SUGGESTED)
@@ -588,49 +591,79 @@ class BezierEditorDialog:
         """Switch the animation to hyprmodCurve for live preview."""
         if self._preview_active or not self._animation_name or not self._original_eff:
             return
-        if self._anims is None:
+        anims = self._anims
+        if anims is None:
             return
-        self._preview_active = True
         eff_en, eff_sp, _, eff_st = self._original_eff
-        self._anims.define_bezier("hyprmodCurve", self._editor.get_points())
-        self._anims.preview(self._animation_name, eff_en, eff_sp, "hyprmodCurve", eff_st)
+        self._preview_active = try_with_toast(
+            self._parent.show_bug_toast,
+            "Curve preview failed",
+            lambda: anims.preview(
+                self._animation_name,
+                eff_en,
+                eff_sp,
+                "hyprmodCurve",
+                eff_st,
+                curve_points=self._editor.get_points(),
+            ),
+            catch=HyprlandError,
+        )
 
     def _on_curve_changed(self, x1, y1, x2, y2):
         """Apply bezier curve live to Hyprland for preview."""
-        if self._animation_name and self._anims is not None:
+        anims = self._anims
+        if self._animation_name and anims is not None:
             self._start_preview()
-            self._anims.define_bezier("hyprmodCurve", (x1, y1, x2, y2))
+            if self._preview_active:
+                try_with_toast(
+                    self._parent.show_bug_toast,
+                    "Curve preview failed",
+                    lambda: anims.define_bezier("hyprmodCurve", (x1, y1, x2, y2)),
+                    catch=HyprlandError,
+                )
 
     def _on_editor_saved(self, curve_name):
         """Called when the editor saves a curve — apply to the animation."""
         self._user_saved = True
-        if self._animation_name and self._animation_page and self._anims is not None:
+        if self._animation_page:
+            self._animation_page.curve_saved(curve_name)
+        anims = self._anims
+        if self._animation_name and self._animation_page and anims is not None:
             self._animation_page.set_field(self._animation_name, "curve", curve_name)
-            pts = get_curve_store().get_curve_points(curve_name)
-            if pts:
-                self._anims.define_bezier(curve_name, pts)
             # Re-apply hyprmodCurve for continued live preview
             eff = self._animation_page.anims.get_effective(self._animation_name)
-            self._anims.define_bezier("hyprmodCurve", self._editor.get_points())
-            self._anims.preview(self._animation_name, eff[0], eff[1], "hyprmodCurve", eff[3])
+            try_with_toast(
+                self._parent.show_bug_toast,
+                "Curve preview failed",
+                lambda: anims.preview(
+                    self._animation_name,
+                    eff[0],
+                    eff[1],
+                    "hyprmodCurve",
+                    eff[3],
+                    curve_points=self._editor.get_points(),
+                ),
+                catch=HyprlandError,
+            )
         if self._on_curve_saved:
             self._on_curve_saved(curve_name)
 
     def _on_editor_deleted(self, curve_name):
         """Called when a curve is deleted — update animations that used it."""
+        self._user_saved = True
         if self._animation_page:
+            self._animation_page.revert_curve(curve_name)
             self._animation_page.reset_curve_to_default(curve_name)
         if self._on_curve_saved:
             self._on_curve_saved(None)
 
     def _on_editor_renamed(self, old_name, new_name):
         """Called when a curve is renamed — update animation references."""
+        self._user_saved = True
         if self._animation_page:
-            # Define the renamed curve in Hyprland before updating references
-            pts = get_curve_store().get_curve_points(new_name)
-            if pts and self._anims is not None:
-                self._anims.define_bezier(new_name, pts)
+            self._animation_page.curve_saved(new_name)
             self._animation_page.replace_curve(old_name, new_name)
+            self._animation_page.revert_curve(old_name)
         if self._on_curve_saved:
             self._on_curve_saved(new_name)
 
@@ -646,19 +679,37 @@ class BezierEditorDialog:
     def _on_closed(self, dialog):
         """Revert animation to its actual state on close."""
         self._editor.cleanup()
-        if not self._animation_name or not self._animation_page or self._anims is None:
+        anims = self._anims
+        page = self._animation_page
+        original_eff = self._original_eff
+        if not self._animation_name or not page or anims is None:
             return
         if self._user_saved:
             # User explicitly saved/applied — restore Hyprland to the model state
-            state = self._animation_page.anims.get_cached(self._animation_name)
+            state = page.anims.get_cached(self._animation_name)
             if state and state.overridden:
-                self._anims.apply(
-                    self._animation_name,
-                    state.enabled,
-                    state.speed,
-                    state.curve,
-                    state.style,
+                try_with_toast(
+                    self._parent.show_bug_toast,
+                    "Animation preview restore failed",
+                    lambda: anims.apply(
+                        self._animation_name,
+                        state.enabled,
+                        state.speed,
+                        state.curve,
+                        state.style,
+                        curve_points=page.get_curve_points(state.curve),
+                    ),
+                    catch=HyprlandError,
                 )
-        elif self._preview_active and self._original_eff:
+        elif self._preview_active and original_eff:
             # Preview didn't touch cache — just revert Hyprland
-            self._anims.preview(self._animation_name, *self._original_eff)
+            try_with_toast(
+                self._parent.show_bug_toast,
+                "Animation preview restore failed",
+                lambda: anims.preview(
+                    self._animation_name,
+                    *original_eff,
+                    curve_points=page.get_curve_points(original_eff[2]),
+                ),
+                catch=HyprlandError,
+            )

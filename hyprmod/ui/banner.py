@@ -1,8 +1,7 @@
 """Unsaved-changes banner with save/discard buttons and save animation."""
 
-from gi.repository import Adw, Gio, Gtk
+from gi.repository import Gtk
 
-from hyprmod.ui import clear_children
 from hyprmod.ui.timer import Timer
 
 
@@ -13,8 +12,6 @@ class DirtyBanner(Gtk.Revealer):
         self,
         *,
         on_save=None,
-        on_save_without_update=None,
-        on_save_as_new=None,
         on_discard=None,
     ):
         super().__init__()
@@ -22,10 +19,7 @@ class DirtyBanner(Gtk.Revealer):
         self.set_reveal_child(False)
 
         self._on_save = on_save
-        self._on_save_without_update = on_save_without_update
-        self._on_save_as_new = on_save_as_new
         self._on_discard = on_discard
-        self._has_active_profile = False
         self._transition_timer = Timer()
         self._reset_timer = Timer()
 
@@ -40,7 +34,7 @@ class DirtyBanner(Gtk.Revealer):
         self._icon.add_css_class("warning")
         box.append(self._icon)
 
-        self._label = Gtk.Label(label="Unsaved changes \u2014 applied live, not saved to disk")
+        self._label = Gtk.Label(label="Unsaved previews. Review before writing to disk.")
         self._label.set_hexpand(True)
         self._label.set_xalign(0)
         box.append(self._label)
@@ -49,22 +43,13 @@ class DirtyBanner(Gtk.Revealer):
         self._discard_button.connect("clicked", self._on_discard_clicked)
         box.append(self._discard_button)
 
-        # Save button area — holds either a plain Button or a SplitButton
-        self._save_area = Gtk.Box()
-        box.append(self._save_area)
-
-        self._save_widget: Adw.SplitButton | None = None
-        self._build_save_button()
+        self._save_widget = Gtk.Button(label="Review Changes")
+        self._save_widget.add_css_class("suggested-action")
+        self._save_widget.connect("clicked", self._on_save_clicked)
+        box.append(self._save_widget)
         self.set_child(box)
 
     # -- Public API --
-
-    def set_active_profile(self, has_profile: bool):
-        """Update whether a profile is active, rebuilding the save button."""
-        if has_profile == self._has_active_profile:
-            return
-        self._has_active_profile = has_profile
-        self._build_save_button()
 
     def show_dirty(self):
         """Reveal the banner in its default 'unsaved changes' state."""
@@ -78,8 +63,7 @@ class DirtyBanner(Gtk.Revealer):
 
     def show_saved(self):
         """Transition to 'saved' state, then auto-hide after a delay."""
-        if self._save_widget is None:
-            return
+        self.set_reveal_child(True)
         self._save_widget.set_sensitive(False)
         self._discard_button.set_visible(False)
         self._label.set_label("Changes saved to disk")
@@ -90,44 +74,9 @@ class DirtyBanner(Gtk.Revealer):
 
     # -- Internal --
 
-    def _build_save_button(self):
-        """Build a SplitButton with profile-aware menu options."""
-        clear_children(self._save_area)
-
-        menu = Gio.Menu()
-        if self._has_active_profile:
-            menu.append("Save without updating profile", "banner.save-no-update")
-        menu.append("Save as new profile", "banner.save-as-new")
-
-        group = Gio.SimpleActionGroup()
-        for name, handler in [
-            ("save-no-update", self._on_save_clicked_without_update),
-            ("save-as-new", self._on_save_clicked_as_new),
-        ]:
-            action = Gio.SimpleAction.new(name, None)
-            action.connect("activate", handler)
-            group.add_action(action)
-        self._save_area.insert_action_group("banner", group)
-
-        split = Adw.SplitButton(label="Save now")
-        split.add_css_class("suggested-action")
-        split.set_menu_model(menu)
-        split.connect("clicked", self._on_save_clicked)
-        self._save_widget = split
-
-        self._save_area.append(self._save_widget)
-
     def _on_save_clicked(self, *_args):
         if self._on_save:
             self._on_save()
-
-    def _on_save_clicked_without_update(self, *_args):
-        if self._on_save_without_update:
-            self._on_save_without_update()
-
-    def _on_save_clicked_as_new(self, *_args):
-        if self._on_save_as_new:
-            self._on_save_as_new()
 
     def _on_discard_clicked(self, *_args):
         if self._on_discard:
@@ -144,11 +93,9 @@ class DirtyBanner(Gtk.Revealer):
         self._reset_timer.schedule(transition_ms, self._reset)
 
     def _reset(self):
-        if self._save_widget is None:
-            return
         self._save_widget.set_sensitive(True)
         self._discard_button.set_visible(True)
-        self._label.set_label("Unsaved changes \u2014 applied live, not saved to disk")
+        self._label.set_label("Unsaved previews. Review before writing to disk.")
         self._icon.set_from_icon_name("dialog-warning-symbolic")
         self._icon.remove_css_class("accent")
         self._icon.add_css_class("warning")

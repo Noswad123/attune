@@ -39,6 +39,7 @@ class FakeHypr:
     """
 
     def __init__(self, live=None, apply_ok=True, discard_result=None):
+        self.online = True
         self.live = live or {}
         self.apply_ok = apply_ok
         self.discard_result = discard_result or {}
@@ -80,6 +81,17 @@ def make_state(hypr: FakeHypr | None = None) -> AppState:
 
 
 class TestRegister:
+    def test_offline_editor_uses_saved_values_and_can_edit_without_ipc(self):
+        hypr = HyprlandState(path="/dev/null", offline=True)
+        state = AppState(hypr)
+        state.register("decoration:rounding", default_value=0, was_managed_value=12)
+        option = state.get("decoration:rounding")
+        assert option is not None and option.available
+        assert option.live_value == 12
+        assert state.set_live("decoration:rounding", 17) is not None
+        assert state.get_all_live_values() == {"decoration:rounding": "17"}
+        assert state.apply_option_value("decoration:rounding", 12, True)
+
     def test_registered_option_is_not_dirty(self):
         """Saved baseline seeds from live, so a fresh option is clean."""
         state = make_state(FakeHypr(live={"gaps_in": (5, True)}))
@@ -358,6 +370,19 @@ class TestSaveAndDiscardDirty:
 
 
 class TestQueryHelpers:
+    def test_unedited_managed_value_preserves_disk_despite_runtime_drift(self):
+        state = make_state(FakeHypr(live={"rounding": (99, True), "other": (1, True)}))
+        state.register("rounding", default_value=0, was_managed_value=8)
+        state.register("other", default_value=0, was_managed_value=None)
+        state.set_live("other", 2)
+        assert state.get_all_live_values() == {"rounding": "8", "other": "2"}
+        state.mark_saved()
+        assert state.get_all_live_values() == {"rounding": "8", "other": "2"}
+        state.set_live("rounding", 42)
+        assert state.get_all_live_values()["rounding"] == "42"
+        state.mark_saved()
+        assert state.get_all_live_values()["rounding"] == "42"
+
     def _two_options(self):
         hypr = FakeHypr(live={"a": (1, True), "b": (2, True)})
         state = make_state(hypr)

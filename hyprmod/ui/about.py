@@ -1,21 +1,22 @@
-"""About dialog — standard GNOME ``Adw.AboutDialog``.
+"""About dialog using the standard GNOME ``Adw.AboutDialog``.
 
-Presents version, license, credits, and links to the project's homepage
-and issue tracker. Attached to the ``win.show-about`` action, which is
+Presents version, license, and upstream credits.
+Attached to the ``win.show-about`` action, which is
 registered in ``HyprModWindow._build_ui`` and exposed through the primary
 menu on every page header.
 """
+
+from importlib.metadata import PackageNotFoundError, version
 
 from gi.repository import Adw, Gtk
 from hyprland_schema import HYPRLAND_VERSION
 
 from hyprmod.constants import APPLICATION_ID
-from hyprmod.core.bug_report import REPO_URL, build_bug_report_url, hyprmod_version
 
-APPLICATION_NAME = "HyprMod"
-DEVELOPER_NAME = "Ivo Šmerek"
+APPLICATION_NAME = "Attune"
+DEVELOPER_NAME = "jdawson"
 COPYRIGHT = "© 2026 Ivo Šmerek"
-COMMENTS = "A native GTK4/libadwaita settings app for Hyprland"
+COMMENTS = "A native GTK4/libadwaita settings app for Hyprland, forked from HyprMod"
 
 # Adw.AboutDialog renders entries in the ``developers`` list as clickable
 # links when they match the "Name URL" format. Keep the handle in the URL
@@ -31,7 +32,10 @@ def build_about_dialog(running_hyprland_version: str | None = None) -> Adw.About
     description; when omitted (Hyprland offline), the bundled schema
     version is shown instead so users still have a version reference.
     """
-    version = hyprmod_version()
+    try:
+        app_version = version("attune")
+    except PackageNotFoundError:
+        app_version = "unknown"
 
     # hyprland_schema keys versions by the GitHub tag (``vX.Y.Z``) while the
     # live compositor reports without the prefix. Strip so both numbers
@@ -44,29 +48,22 @@ def build_about_dialog(running_hyprland_version: str | None = None) -> Adw.About
     else:
         hyprland_line = f"Hyprland schema: {schema_version} (bundled)"
 
-    # debug_info goes into the Troubleshooting section — give bug reporters
+    # debug_info goes into the Troubleshooting section. Give bug reporters
     # both numbers unambiguously, regardless of detection state.
     debug_info = (
-        f"HyprMod {version}\n"
+        f"{APPLICATION_NAME} {app_version}\n"
         f"Hyprland (running): {running or 'not detected'}\n"
         f"Hyprland schema (bundled): {schema_version}"
     )
 
-    # Route the standard "Report a problem" link through the same prefilled
-    # URL the Help menu uses, so reports filed from either entry point carry
-    # the version/config-language block (no second-class blank-issue path).
-    issue_url = build_bug_report_url(running_hyprland_version=running_hyprland_version)
-
     return Adw.AboutDialog(
         application_name=APPLICATION_NAME,
         application_icon=APPLICATION_ID,
-        version=version,
+        version=app_version,
         developer_name=DEVELOPER_NAME,
         developers=DEVELOPERS,
         copyright=COPYRIGHT,
         license_type=Gtk.License.GPL_3_0,
         comments=f"{COMMENTS}\n\n{hyprland_line}",
         debug_info=debug_info,
-        website=REPO_URL,
-        issue_url=issue_url,
     )

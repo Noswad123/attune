@@ -21,6 +21,7 @@ class OptionState:
     key: str
     live_value: Any = None
     saved_value: Any = None
+    disk_value: Any = None
     default_value: Any = None
     initial_value: Any = None
     managed: bool = False
@@ -77,6 +78,7 @@ class AppState:
         live_value, available = self._hypr.get_live(key, default_value)
         if not available:
             live_value = was_managed_value if was_managed_value is not None else default_value
+        available = available or not self._hypr.online
         live_value = self.normalize(key, live_value)
         managed = was_managed_value is not None
 
@@ -84,6 +86,7 @@ class AppState:
             key=key,
             live_value=live_value,
             saved_value=live_value,
+            disk_value=was_managed_value,
             default_value=default_value,
             initial_value=live_value,
             managed=managed,
@@ -107,7 +110,7 @@ class AppState:
         old_value = state.live_value
         old_managed = state.managed
 
-        if self._hypr.apply(key, value, validate=False):
+        if not self._hypr.online or self._hypr.apply(key, value, validate=False):
             state.live_value = value
             state.managed = state.saved_managed or value != state.saved_value
             self.notify(key)
@@ -130,7 +133,7 @@ class AppState:
         # they round-trip back through IPC; non-strings are already in
         # their target Python type and pass through unchanged.
         coerced = value_to_conf(value) if isinstance(value, str) else value
-        if self._hypr.apply(key, coerced, validate=False):
+        if not self._hypr.online or self._hypr.apply(key, coerced, validate=False):
             state.live_value = coerced
             state.managed = managed
             self.notify(key)
@@ -232,12 +235,18 @@ class AppState:
         return {key: s.live_value for key, s in self.options.items() if s.is_dirty}
 
     def get_all_live_values(self) -> dict[str, str]:
-        """Return all live values as strings for config writing."""
-        return {key: value_to_conf(s.live_value) for key, s in self.options.items() if s.managed}
+        """Preserve canonical values unless the user explicitly edits an option."""
+        return {
+            key: value_to_conf(s.live_value if s.is_dirty else s.disk_value)
+            for key, s in self.options.items()
+            if s.managed
+        }
 
     def mark_saved(self):
         """After a save, update all saved values to match live."""
         for s in self.options.values():
+            if s.is_dirty:
+                s.disk_value = s.live_value if s.managed else None
             s.saved_value = s.live_value
             s.saved_managed = s.managed
 

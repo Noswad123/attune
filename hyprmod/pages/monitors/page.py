@@ -15,7 +15,6 @@ from hyprland_monitors.monitors import (
     merge_saved_state,
     nearest_scale_index,
     parse_extras,
-    parse_mode,
     resolve_identifier,
     validate_mirror,
 )
@@ -144,13 +143,19 @@ class MonitorsPage(SectionPage):
 
     def restore_snapshot(self, monitor_copies, owned_names):
         """Restore monitors state from an undo/redo snapshot."""
+        before = lines_from_monitors(self._monitors)
         by_name = {m.name: m for m in monitor_copies}
         for mon in self._monitors:
             saved = by_name.get(mon.name)
             if saved:
                 self._copy_editable_fields(saved, mon)
         self._ownership.restore(owned_names)
-        self._commit_to_hyprland()
+        if lines_from_monitors(self._monitors) != before:
+            self._commit_to_hyprland()
+        else:
+            self._push_to_ui()
+            self._update_card_states()
+            self._notify_dirty()
 
     # -- Data loading --
 
@@ -171,6 +176,12 @@ class MonitorsPage(SectionPage):
         self._snap_scales()
         sections = saved_sections if saved_sections is not None else self._window.saved_sections
         saved = config.collect_section(sections, config.KEYWORD_MONITOR)
+        self._saved_lines = list(saved)
+        self._saved_selectors = {
+            port: line.partition("=")[2].split(",")[0].strip()
+            for line in saved
+            if (port := self._resolve_line_to_port(line)) is not None
+        }
         if saved:
             merge_saved_state(self._monitors, saved)
 
@@ -513,65 +524,24 @@ class MonitorsPage(SectionPage):
             self._remove_monitor(mon)
             return
         with self._undo_track():
+            changed = lines_from_monitors([mon]) != lines_from_monitors([baseline])
             self._copy_editable_fields(baseline, mon)
             self._ownership.discard(mon.name)
-            self._commit_to_hyprland()
+            if changed:
+                self._commit_to_hyprland()
+            else:
+                self._update_card_states()
+                self._notify_dirty()
 
     def _remove_monitor(self, mon: MonitorState):
-        """Remove a monitor from HyprMod management."""
+        """Remove the saved directive without changing the live display layout."""
         with self._undo_track():
             self._ownership.disown(mon.name)
-            self._apply_monitor_fallback(mon)
-            self._commit_to_hyprland()
-
-    def _apply_monitor_fallback(self, mon: MonitorState):
-        """Revert a monitor to user-config values (excluding HyprMod).
-
-        Parses the user's own monitor line and restores all fields:
-        core geometry (resolution, position, scale, transform) and extras.
-        """
-        doc = self._window.hypr.document
-        if doc is None:
-            return
-        excluded = frozenset({config.managed_path().resolve()})
-        user_lines = doc.find_all(config.KEYWORD_MONITOR, exclude_sources=excluded)
-        # Find the last matching line (Hyprland semantics).
-        # A line refers to ``mon`` if its leading token resolves to it — handles
-        # both port-name (``DP-1``) and ``desc:`` forms.
-        parts: list[str] = []
-        for kw in user_lines:
-            p = [s.strip() for s in kw.value.split(",")]
-            if p and resolve_identifier(p[0], [mon]) is mon:
-                parts = p
-        if len(parts) < 4:
-            return
-        # Core: NAME, RESxREFRESH, XxY, SCALE
-        mode = parse_mode(parts[1])
-        mon.width = mode["width"]
-        mon.height = mode["height"]
-        mon.refresh_rate = mode["refresh_rate"]
-        try:
-            px, py = parts[2].split("x")
-            mon.x, mon.y = int(px), int(py)
-        except (ValueError, IndexError):
-            pass
-        try:
-            mon.scale = float(parts[3])
-        except ValueError:
-            pass
-        # Transform + extras from tail key-value pairs
-        mon.transform = 0
-        tail = parts[4:]
-        for i in range(0, len(tail) - 1, 2):
-            if tail[i].lower() == "transform":
-                try:
-                    mon.transform = int(tail[i + 1])
-                except ValueError:
-                    pass
-                break
-        extras = parse_extras(",".join(parts))
-        for field in _EXTRA_FIELDS:
-            setattr(mon, field, extras.get(field))
+        self._window.show_toast(
+            "Save removes override; reload your config to restore baseline.", timeout=5
+        )
+        self._update_card_states()
+        self._notify_dirty()
 
     # -- IPC resync --
 
@@ -827,6 +797,12 @@ class MonitorsPage(SectionPage):
         return count
 
     def mark_saved(self):
+        self._saved_lines = self.get_monitor_lines()
+        self._saved_selectors = {
+            port: line.partition("=")[2].split(",")[0].strip()
+            for line in self._saved_lines
+            if (port := self._resolve_line_to_port(line)) is not None
+        }
         self._ownership.mark_saved()
         self._save_snapshot()
         self._save_confirmed_snapshot()
@@ -839,6 +815,10 @@ class MonitorsPage(SectionPage):
         if not self._saved_monitors or not self.is_dirty():
             return
         self._ownership.discard_all()
+        if lines_from_monitors(self._monitors) == lines_from_monitors(self._saved_monitors):
+            self._update_card_states()
+            self._notify_dirty()
+            return
         self._applying = True
         try:
             self._window.hypr.monitors.apply(self._saved_monitors)
@@ -892,5 +872,45 @@ class MonitorsPage(SectionPage):
         return entries
 
     def get_monitor_lines(self) -> list[str]:
-        managed = [m for m in self._monitors if self._ownership.is_owned(m.name)]
-        return [f"monitor = {line}" for line in lines_from_monitors(managed)]
+        """Merge edited selectors without dropping directives absent from live IPC."""
+        saved_by_name = {mon.name: mon for mon in self._saved_monitors}
+        changes: dict[str, str | None] = {
+            selector: None
+            for name, selector in self._saved_selectors.items()
+            if self._ownership.is_saved(name) and not self._ownership.is_owned(name)
+        }
+        for mon in self._monitors:
+            if not self._ownership.is_owned(mon.name):
+                continue
+            baseline = saved_by_name.get(mon.name)
+            if (
+                not self._ownership.is_item_dirty(mon.name)
+                and baseline is not None
+                and lines_from_monitors([mon]) == lines_from_monitors([baseline])
+            ):
+                continue
+            body = lines_from_monitors([mon])[0]
+            selector = self._saved_selectors.get(mon.name)
+            if (
+                selector is not None
+                and baseline is not None
+                and mon.identify_by_description == baseline.identify_by_description
+            ):
+                # Keep the original description prefix rather than narrowing it to IPC's full name.
+                body = selector + "," + body.partition(",")[2]
+            changes[selector if selector is not None else body.split(",")[0].strip()] = (
+                f"monitor = {body}"
+            )
+
+        selectors = [line.partition("=")[2].split(",")[0].strip() for line in self._saved_lines]
+        last_index = {selector: index for index, selector in enumerate(selectors)}
+        lines = []
+        for index, (selector, line) in enumerate(zip(selectors, self._saved_lines, strict=True)):
+            if selector not in changes:
+                lines.append(line)
+            elif (replacement := changes[selector]) is not None:
+                lines.append(replacement if index == last_index[selector] else line)
+        lines.extend(
+            line for selector, line in changes.items() if selector not in last_index and line
+        )
+        return lines

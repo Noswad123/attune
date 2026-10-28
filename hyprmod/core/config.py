@@ -1,14 +1,11 @@
-"""Read/write hyprmod's managed config file.
+"""Generic config helpers, with Attune's fixed Lua default and safe reader.
 
-The managed file lives at ``~/.config/hypr/hyprland-gui.{conf,lua}`` by
-default (path is user-configurable via :func:`set_managed_path`). The
-suffix is mode-driven: ``.lua`` when the user has ``hyprland.lua`` on
-disk (Hyprland 0.55+ default), ``.conf`` otherwise. Both formats are
-read back into the same :class:`Document` shape, so the rest of hyprmod
-doesn't care which one is on disk.
+Explicit legacy overrides retain their format behavior for non-GUI callers.
+The GUI uses core.persistence rather than the generic write_all helper.
 """
 
 import logging
+import os
 from collections.abc import Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -36,6 +33,8 @@ from hyprland_config import (
     serialize_hyprlang,
 )
 
+from hyprmod.core import persistence
+
 log = logging.getLogger(__name__)
 
 
@@ -60,13 +59,14 @@ class ConfigSections:
     plugins: list[str] | None = None
 
 
-HYPRMOD_DIR = Path.home() / ".config" / "hypr" / "hyprmod"
-_DEFAULT_MANAGED_BASE = Path.home() / ".config" / "hypr" / "hyprland-gui"
+HYPRMOD_DIR = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "attune"
+_DEFAULT_MANAGED_BASE = (
+    Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "hypr" / "attune.lua"
+)
 # Public so UI strings can format a label off the same source of truth.
 LUA_MIN_VERSION: tuple[int, int, int] = (0, 55, 0)
 
-# User-configurable override for the managed-file path. When ``None`` we
-# fall back to ``_DEFAULT_MANAGED_BASE`` with the mode-appropriate suffix.
+# Generic-helper override. The focused GUI does not expose path editing.
 _path_override: Path | None = None
 _lua_mode_cache: tuple[Path, bool] | None = None
 
@@ -129,7 +129,7 @@ def _with_active_suffix(base: Path) -> Path:
 
 
 def managed_path() -> Path:
-    """Active managed-file path (suffix matches active mode by default)."""
+    """Attune Lua path, or an explicit generic-helper override."""
     return _with_active_suffix(_path_override or _DEFAULT_MANAGED_BASE)
 
 
@@ -144,7 +144,7 @@ def managed_conf_path() -> Path:
 
 
 def default_managed_path() -> Path:
-    """Default managed-file path with the active mode's suffix."""
+    """Default Attune Lua destination, independent of compositor mode."""
     return _with_active_suffix(_DEFAULT_MANAGED_BASE)
 
 
@@ -342,7 +342,11 @@ def read_all_sections(
     path = path or managed_path()
     if not path.exists():
         return {}, {}, []
-    doc = load_any(path, follow_sources=False, lenient=True)
+    doc = (
+        persistence.read_document(path.read_bytes().decode("utf-8"))
+        if path.name == "attune.lua"
+        else load_any(path, follow_sources=False, lenient=True)
+    )
     # In-memory only — keeps the UI consistent when the on-disk file still
     # uses legacy syntax. Persisting the migration requires user consent
     # via the deprecation dialog (:mod:`hyprmod.core.deprecations`).
@@ -550,9 +554,8 @@ def to_managed_text(
 ) -> str:
     """Build the next-save content in the format that hits disk.
 
-    Returns Hyprlang text in Hyprlang mode, Lua text in Lua mode. Used by
-    :func:`write_all` and the Pending Changes diff so both see the same
-    bytes that will land on disk.
+    Uses the destination suffix, including explicit legacy overrides.
+    The focused GUI instead uses persistence.build_text for its review.
     """
     doc = _build_document(values, sections)
     _log_deprecations(doc, hyprland_version=hyprland_version)

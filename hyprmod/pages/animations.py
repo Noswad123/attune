@@ -1,9 +1,11 @@
 """Animation configuration page — flat list with detail dialogs."""
 
 from collections.abc import Iterator
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 from gi.repository import Adw, GLib, Gtk
+from hyprland_config import BezierData
+from hyprland_socket import HyprlandError
 from hyprland_state import (
     ANIM_CHILDREN,
     ANIM_FLAT,
@@ -15,9 +17,10 @@ from hyprland_state import (
 from hyprmod.core import config
 from hyprmod.core.ownership import OwnershipSet
 from hyprmod.core.pending import ChangeKind, PendingChange
-from hyprmod.core.undo import AnimationUndoEntry
+from hyprmod.core.undo import AnimationUndoEntry, UndoEntry
 from hyprmod.data.bezier_data import get_curve_store
 from hyprmod.pages.section import SectionPage
+from hyprmod.ui import try_with_toast
 from hyprmod.ui.bezier_editor import BezierEditorDialog
 from hyprmod.ui.icons import ANIMATIONS_ICON
 from hyprmod.ui.row_actions import RowActions
@@ -84,6 +87,18 @@ def _curve_display_names(curve_names: list[str]) -> list[str]:
     return [f"\u2605 {n}" if n in user_set else n for n in curve_names]
 
 
+@dataclass
+class _CurveChange(UndoEntry):
+    page: "AnimationsPage"
+    name: str
+    old_points: tuple | None
+    new_points: tuple | None
+
+    def apply(self, window, *, undo: bool) -> bool:
+        self.page.restore_curve(self.name, self.old_points if undo else self.new_points)
+        return True
+
+
 class AnimationsPage(SectionPage):
     def __init__(self, window, on_dirty_changed=None, push_undo=None, saved_sections=None):
         super().__init__(window, on_dirty_changed, push_undo)
@@ -129,13 +144,19 @@ class AnimationsPage(SectionPage):
 
     def _apply_with_curves(self, state: AnimState) -> bool:
         """Apply an AnimState with automatic curve point resolution."""
-        points = get_curve_store().get_curve_points(state.curve) if state.curve else None
-        return self._anims.apply_state(state, curve_points=points)
+        points = self.get_curve_points(state.curve) if state.curve else None
+        return try_with_toast(
+            self._window.show_bug_toast,
+            "Animation preview failed",
+            lambda: self._anims.apply_state(state, curve_points=points),
+            catch=HyprlandError,
+        )
 
     def replace_curve(self, old_name: str, new_name: str):
         """Replace all references to a curve name and re-apply affected animations."""
         for name, state in self._anims.get_all_cached().items():
             if state.curve == old_name:
+                self._ownership.own(name)
                 updated = replace(state, curve=new_name)
                 self._anims.update_cached(name, updated)
                 self._apply_with_curves(updated)
@@ -144,6 +165,7 @@ class AnimationsPage(SectionPage):
         """Reset animations using a deleted curve to 'default' and re-apply."""
         for name, state in self._anims.get_all_cached().items():
             if state.overridden and state.curve == deleted_name:
+                self._ownership.own(name)
                 updated = replace(state, curve="default")
                 self._anims.update_cached(name, updated)
                 self._apply_with_curves(updated)
@@ -152,17 +174,88 @@ class AnimationsPage(SectionPage):
         """Load which animation names HyprMod owns from the config file."""
         sections = saved_sections if saved_sections is not None else self._window.saved_sections
         saved_lines = config.collect_section(sections, config.KEYWORD_ANIMATION)
-        names: set[str] = set()
+        self._saved_lines: dict[str, str] = {}
         for line in saved_lines:
             _, _, val = line.partition("=")
             parts = [p.strip() for p in val.split(",")]
-            if parts:
-                names.add(parts[0])
-        self._ownership = OwnershipSet(names)
+            if parts and parts[0]:
+                name = parts[0]
+                self._saved_lines[name] = line
+                if self._anims.get_cached(name) is None:
+                    state = AnimState.from_keyword(name, parts)
+                    self._anims.set_baseline(name, state)
+                    self._anims.update_cached(name, state)
+        self._ownership = OwnershipSet(set(self._saved_lines))
+        self._saved_curve_lines = {
+            line.partition("=")[2].split(",", 1)[0].strip(): line
+            for line in config.collect_section(sections, config.KEYWORD_BEZIER)
+        }
 
     def load_hyprland_curves(self):
         """Load bezier curves from Hyprland."""
-        get_curve_store().set_hyprland_curves(self._anims.get_curves())
+        store = get_curve_store()
+        store.set_hyprland_curves(self._anims.get_curves())
+        self._curve_baselines = {
+            name: points
+            for name in store.get_all_curve_names()
+            if (points := store.get_curve_points(name)) is not None
+        }
+        for name, line in self._saved_curve_lines.items():
+            self._curve_baselines[name] = BezierData.from_body(line.partition("=")[2]).points
+        self._changed_curves: dict[str, tuple] = {}
+
+    def get_curve_points(self, name: str) -> tuple | None:
+        if name in self._changed_curves:
+            return self._changed_curves[name]
+        if name in self._curve_baselines:
+            return self._curve_baselines[name]
+        return get_curve_store().get_curve_points(name)
+
+    @property
+    def changed_curve_names(self) -> set[str]:
+        return set(self._changed_curves)
+
+    def curve_saved(self, name: str) -> None:
+        """Stage an explicitly saved preset for compositor review, even if its name is unchanged."""
+        points = get_curve_store().get_curve_points(name)
+        if points is None:
+            return
+        old_points = self._changed_curves.get(name)
+        new_points = points if points != self._curve_baselines.get(name) else None
+        if old_points != new_points and self._push_undo:
+            self._push_undo(_CurveChange(self, name, old_points, new_points))
+        self.restore_curve(name, new_points)
+
+    def restore_curve(self, name: str, points: tuple | None) -> None:
+        """Restore the compositor draft without rewriting the separately saved preset library."""
+        if points is None:
+            self._changed_curves.pop(name, None)
+        else:
+            self._changed_curves[name] = points
+        baseline = self._curve_baselines.get(name)
+        live_points = points if points is not None else baseline
+        if live_points is not None:
+            try_with_toast(
+                self._window.show_bug_toast,
+                "Curve preview failed",
+                lambda: self._anims.define_bezier(name, live_points),
+                catch=HyprlandError,
+            )
+        self._notify_dirty()
+
+    def revert_curve(self, name: str) -> None:
+        if name in self._changed_curves:
+            self.restore_curve(name, None)
+
+    def get_curve_definitions(self, used_curves: set[str]) -> list[str]:
+        """Keep canonical definitions unless explicitly edited; resolve only new references."""
+        records = dict(self._saved_curve_lines)
+        for line in get_curve_store().get_curve_definitions(used_curves - records.keys()):
+            name = line.partition("=")[2].split(",", 1)[0].strip()
+            records[name] = line
+        for name, points in self._changed_curves.items():
+            records[name] = BezierData(name=name, points=points).to_line()
+        return list(records.values())
 
     def _promote_to_overridden(self, name: str) -> AnimState:
         """Promote an inherited animation to overridden, copying effective values.
@@ -185,23 +278,18 @@ class AnimationsPage(SectionPage):
 
     def set_overridden(self, name: str, overridden: bool):
         """Toggle whether an animation has explicit settings."""
+        if not overridden:
+            self.unmanage_anim(name)
+            return
         state = self._anims.get_cached(name)
         if not state:
             return
-        old_copy = state
-        if overridden and not state.overridden:
+        old_copy = state, self.is_owned(name)
+        self._ownership.own(name)
+        if not state.overridden:
             self._promote_to_overridden(name)
             self._apply_live(name)
-        elif not overridden and state.overridden:
-            # Reload to get the actual state (user's own config may still override)
-            self._window.app_state.reload_preserving_dirty()
-            refreshed = self._anims.get(name)
-            if refreshed:
-                self._anims.update_cached(name, refreshed)
-            else:
-                inherited = AnimState(name=name)
-                self._anims.update_cached(name, inherited)
-        new_copy = self._anims.get_cached(name)
+        new_copy = self._anims.get_cached(name), self.is_owned(name)
         if self._push_undo:
             entry = AnimationUndoEntry(anim_name=name, anim_old=old_copy, anim_new=new_copy)
             self._push_undo(entry)
@@ -214,23 +302,38 @@ class AnimationsPage(SectionPage):
         state = self._anims.get_cached(name)
         if not state:
             return
-        old_copy = state
+        if state.overridden and self.is_owned(name) and getattr(state, field_name) == value:
+            return
+        old_copy = state, self.is_owned(name)
+        self._ownership.own(name)
         if not state.overridden:
             state = self._promote_to_overridden(name)
 
         updated = replace(state, **{field_name: value})
         self._anims.update_cached(name, updated)
         if self._push_undo:
-            self._push_undo(AnimationUndoEntry(anim_name=name, anim_old=old_copy, anim_new=updated))
+            self._push_undo(
+                AnimationUndoEntry(anim_name=name, anim_old=old_copy, anim_new=(updated, True))
+            )
         self._apply_live(name)
         self._refresh_row(name)
         self._refresh_children(name)
 
-    def restore_state(self, name: str, state_copy):
+    def restore_state(self, name: str, snapshot: tuple[AnimState | None, bool]):
         """Restore an animation to a given state (used by undo/redo)."""
-        if state_copy.overridden:
-            self._apply_with_curves(state_copy)
-        self._anims.update_cached(name, state_copy)
+        state_copy, owned = snapshot
+        if owned:
+            self._ownership.own(name)
+        else:
+            self._ownership.disown(name)
+        if state_copy is not None and state_copy != self._anims.get_cached(name):
+            if state_copy.overridden:
+                self._apply_with_curves(state_copy)
+            else:
+                self._window.show_toast(
+                    "Reload your config to restore the live animation baseline."
+                )
+            self._anims.update_cached(name, state_copy)
         self._refresh_row(name)
         self._refresh_children(name)
         self._notify_dirty()
@@ -255,27 +358,22 @@ class AnimationsPage(SectionPage):
             self._refresh_children(child_name)
 
     def get_animation_lines(self) -> tuple[list[str], set[str]]:
-        """Return config lines for animations owned by HyprMod or newly changed,
-        and the set of curve names referenced."""
-        lines = []
+        """Merge explicit edits into saved directives, including names absent from IPC."""
+        records = dict(self._saved_lines)
+        for name in self._saved_lines:
+            if not self.is_owned(name):
+                records.pop(name)
+        for name, state in self._anims.get_all_cached().items():
+            if not self.is_owned(name) or not state.overridden:
+                continue
+            if self.is_anim_dirty(name):
+                records[name] = state.to_line() if state.enabled else f"animation = {name}, 0"
         used_curves: set[str] = set()
-        for name, _, _, _ in ANIM_FLAT:
-            state = self._anims.get_cached(name)
-            if not state or not state.overridden:
-                continue
-            # Only include if HyprMod owns it (was in our config) or the user changed it
-            if not self._ownership.is_owned(name) and not self.is_anim_dirty(name):
-                continue
-            parts = [name, "1" if state.enabled else "0"]
-            if state.enabled:
-                parts.extend([str(state.speed), state.curve])
-                if state.curve:
-                    used_curves.add(state.curve)
-                if state.style:
-                    parts.append(state.style)
-            line = "animation = " + ", ".join(parts)
-            lines.append(line)
-        return lines, used_curves
+        for line in records.values():
+            parts = [part.strip() for part in line.partition("=")[2].split(",")]
+            if len(parts) >= 4 and parts[3]:
+                used_curves.add(parts[3])
+        return list(records.values()), used_curves
 
     def is_anim_dirty(self, name: str) -> bool:
         """Check if a single animation has unsaved changes."""
@@ -285,79 +383,50 @@ class AnimationsPage(SectionPage):
 
     def is_dirty(self) -> bool:
         """Check if any animation has unsaved changes."""
-        if self._anims.is_dirty():
+        if self._changed_curves or self._anims.is_dirty():
             return True
         return self._ownership.is_dirty()
-
-    def _apply_fallback(self, name: str):
-        """Apply the fallback animation state via IPC and update the cache.
-
-        Resolves what the animation would be without our managed config:
-        either a user-defined override from their own config or the
-        inherited value from the parent animation chain.
-        """
-        fallback = self._anims.get_fallback(name, config.managed_path())
-        if fallback:
-            # User has their own animation line — apply it
-            self._apply_with_curves(fallback)
-            self._anims.update_cached(name, fallback)
-        else:
-            # No user override — resolve inherited from a parent chain
-            inherited = AnimState(name=name)
-            self._anims.update_cached(name, inherited)
-            eff_en, eff_sp, eff_cu, eff_st = self._anims.get_effective(name)
-            live = AnimState(
-                name=name,
-                overridden=True,
-                enabled=eff_en,
-                speed=eff_sp,
-                curve=eff_cu,
-                style=eff_st,
-            )
-            self._apply_with_curves(live)
-            self._anims.update_cached(name, inherited)
 
     def revert_anim(self, name: str):
         """Revert a single animation to its saved state (value + ownership)."""
         baseline = self._anims.get_baseline(name)
-        if not baseline:
-            return
-        if baseline.overridden:
-            self._apply_with_curves(baseline)
+        if baseline is not None and baseline != self._anims.get_cached(name):
+            if baseline.overridden:
+                self._apply_with_curves(baseline)
+            else:
+                self._window.show_toast(
+                    "Reload your config to restore the live animation baseline."
+                )
             self._anims.update_cached(name, baseline)
-        else:
-            self._apply_fallback(name)
         self._ownership.discard(name)
         self._refresh_row(name)
         self._refresh_children(name)
         self._notify_dirty()
 
     def unmanage_anim(self, name: str):
-        """Pending removal of an animation override.
-
-        Like option reset_to_value: applies the fallback value live and
-        clears ownership, but does NOT modify the config file or baseline.
-        The actual config removal happens at save time.
-        """
+        """Remove only the saved override, without guessing a live fallback."""
+        state = self._anims.get_cached(name)
+        was_owned = self.is_owned(name)
         self._ownership.disown(name)
-        self._apply_fallback(name)
+        if was_owned and self._push_undo:
+            self._push_undo(AnimationUndoEntry(name, (state, True), (state, False)))
+        self._window.show_toast(
+            "Save removes override; reload your config to restore baseline.", timeout=5
+        )
         self._refresh_row(name)
         self._refresh_children(name)
         self._notify_dirty()
 
     def mark_saved(self):
-        # Promote newly overridden animations to owned, but skip
-        # explicitly disowned ones (pending "remove override").
-        for name in ANIM_LOOKUP:
-            if not self._anims.is_dirty(name):
-                continue
-            state = self._anims.get_cached(name)
-            if not state or not state.overridden:
-                continue
-            # Skip if explicitly disowned (ownership dirty + not owned)
-            if self._ownership.is_item_dirty(name) and not self._ownership.is_owned(name):
-                continue
-            self._ownership.own(name)
+        lines, used_curves = self.get_animation_lines()
+        definitions = self.get_curve_definitions(used_curves)
+        self._saved_curve_lines = {}
+        for line in definitions:
+            curve = BezierData.from_body(line.partition("=")[2])
+            self._saved_curve_lines[curve.name] = line
+            self._curve_baselines[curve.name] = curve.points
+        self._changed_curves.clear()
+        self._saved_lines = {line.partition("=")[2].split(",")[0].strip(): line for line in lines}
         self._ownership.mark_saved()
         self._anims.mark_saved()
         for name in ANIM_LOOKUP:
@@ -365,8 +434,15 @@ class AnimationsPage(SectionPage):
 
     def discard(self):
         """Revert to saved state and re-apply via IPC."""
+        for name in list(self._changed_curves):
+            self.revert_curve(name)
         self._ownership.discard_all()
-        self._anims.discard()
+        try_with_toast(
+            self._window.show_bug_toast,
+            "Animation discard failed",
+            self._anims.discard,
+            catch=HyprlandError,
+        )
         # Match ``revert_anim``: refresh every row + tell the window the page is
         # clean again. Without this the rows render with stale dirty indicators
         # until the next change forces a paint.
@@ -379,6 +455,17 @@ class AnimationsPage(SectionPage):
     def iter_pending_changes(self) -> Iterator[PendingChange]:
         if not self.is_dirty():
             return
+        for name, points in self._changed_curves.items():
+            baseline = self._curve_baselines.get(name)
+            yield PendingChange(
+                category="Animations",
+                title=f"Curve: {name}",
+                subtitle=f"Control points: {baseline} to {points}",
+                kind="modified" if baseline is not None else "added",
+                revert=lambda n=name: self.revert_curve(n),
+                navigate_to="animations",
+                icon=ANIMATIONS_ICON,
+            )
         for name, *_ in ANIM_FLAT:
             if name not in ANIM_LOOKUP or not self.is_anim_dirty(name):
                 continue

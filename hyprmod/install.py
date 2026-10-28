@@ -1,15 +1,15 @@
 """Install/uninstall XDG entries for pipx/uv users.
 
-Wheel installs (``pipx install hyprmod``, ``uv tool install hyprmod``)
+Wheel installs (``pipx install attune``, ``uv tool install attune``)
 place the binary on ``$PATH`` but never touch ``$XDG_DATA_HOME``, so the
 desktop launcher and icon don't appear in app menus. This module copies
 those assets out of the bundled ``hyprmod/data`` tree into the user's
 data directory and removes them again on request.
 
-Distros that package hyprmod install the same files under ``/usr/share``;
+Distros that package Attune install the same files under ``/usr/share``;
 the first-launch safety net checks ``Gio.DesktopAppInfo`` first and
 skips work if anything in ``XDG_DATA_DIRS`` already provides the entry,
-so the two install paths don't collide. Explicit ``hyprmod --install``
+so the two install paths don't collide. Explicit ``attune --install``
 always reinstalls to ``$XDG_DATA_HOME`` (useful when bundled assets
 update with a new release).
 """
@@ -61,7 +61,7 @@ def _user_dest_map() -> list[tuple[Path, Path]]:
 
 
 def is_registered() -> bool:
-    """Whether a .desktop entry for hyprmod is visible to the desktop."""
+    """Whether a .desktop entry for Attune is visible to the desktop."""
     # PyGObject raises ``TypeError: constructor returned NULL`` rather than
     # returning ``None`` when no entry with this ID exists in XDG_DATA_DIRS.
     try:
@@ -85,14 +85,14 @@ def _exec_value(binary: str) -> str:
 
 
 def _pin_exec_to_binary(desktop_file: Path) -> None:
-    """Point ``Exec`` at the resolved hyprmod path instead of a bare name.
+    """Point ``Exec`` at the resolved attune path instead of a bare name.
 
     App menus and dock launchers often start without ``~/.local/bin`` on
-    ``$PATH``, so the bundled ``Exec=hyprmod`` silently fails to launch a
+    ``$PATH``, so the bundled ``Exec=attune`` silently fails to launch a
     pipx or uv install (#67). Distro packages ship their own copy under
     ``/usr/share`` and never reach this code.
     """
-    binary = shutil.which("hyprmod")
+    binary = shutil.which("attune")
     if binary is None:
         return
     rewritten = _EXEC_LINE.sub(lambda _: f"Exec={_exec_value(binary)}", desktop_file.read_text())
@@ -118,7 +118,7 @@ def install_user_files(*, quiet: bool = False) -> list[Path]:
 
 
 def uninstall_user_files(*, quiet: bool = False) -> list[Path]:
-    """Remove user-scope XDG assets owned by hyprmod. Leaves system files alone."""
+    """Remove user-scope XDG assets owned by Attune. Leaves system files alone."""
     removed: list[Path] = []
     home = _xdg_data_home()
     for _, dest in _user_dest_map():
@@ -139,8 +139,8 @@ def ensure_registered_silently() -> None:
     """First-launch safety net: install only if no entry is visible anywhere."""
     if is_registered():
         return
-    # Source-checkout runs (``uv run hyprmod``) don't put the binary on PATH,
-    # so dropping a launcher with ``Exec=hyprmod`` would point at nothing.
-    if shutil.which("hyprmod") is None:
+    # Source-checkout runs (``uv run attune``) don't put the binary on PATH,
+    # so dropping a launcher with ``Exec=attune`` would point at nothing.
+    if shutil.which("attune") is None:
         return
     install_user_files(quiet=True)

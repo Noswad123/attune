@@ -6,6 +6,23 @@ from hyprmod.core import config
 
 
 @pytest.fixture(autouse=True)
+def isolated_user_paths(tmp_path, monkeypatch):
+    """No test may use the developer's configuration or application state."""
+    home = tmp_path / "home"
+    home.mkdir()
+    config_home = home / ".config"
+    state_home = home / ".local" / "state"
+    config_home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
+    monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
+    monkeypatch.setenv("XDG_DATA_HOME", str(home / ".local" / "share"))
+    monkeypatch.setenv("GSETTINGS_BACKEND", "memory")
+    monkeypatch.setattr(config, "HYPRMOD_DIR", config_home / "attune")
+    monkeypatch.setattr(config, "_DEFAULT_MANAGED_BASE", config_home / "hypr" / "attune.lua")
+
+
+@pytest.fixture(autouse=True)
 def reset_config_caches():
     """Keep ``config.is_lua_mode()`` and ``config.read_cached()`` deterministic.
 

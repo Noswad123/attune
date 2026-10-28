@@ -1,8 +1,4 @@
-"""Open hyprmod's GSettings store and apply the stored config-path.
-
-Shared by the GTK window and the headless CLI so both resolve the
-managed-file path from the same source of truth.
-"""
+"""Open Attune's GSettings store without migrating configuration files."""
 
 import subprocess
 from pathlib import Path
@@ -44,20 +40,9 @@ def open_settings() -> Gio.Settings | None:
 
 
 def apply_saved_config_path(settings: Gio.Settings | None) -> None:
-    """Apply the stored ``config-path`` to :mod:`hyprmod.core.config`.
+    """Use Attune's fixed Lua destination, ignoring legacy path preferences.
 
-    The user may have switched Hyprland's config language out-of-band
-    since the path was stored, so the suffix is re-aligned to the active
-    mode (converting file content if needed) and the repointed value is
-    persisted back to *settings*. No-op when no override is stored.
+    Startup must never convert, create, or repoint a user's configuration.
     """
-    if settings is None:
-        return
-    path = settings.get_string("config-path")
-    if not path:
-        return
-    repointed = config.ensure_managed_path_matches_mode(path)
-    if repointed is not None:
-        settings.set_string("config-path", repointed)
-        path = repointed
-    config.set_managed_path(Path(path))
+    if settings is not None:
+        config.set_managed_path(None)

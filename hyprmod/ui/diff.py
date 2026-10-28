@@ -85,9 +85,9 @@ class ConfigDiffWidget(Gtk.Box):
         icon.set_pixel_size(36)
         icon.add_css_class("dim-label")
         empty.append(icon)
-        empty_label = Gtk.Label(label="Saved config is up to date")
-        empty_label.add_css_class("dim-label")
-        empty.append(empty_label)
+        self._empty_label = Gtk.Label(label="Saved config is up to date")
+        self._empty_label.add_css_class("dim-label")
+        empty.append(self._empty_label)
         self._stack.add_named(empty, "empty")
 
         self._title_label.set_label("Resulting config")
@@ -138,6 +138,7 @@ class ConfigDiffWidget(Gtk.Box):
         title: str | None = None,
     ) -> None:
         """Render the unified diff between *old_text* and *new_text*."""
+        self._empty_label.set_label("Saved config is up to date")
         if title is not None:
             self._title_label.set_label(title)
 
@@ -169,7 +170,29 @@ class ConfigDiffWidget(Gtk.Box):
         self._added_label.set_label(f"+{added}")
         self._removed_label.set_label(f"−{removed}")
 
+        self._render_lines(diff_lines)
+
+    def set_precomputed_diff(
+        self,
+        diff: str,
+        *,
+        added_lines: int,
+        removed_lines: int,
+        title: str,
+        empty_message: str = "No textual differences",
+    ) -> None:
+        """Render a collector-bounded diff literally, without computing a diff."""
+        self._title_label.set_label(title)
+        self._empty_label.set_label(empty_message)
+        self._added_label.set_label(f"+{added_lines}" if diff or added_lines else "")
+        self._removed_label.set_label(f"−{removed_lines}" if diff or removed_lines else "")
+        self._render_lines(diff.splitlines(keepends=True))
+
+    def _render_lines(self, diff_lines: list[str]) -> None:
         self._buffer.set_text("")
+        if not diff_lines:
+            self._stack.set_visible_child_name("empty")
+            return
         end = self._buffer.get_end_iter()
 
         for line in diff_lines:

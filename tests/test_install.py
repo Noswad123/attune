@@ -7,7 +7,7 @@ from gi.repository import Gio, GLib
 
 from hyprmod import install
 
-DESKTOP_TEXT = "[Desktop Entry]\nType=Application\nExec=hyprmod\nTerminal=false\n"
+DESKTOP_TEXT = "[Desktop Entry]\nType=Application\nExec=attune\nTerminal=false\n"
 
 
 def _desktop_file(tmp_path: Path) -> Path:
@@ -36,12 +36,12 @@ class TestPinExecToBinary:
     @pytest.mark.parametrize(
         "binary",
         [
-            "/home/user/.local/bin/hyprmod",
-            "/home/my user/bin/hyprmod",
-            "/home/my$dir/hyprmod",
-            "/home/back\\slash/hyprmod",
-            '/home/qu"ote/hyprmod',
-            "/home/tick`s/hyprmod",
+            "/home/user/.local/bin/attune",
+            "/home/my user/bin/attune",
+            "/home/my$dir/attune",
+            "/home/back\\slash/attune",
+            '/home/qu"ote/attune',
+            "/home/tick`s/attune",
         ],
     )
     def test_written_exec_line_parses_back_to_the_binary(self, tmp_path, monkeypatch, binary):
@@ -69,10 +69,44 @@ class TestPinExecToBinary:
 class TestInstallUserFiles:
     def test_installed_entry_points_at_the_binary(self, tmp_path, monkeypatch):
         monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
-        monkeypatch.setattr(install.shutil, "which", lambda _: "/opt/hyprmod/bin/hyprmod")
+        monkeypatch.setattr(install.shutil, "which", lambda _: "/opt/attune/bin/attune")
 
         placed = install.install_user_files(quiet=True)
 
         desktop = tmp_path / "applications" / install.DESKTOP_FILE
         assert desktop in placed
-        assert "Exec=/opt/hyprmod/bin/hyprmod\n" in desktop.read_text()
+        assert "Exec=/opt/attune/bin/attune\n" in desktop.read_text()
+
+    def test_install_and_uninstall_leave_upstream_assets_untouched(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+        monkeypatch.setattr(install.shutil, "which", lambda _: None)
+        upstream_files = [
+            tmp_path / "applications/io.github.bluemancz.hyprmod.desktop",
+            tmp_path / "metainfo/io.github.bluemancz.hyprmod.metainfo.xml",
+            tmp_path / "icons/hicolor/scalable/apps/io.github.bluemancz.hyprmod.svg",
+        ]
+        for path in upstream_files:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("upstream sentinel")
+
+        placed = install.install_user_files(quiet=True)
+        assert len(placed) == 3
+        assert all("io.github.jdawson.Attune" in path.name for path in placed)
+
+        assert install.uninstall_user_files(quiet=True) == placed
+        assert all(not path.exists() for path in placed)
+        assert all(path.read_text() == "upstream sentinel" for path in upstream_files)
+
+
+class TestEnsureRegistered:
+    def test_does_not_register_when_only_upstream_binary_exists(self, monkeypatch):
+        monkeypatch.setattr(install, "is_registered", lambda: False)
+        monkeypatch.setattr(
+            install.shutil, "which", lambda name: "/usr/bin/hyprmod" if name == "hyprmod" else None
+        )
+        calls = []
+        monkeypatch.setattr(install, "install_user_files", lambda **kwargs: calls.append(kwargs))
+
+        install.ensure_registered_silently()
+
+        assert calls == []
