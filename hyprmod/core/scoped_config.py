@@ -17,7 +17,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Literal
 
-from hyprland_config import serialize_lua
+from hyprland_config import Assignment, Keyword, serialize_lua
 
 from hyprmod.core import persistence
 from hyprmod.core.scopes import Scope
@@ -97,6 +97,32 @@ class ScopedConfig:
 class LegacyBundle:
     text: str
     kind: Literal["legacy-full-bundle"] = "legacy-full-bundle"
+
+
+def partition_legacy(bundle: LegacyBundle) -> tuple[ScopedConfig, ScopedConfig]:
+    """Explicitly partition owned v1 data; this grants no conversion or write approval."""
+    if not isinstance(bundle, LegacyBundle) or bundle.kind != "legacy-full-bundle":
+        raise ValueError("Expected a legacy full bundle")
+    validated = read_document(bundle.text)
+    if not isinstance(validated, LegacyBundle):
+        raise ValueError("Expected canonical v1 full-bundle text")
+    document = persistence.read_document(validated.text)
+    values = {}
+    sections: dict[str, list[str]] = {"bezier": [], "animation": [], "monitor": []}
+    for line in document.lines:
+        if isinstance(line, Assignment):
+            values[line.full_key] = line.value
+        elif isinstance(line, Keyword):
+            if line.key not in sections:
+                raise ValueError("Unsupported legacy directive")
+            sections[line.key].append(line.raw.rstrip("\n"))
+    return (
+        ScopedConfig(
+            Scope.APPEARANCE,
+            {"values": values, "beziers": sections["bezier"], "animations": sections["animation"]},
+        ),
+        ScopedConfig(Scope.DISPLAYS, {"monitors": sections["monitor"]}),
+    )
 
 
 def build_text(config: ScopedConfig) -> str:

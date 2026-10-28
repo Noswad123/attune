@@ -17,6 +17,47 @@ HASHES = {
 
 class TestFrozenV1:
     @pytest.mark.parametrize("name", HASHES)
+    def test_explicit_partition_returns_both_scopes_without_reinterpreting_source(self, name):
+        raw = (FIXTURES / f"{name}.lua").read_bytes()
+        legacy = scoped_config.read_document(raw.decode())
+        if not isinstance(legacy, scoped_config.LegacyBundle):
+            pytest.fail("Frozen fixture must remain a legacy full bundle")
+        appearance, displays = scoped_config.partition_legacy(legacy)
+        assert appearance.scope == Scope.APPEARANCE
+        assert displays.scope == Scope.DISPLAYS
+        assert appearance.monitors == ()
+        assert displays.values == displays.animations == displays.beziers == ()
+        if name == "combined":
+            assert dict(appearance.values)["general:gaps_in"] == "7"
+            assert appearance.beziers == ("bezier = ease, 0.1, 0.2, 0.8, 1",)
+            assert appearance.animations == ("animation = windows, 1, 5, ease",)
+            assert displays.monitors == (
+                "monitor = DP-1, 2560x1440@144, 0x0, 1",
+                "monitor = HDMI-A-9, disable",
+                "monitor = DP-9, preferred, auto, 1",
+            )
+        else:
+            assert appearance.values == appearance.beziers == appearance.animations == ()
+            assert displays.monitors == ()
+        for scoped in (appearance, displays):
+            assert (
+                scoped_config.read_document(
+                    scoped_config.build_text(scoped), expected_scope=scoped.scope
+                )
+                == scoped
+            )
+        assert legacy.text.encode() == raw
+        assert (FIXTURES / f"{name}.lua").read_bytes() == raw
+
+    def test_partition_revalidates_legacy_tag_and_never_accepts_foreign_or_scoped_text(self):
+        appearance = scoped_config.ScopedConfig(
+            Scope.APPEARANCE, {"values": {}, "beziers": [], "animations": []}
+        )
+        for text in ("", "os.execute('false')\n", scoped_config.build_text(appearance)):
+            with pytest.raises(ValueError):
+                scoped_config.partition_legacy(scoped_config.LegacyBundle(text))
+
+    @pytest.mark.parametrize("name", HASHES)
     def test_literal_bytes_and_renderer(self, name):
         raw = (FIXTURES / f"{name}.lua").read_bytes()
         assert hashlib.sha256(raw).hexdigest() == HASHES[name]
