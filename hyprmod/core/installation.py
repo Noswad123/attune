@@ -1,8 +1,8 @@
 """Pure split-v2 declarations, not filesystem approval or write authority.
 
-M3.3 must verify actual resolution, aliases (including main/state/registry/v1),
-file types, ownership/permissions, and Git policy. Even approved_resolved_path
-is only an unverified declaration here. No discovery or activation occurs.
+The separate route_approval layer observes actual resolution, protected aliases,
+file types, permissions, and Git policy. Even approved_resolved_path is only an
+unverified declaration here. Neither layer performs discovery or activation.
 """
 
 import hashlib

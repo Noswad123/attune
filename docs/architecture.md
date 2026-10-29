@@ -24,6 +24,8 @@ The selected future design is
 registered scope outputs and journaled recovery, with manual loader handoff and
 no claim of pair-atomic or runtime snapshot loading. The interfaces below remain
 the shipped single-output implementation.
+M3.2's pure models and codec are implemented separately below; no active app path
+discovers or selects their registry or writes their v2 output.
 
 ## API / Interfaces
 
@@ -60,6 +62,96 @@ the shipped single-output implementation.
 managed-data caching. It still contains legacy generic helpers such as
 `write_all`, path overrides, and format conversion. Those are not the GUI's
 reviewed persistence API. Settings exposes neither path editing nor auto-save.
+
+## Inactive M3.2 data APIs
+
+These pure interfaces perform no filesystem operations, subprocess calls, Lua
+evaluation, registry creation, discovery, or activation. They are not wired into
+the GUI or existing read/write routing.
+
+| Interface | Role |
+| --- | --- |
+| `scopes.Scope`, `SCOPE_BASENAMES` | Shared immutable logical identities and dedicated appearance/display basenames. |
+| `scoped_config.ScopedConfig(scope, payload)` | Validates a closed scope payload and copies its data into deeply immutable tuples. |
+| `scoped_config.build_text(config)` | Renders canonical v2 metadata and Lua text in memory, not to disk. |
+| `scoped_config.read_document(text, expected_scope=...)` | Strict, bounded v1/v2 decoding. V1 is a tagged full bundle, never implicitly one scope. |
+| `scoped_config.partition_legacy(bundle)` | Explicit pure partition into both scopes, without approval to migrate or write. |
+| `installation.parse_registry(text)` | Validates exact schema/layout/routes and normalized declared paths, returning immutable data and exact source-byte SHA256. |
+
+Appearance payloads require exactly `values`, `beziers`, and `animations`; displays
+require exactly `monitors`. Forbidden fields are rejected even when empty. Scalar
+keys are sorted; directive order is preserved and duplicate directive identities
+are rejected rather than silently collapsed.
+
+V2 starts with the ownership header and `-- Attune data v2: ` record. Its compact,
+sorted-key ASCII JSON contains exactly `version`, `scope`, `payload`, `content_id`.
+The scope-local ID hashes canonical version/scope/payload data, while `byte_hash`
+hashes the full emitted UTF-8 text. Bounded one-MiB decoding, duplicate-field/type
+validation, expected-scope checking, identity recomputation, and byte-exact
+regeneration reject edited or cross-scoped data without executing it.
+
+The registry parser accepts at most 64 KiB, 16 JSON nesting levels, and 4,096 UTF-8
+bytes per path. Exact input-byte identity changes when input whitespace changes;
+`InstallationRegistry.to_json()` separately emits canonical schema-only JSON.
+Declared path overlap, invalid basenames, non-normalized/relative paths, controls,
+and interpolation are refused. Actual symlink resolution, file types, hardlink
+aliases, permissions, protected targets, and outside-Git policy are **not** verified
+by these pure declarations; the separate inspector below observes those facts
+without granting write authority.
+
+The v1 reader/writer is unchanged apart from promoting its pure document builder
+to public `build_document` for renderer reuse. It still rejects v2 on active paths.
+Literal combined/empty v1 fixtures lock historical emitted bytes and backup
+validation. No split cache, journal, runtime loader, migration, or v2 writer is
+activated by these models. Canonical validation is not live compositor acceptance.
+
+## Inactive M3.3a route inspection
+
+`core/route_approval.py` is not imported by active GUI/configuration routing. Its
+public APIs require explicit normalized absolute `registry_path`, `config_root`,
+and `state_root`; the registry must be at `config_root/attune/installation.json`.
+There is no environment-based installation discovery or filename-based activation.
+
+- `inspect_installation(...)` directly observes an existing canonical v2 pair.
+- `run_inspect(...)` performs the same read-only work in an isolated supervised
+  child with a default ten-second deadline and cancellation.
+- `revalidate(evidence)` / `run_revalidate(evidence)` recapture actual facts and
+  reject an evidence-hash mismatch. New observation time does not change that hash.
+
+Frozen, slotted evidence binds exact registry bytes, lexical/resolved paths,
+symlink targets/identities, security metadata, scope content IDs/full-byte hashes,
+canonical counts, protected context, and ancestor Git-marker facts. Directory
+facts exclude timestamps/link counts so unrelated sibling activity is harmless.
+File and symlink facts retain content/identity metadata. Full dependency rechecks
+after both reads reject changing or mixed observations where detected.
+
+Registry input must be user-owned, private `0600`, regular, and single-link. Both
+outputs must be existing nonempty canonical v2 with the expected scope, user-owned,
+regular/single-link, owner-readable/writable, non-executable, and not group/world
+writable. Common `0600`/`0640`/`0644` output modes are accepted. Resolved immediate
+parents must be owned, writable/searchable, and not group/world writable. No chmod
+or repair is attempted. Missing/empty targets are provisioning states for future
+migration, not a healthy ordinary installation.
+
+Resolution captures file/parent links, bounds depth/hops, and confirms kernel-
+followed lexical metadata agrees with the computed target. This matters for search
+permissions and ACLs on directories later canceled by `..`; textual normalization
+alone is insufficient. Protected main/legacy/registry/state collisions are checked
+before reading potentially aliased bytes. Main files are metadata-only observations.
+Registry and displays must resolve outside ancestor `.git` directory/file markers;
+appearance may be inside Git. This is not discovery through arbitrary Git environment
+variables or nonstandard configuration.
+
+Limits are 64 KiB registry bytes, 1 MiB per output/evidence transport, 128 path
+components, and 40 symlink hops. Direct calls have no hard filesystem-latency bound;
+clients should use the supervised API off GTK. Serialized hashes are not authentication
+or a durable permit. Inspection is transient and non-atomic; future writers must
+revalidate under lock and again before replacement, accounting for intentional state
+provisioning rather than blindly ignoring changed evidence.
+
+The layer never writes files, creates state, executes/compiles Lua, runs compositor
+queries, or activates split routing. Scope-aware review/backup/diagnostic integration
+and the journaled writer remain future M3 work. V1 stays the only active write mode.
 
 ## Data Flow
 

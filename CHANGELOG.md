@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Inactive read-only split-route inspection with stable file/symlink evidence,
+  ownership and permission checks, protected-path/alias guards, Git-placement
+  policy, and stale-evidence revalidation. No registry creation or split writes.
+- Inactive M3.2 appearance/display scope models, explicit legacy-bundle partition,
+  canonical v2 codec with scope-local content identities, and pure strict registry
+  declarations. Existing GUI/configuration/persistence remains v1-only.
+- Literal historical v1 fixtures and hashes to verify byte-for-byte renderer and
+  backup compatibility without regenerating expected data during tests.
 - M3.1 architecture decision for future shared appearance/local display ownership,
   scoped v2 data, journaled transactions, and explicit migration handoff. This is
   a design record only; current output, loaders, and routing are unchanged.

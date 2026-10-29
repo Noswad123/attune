@@ -40,7 +40,12 @@ register a desktop entry.
 A shared-appearance/machine-specific-monitor split is future work, not delivered.
 Its accepted design is recorded in
 [ADR 0001](docs/decisions/0001-shared-local-ownership.md); the proposed two-file
-layout, installation registry, and transaction journal are not available yet.
+layout, registry activation, and transaction journal are not available yet.
+Pure scoped models, registry parsing, and a v2 codec exist as inactive development
+foundations, not a new installation mode or UI feature.
+An inactive read-only inspector can now verify explicitly supplied routes and
+revalidate captured evidence. It does not discover, create, approve for writing,
+or activate an installation, and is not a new GUI/launcher command.
 
 ### Roadmap
 
@@ -48,8 +53,9 @@ See [ROADMAP.md](ROADMAP.md) for the phased backlog and acceptance criteria:
 validate the foundation, add diagnostics and recovery, separate shared/local
 settings, then introduce constrained presets, Wisp entry points, and a CARAMEL
 appearance overview. M1 diagnostics and M2 disk inspection/restoration/recovery
-are implemented. Shared/local ownership design is recorded; scoped models and
-format validation are next, without activating split writes. Explicit live
+are implemented. Shared/local ownership design and pure scoped model/codec work
+are complete, along with the read-only route-inspection foundation. Scope-aware
+review/backup/diagnostic adapters are next. Explicit live
 application and routing rollout remain gated by manual acceptance.
 Unchecked roadmap items are not yet available features.
 

@@ -1,6 +1,6 @@
 # ADR 0001: Shared appearance and machine-local displays
 
-- Status: accepted design for implementation; not shipped or activated
+- Status: accepted; data and read-only inspection foundations implemented, split layout not activated
 - Date: 2026-10-27
 - Roadmap: M3.1; follow-on implementation spans M3.2-M3.6
 - Runtime rollout: gated by M0 acceptance and an explicit, reviewed migration
@@ -55,7 +55,9 @@ transaction ID or shared generation counter.
 
 Introduce a local installation registry at
 `$XDG_CONFIG_HOME/attune/installation.json`, with `~/.config` as the XDG fallback.
-This is a proposed interface, not an existing configuration file.
+Its schema has an inactive pure parser and a separate explicit read-only filesystem
+inspector. No registry file is created or read by the active app. Activation and
+write authorization remain future work.
 
 The strict schema has exactly these fields:
 
@@ -102,6 +104,9 @@ or a source of arbitrary read/write authority. Its resolved identity and exact
 content hash are part of every review. Creation/rebinding is a separate explicit
 installation review; no normal Save changes it. Link retargeting or registry
 changes invalidate a review, including identical-byte retargeting.
+The first inspector requires private `0600` registry storage and safe owned output
+permissions. Its evidence can be revalidated but neither authorizes writing nor
+automatically persists a destination approval.
 
 An absent registry preserves current legacy v1 behavior only when no blocking
 transaction or migration handoff is pending. Startup checks that durable state
@@ -115,6 +120,9 @@ Retain the generated ownership header and add a distinct v2 data-record prefix.
 The versioned record contains `version`, `scope`, restricted `payload`, and a
 deterministic scope-local `content_id`. The payload contains that scope's values
 and supported sections only.
+The M3.2 codec requires exactly `values`, `beziers`, and `animations` for appearance,
+or exactly `monitors` for displays, including empty collections. Directive order is
+preserved and duplicate directive identities are rejected.
 
 Compute `content_id` over canonical version/scope/payload data, excluding the
 identifier itself. Also retain a hash of the complete emitted file bytes for
@@ -332,9 +340,12 @@ not an in-place concatenation of potentially divergent outputs.
 
 ## 8. Implementation sequence and acceptance
 
-- M3.2: pure scoped models, strict registry validation, v1/v2 readers/renderers,
-  and routing tests. Keep existing v1 behavior as the only active write mode.
-- M3.3-M3.4: registered destination guards, group review, private evidence,
+- M3.2 (implemented, inactive): pure scoped models, strict structural registry
+  validation, v1/v2 readers/renderers, explicit partition, and frozen v1 fixtures.
+  Existing v1 behavior remains the only active write mode.
+- M3.3a (implemented, inactive): explicit read-only destination inspection and
+  transient evidence revalidation, without provisioning or write authority.
+- M3.3b-M3.4: scope-aware group review/backup/diagnostic adapters, private evidence,
   journaled writer, interruption classification, and explicit recovery tests.
 - M3.6: scope-aware diagnostics, backup/restore/preservation, cache/exclusion,
   and recovery UI before migration is offered. Implement this ahead of rollout
@@ -367,7 +378,9 @@ is preferable to silently overwriting damaged state or claiming false atomicity.
 The initial outside-Git display policy deliberately excludes versioned host-specific
 display packages until an explicit policy extension is designed.
 
-This decision creates no files in the user's configuration/state, implements no
-v2 codec or journal, changes no current loader/output, and grants no permission
-for live state-changing validation. See [architecture.md](../architecture.md) for
-the shipped implementation and [ROADMAP.md](../../ROADMAP.md) for remaining work.
+The M3.1 decision itself created no configuration/state files or codec. Subsequent
+M3.2 work implements inactive pure models and codecs, not a registry file, journal,
+split writer, or loader. No current output or live configuration has changed, and
+no permission for state-changing validation is implied. See
+[architecture.md](../architecture.md) for implemented APIs and
+[ROADMAP.md](../../ROADMAP.md) for remaining work.

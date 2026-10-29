@@ -32,6 +32,10 @@ Implemented in the development checkout:
   existing owned output, with rollback backups and cached-editor invalidation.
 - Explicit preservation-first recovery of bounded foreign/invalid text, isolated
   from ordinary saves and restoration, with private exact-byte evidence.
+- Inactive M3 scoped data models, canonical v2 codec, pure registry declarations,
+  and frozen v1 compatibility fixtures. Active persistence still writes v1 only.
+- Inactive read-only route inspection and stale-evidence revalidation, without
+  registry creation, split-write authority, or GUI integration.
 
 Live display/HDR and animation behavior still requires manual acceptance. Automated
 and isolated GTK checks are not evidence that the workstation integration is done.
@@ -44,7 +48,7 @@ Persistent loading, Stow provisioning, and desktop registration remain opt-in.
 | M0: Validate the foundation | Pending manual acceptance | Existing baseline | Confidence in live previews and recovery |
 | M1: Workstation diagnostics | Implemented: M1.1-M1.7 delivered | Existing baseline; may proceed alongside M0 | Read-only visibility into effective state and integration |
 | M2: Recovery interface | Disk workflows delivered; M2.5 waits for M0 | M1 | Inspect and restore known Attune output through review |
-| M3: Shared/local ownership split | In progress: M3.1 design recorded | Pure model work may proceed; routing rollout requires M0 and M2 | Portable appearance with machine-local display settings |
+| M3: Shared/local ownership split | In progress: models and read-only approval foundation delivered | Scope-aware review work may proceed; routing rollout requires M0 and M2 | Portable appearance with machine-local display settings |
 | M4: Constrained presets | Planned | M0 and M3 | Safe, deliberate visual and display modes |
 | M5: Wisp integration | Planned | M1; preset entry points require M4 | Fast access without a second settings implementation |
 | M6: CARAMEL appearance overview | Later | Existing helper contracts; M3 for saving appearance | Activity-aware presentation using existing tools |
@@ -158,11 +162,16 @@ Goal: keep appearance portable without exporting a machine's display topology.
 
 - [x] M3.1 Record a design decision for owned filenames, scope routing, explicit
   destination configuration, and load order before changing the format.
-- [ ] M3.2 Route general visual settings, decoration, animation definitions, and
-  Beziers to shared appearance; route monitor directives to local display output.
+- [x] M3.2 Model and explicitly partition general visual settings, decoration,
+  animations/Beziers, and monitor directives into pure appearance/display scopes,
+  with strict registry declarations and canonical v2 codecs. Keep active writes v1.
 - [ ] M3.3 Extend canonical ownership, reviewed destination binding, backups, and
   diagnostics to each designated file. Do not replace path guards with unrestricted
   output selection or infer destinations from a hardcoded username/repository path.
+  - [x] M3.3a Inspect explicit filesystem routes and capture immutable, revalidatable
+    evidence for both correctly scoped outputs, registry, and protected paths.
+  - [ ] M3.3b Build scope-aware review/backup/diagnostic adapters around that evidence,
+    retaining inactive split writes until the journaled transaction layer exists.
 - [ ] M3.4 Implement and validate the journaled multi-file failure/recovery protocol
   selected in the design decision. Separate atomic replacements do not make a
   multi-file transaction atomic.
@@ -183,11 +192,16 @@ The first split policy keeps registry/display storage outside Git, supports loca
 Stow sources, and leaves appearance eligible for tracked dotfiles. Existing v1
 files/backups remain legacy full bundles until an explicit reviewed migration.
 
-M3.1 is design-only: no v2 codec, installation registry, journal, routing, or loader
-was installed. Next is M3.2's pure scoped model/registry/codec validation with v1
-remaining the only active write mode. Then implement M3.3-M3.4 and M3.6 before
-offering M3.5 migration. Rollout still requires M0 acceptance; do not run automatic
-loader edits, activation, recovery, or live reloads to satisfy a design checkbox.
+M3.1 is the design record. M3.2 implements pure scoped models/partition, a v2 codec,
+and structural registry parsing, with frozen literal v1 compatibility coverage.
+M3.3a adds separate filesystem inspection; `approved_resolved_path` remains only a
+declaration until inspected, and even valid inspection evidence is not a write
+permit. No registry file, journal, split write, migration, or loader was installed.
+
+Next is M3.3b's scope-aware review/backup/diagnostic adapters using fresh evidence.
+Then implement M3.4 and M3.6 before offering M3.5 migration. V1 remains the only
+active write mode. Rollout still requires M0 acceptance; do not run automatic
+loader edits, activation, recovery, or live reloads to satisfy a model checkbox.
 
 ## M4: Constrained visual and display presets
 

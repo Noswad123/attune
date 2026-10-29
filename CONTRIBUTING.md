@@ -131,6 +131,13 @@ Things to avoid:
 - Follow [ADR 0001](docs/decisions/0001-shared-local-ownership.md) for M3 development.
   Model/codec work must not activate the proposed split layout, registry, journal,
   or migration as a side effect. Existing v1 persistence remains the default.
+- `scoped_config` and `installation` are inactive pure data APIs. Structural
+  registry acceptance is not filesystem approval. Keep v1 fixtures frozen; do not
+  regenerate their expected bytes to make compatibility tests pass.
+- `route_approval` separately inspects explicit filesystem context without mutation.
+  Its transient evidence is not a write permit or activation token. Supervise
+  filesystem work off GTK; future writers must recheck under their own lock and
+  account explicitly for any intended state-directory transitions.
 - Do not bypass review, parse/execute main Lua to discover defaults, insert
   includes, enable auto-save/startup reload, or silently register desktop files.
 - Discuss larger changes with the fork owner; an upstream issue is not required.
