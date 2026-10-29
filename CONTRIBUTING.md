@@ -138,6 +138,10 @@ Things to avoid:
   Its transient evidence is not a write permit or activation token. Supervise
   filesystem work off GTK; future writers must recheck under their own lock and
   account explicitly for any intended state-directory transitions.
+- Scoped review/backup/diagnostic adapters are inactive read-only foundations.
+  Their hashes and canonical checks do not authorize commits or establish Lua
+  semantics/runtime loading. Do not wire them to Save before the journaled writer,
+  scope-aware recovery, and migration prerequisites are validated.
 - Do not bypass review, parse/execute main Lua to discover defaults, insert
   includes, enable auto-save/startup reload, or silently register desktop files.
 - Discuss larger changes with the fork owner; an upstream issue is not required.

@@ -46,6 +46,8 @@ foundations, not a new installation mode or UI feature.
 An inactive read-only inspector can now verify explicitly supplied routes and
 revalidate captured evidence. It does not discover, create, approve for writing,
 or activate an installation, and is not a new GUI/launcher command.
+Inactive adapters also prepare exact scoped review plans, describe v1/v2 backup
+metadata, and project scoped diagnostics. They do not provide a split commit path.
 
 ### Roadmap
 
@@ -54,8 +56,8 @@ validate the foundation, add diagnostics and recovery, separate shared/local
 settings, then introduce constrained presets, Wisp entry points, and a CARAMEL
 appearance overview. M1 diagnostics and M2 disk inspection/restoration/recovery
 are implemented. Shared/local ownership design and pure scoped model/codec work
-are complete, along with the read-only route-inspection foundation. Scope-aware
-review/backup/diagnostic adapters are next. Explicit live
+are complete, along with read-only route inspection and scoped review/backup/
+diagnostic adapters. The private journal/evidence foundation is next. Explicit live
 application and routing rollout remain gated by manual acceptance.
 Unchecked roadmap items are not yet available features.
 

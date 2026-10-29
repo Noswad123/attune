@@ -1,6 +1,6 @@
 # ADR 0001: Shared appearance and machine-local displays
 
-- Status: accepted; data and read-only inspection foundations implemented, split layout not activated
+- Status: accepted; M3.1-M3.3 read-only foundations implemented, split layout not activated
 - Date: 2026-10-27
 - Roadmap: M3.1; follow-on implementation spans M3.2-M3.6
 - Runtime rollout: gated by M0 acceptance and an explicit, reviewed migration
@@ -345,8 +345,10 @@ not an in-place concatenation of potentially divergent outputs.
   Existing v1 behavior remains the only active write mode.
 - M3.3a (implemented, inactive): explicit read-only destination inspection and
   transient evidence revalidation, without provisioning or write authority.
-- M3.3b-M3.4: scope-aware group review/backup/diagnostic adapters, private evidence,
-  journaled writer, interruption classification, and explicit recovery tests.
+- M3.3b (implemented, inactive): complete scope-aware group reviews, pure legacy/v2
+  backup descriptors, and fresh scoped diagnostics with redacted report projection.
+- M3.4: private evidence/journal models and interruption classification, then the
+  guarded writer and explicitly reviewed recovery with failure/crash tests.
 - M3.6: scope-aware diagnostics, backup/restore/preservation, cache/exclusion,
   and recovery UI before migration is offered. Implement this ahead of rollout
   even though its roadmap number follows M3.5.

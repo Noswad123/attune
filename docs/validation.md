@@ -288,3 +288,33 @@ Missing, empty, binary, oversized, and unsafe targets remain refused.
   discovery is not implemented. Direct filesystem calls have no hard latency bound.
 - No files/directories are written, created, chmodded, or repaired by inspection;
   ordinary filesystem access may update atime. Active v1 persistence is unchanged.
+
+## M3.3b: scoped review, backup metadata, and diagnostics adapters
+
+### Verification
+
+- Full suite: 2,239 passed, 35 skipped.
+- Isolated Broadway smoke: 32 passed, 2 inapplicable recovery-no-op cases skipped.
+- Ruff lint/format, Pyright error checks, whitespace checks, and focused safety
+  review passed. Existing GI/dependency warnings remain separate evidence.
+- Review tests cover appearance-only/display-only/both/no-op proposals, exact
+  unchanged-scope preservation, fixed bindings, immutable complete diffs, limits,
+  stale route context, read races, and forged hashes/counts/paths/change sets.
+- Backup tests use frozen literal v1 fixtures and both v2 scopes, preserving
+  full-bundle classification and refusing hash/scope mismatch or implicit conversion.
+- Diagnostic tests cover fresh revalidation, stale/path/permission changes,
+  immutable observations, normalized time, and projection privacy against injected
+  raw titles/errors/paths/hashes/values and malformed count/status metadata.
+- Forbidden-effects tests confirm no writes, compilation, IPC, activation, or
+  active-v1 behavior changes. Only temporary fixtures were read by these adapters.
+
+### Limits
+
+- M3.3's inactive core adapters are complete, not the split writer or GUI routing.
+  No registry, journal, backup blob, split output, migration, or loader was created.
+- Reviews and descriptor hashes are not commit permits, authentication, atomic
+  snapshots, Lua semantic validation, or proof that output was loaded.
+- Direct I/O/diff APIs have no hard wall-time bound. Future clients must supervise
+  them off GTK; this slice adds no worker or public CLI for the adapters.
+- Pure reports describe recorded collection-time evidence. Rendering alone cannot
+  establish current freshness. Counts/timestamps may still identify activity.

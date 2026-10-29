@@ -150,8 +150,51 @@ revalidate under lock and again before replacement, accounting for intentional s
 provisioning rather than blindly ignoring changed evidence.
 
 The layer never writes files, creates state, executes/compiles Lua, runs compositor
-queries, or activates split routing. Scope-aware review/backup/diagnostic integration
-and the journaled writer remain future M3 work. V1 stays the only active write mode.
+queries, or activates split routing. The adapters below consume its evidence;
+active GUI integration and the journaled writer remain future M3 work. V1 stays
+the only active write mode.
+
+## Inactive M3.3b scoped adapters
+
+These are separate core APIs, not active GUI features or new output routing:
+
+| Interface | Role |
+| --- | --- |
+| `scoped_review.build_review(evidence, proposals)` | Freshly revalidates both routes, reads exact current canonical v2 text, and derives an immutable complete group proposal. |
+| `scoped_review.revalidate_review(plan)` | Reconstructs candidate models and rederives all review semantics against current filesystem evidence. |
+| `scoped_backups.describe_backup(name, text, expected_scope=...)` | Pure full-byte hash, canonical-format, and scope classification for supplied backup text. |
+| `scoped_diagnostics.collect_scoped_diagnostics(evidence)` | Freshly revalidates the explicit installation and derives immutable per-scope identity/count observations. |
+| `scoped_diagnostics.build_scoped_diagnostics_report(observation, stale=...)` | Pure fixed-summary projection, without rechecking freshness or exporting private identities. |
+
+Group plans include both scopes in fixed order, registry/evidence identity,
+lexical/resolved destination bindings, exact prior/proposed text, full-byte hashes,
+scope content IDs, complete labeled diffs/counts, and a derived changed-scope set.
+Proposals can omit a scope: its proposed text is the exact prior text, not a
+runtime reconstruction or new generation stamp. No-ops produce no changed scopes.
+
+Each side is bounded to 256 KiB/10,000 lines, and each complete diff to
+256 KiB/4,000 lines. Oversized reviews refuse instead of truncating. Filesystem
+evidence is revalidated before adapter reads and after both reads/diffs; every read
+must match its observed byte hash. Review hashes exclude observation time but bind
+all substantive fields. Revalidation rejects forged fields even with recomputed
+fingerprints, because it reconstructs the plan from actual files and proposals.
+
+Backup descriptors explicitly distinguish `legacy-full-bundle` v1 from `scoped-v2`.
+An expected scope rejects v1 until explicit conversion, even if the bundle happens
+to contain only appearance. V2 scope mismatches refuse. Counts are ordered as
+values, Beziers, animations, monitors. Hash/canonical classification establishes
+neither Lua syntax, semantic validity, runtime loading, nor restorability.
+
+Diagnostic collection rejects stale evidence and records the fresh observation
+time. Rendering a report does not revalidate it; stale export is explicitly labeled.
+Only fixed text, known scope/version values, bounded counts, and normalized UTC
+time appear in reports. Paths, hashes, usernames, ownership/inode metadata, raw
+errors, registry contents, link targets, and scalar values are omitted.
+
+No adapters write files, enumerate backup directories, compile/execute Lua, run
+IPC, or grant write authority. Direct review/collection I/O and diff computation
+must be supervised off GTK by future clients. Journals, evidence storage, workers,
+publication/recovery, and active UI integration are not implemented by this slice.
 
 ## Data Flow
 

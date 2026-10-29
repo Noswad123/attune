@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Inactive scoped group-review plans bound to fresh filesystem evidence, with
+  complete per-scope diffs and exact unchanged-sibling preservation.
+- Pure v1/v2 backup descriptors and fresh scoped diagnostics with an allowlisted
+  report projection omitting paths, hashes, raw values, and private metadata.
+  Existing GUI, backup routing, and v1 persistence remain unchanged.
 - Inactive read-only split-route inspection with stable file/symlink evidence,
   ownership and permission checks, protected-path/alias guards, Git-placement
   policy, and stale-evidence revalidation. No registry creation or split writes.

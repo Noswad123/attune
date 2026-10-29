@@ -36,6 +36,8 @@ Implemented in the development checkout:
   and frozen v1 compatibility fixtures. Active persistence still writes v1 only.
 - Inactive read-only route inspection and stale-evidence revalidation, without
   registry creation, split-write authority, or GUI integration.
+- Inactive scoped group reviews, v1/v2 backup descriptors, and redacted scoped
+  diagnostic projections, all without a split commit path.
 
 Live display/HDR and animation behavior still requires manual acceptance. Automated
 and isolated GTK checks are not evidence that the workstation integration is done.
@@ -48,7 +50,7 @@ Persistent loading, Stow provisioning, and desktop registration remain opt-in.
 | M0: Validate the foundation | Pending manual acceptance | Existing baseline | Confidence in live previews and recovery |
 | M1: Workstation diagnostics | Implemented: M1.1-M1.7 delivered | Existing baseline; may proceed alongside M0 | Read-only visibility into effective state and integration |
 | M2: Recovery interface | Disk workflows delivered; M2.5 waits for M0 | M1 | Inspect and restore known Attune output through review |
-| M3: Shared/local ownership split | In progress: models and read-only approval foundation delivered | Scope-aware review work may proceed; routing rollout requires M0 and M2 | Portable appearance with machine-local display settings |
+| M3: Shared/local ownership split | In progress: M3.1-M3.3 inactive foundations delivered | Journal work may proceed; routing rollout requires M0 and M2 | Portable appearance with machine-local display settings |
 | M4: Constrained presets | Planned | M0 and M3 | Safe, deliberate visual and display modes |
 | M5: Wisp integration | Planned | M1; preset entry points require M4 | Fast access without a second settings implementation |
 | M6: CARAMEL appearance overview | Later | Existing helper contracts; M3 for saving appearance | Activity-aware presentation using existing tools |
@@ -165,16 +167,20 @@ Goal: keep appearance portable without exporting a machine's display topology.
 - [x] M3.2 Model and explicitly partition general visual settings, decoration,
   animations/Beziers, and monitor directives into pure appearance/display scopes,
   with strict registry declarations and canonical v2 codecs. Keep active writes v1.
-- [ ] M3.3 Extend canonical ownership, reviewed destination binding, backups, and
+- [x] M3.3 Extend canonical ownership, reviewed destination binding, backups, and
   diagnostics to each designated file. Do not replace path guards with unrestricted
   output selection or infer destinations from a hardcoded username/repository path.
   - [x] M3.3a Inspect explicit filesystem routes and capture immutable, revalidatable
     evidence for both correctly scoped outputs, registry, and protected paths.
-  - [ ] M3.3b Build scope-aware review/backup/diagnostic adapters around that evidence,
+  - [x] M3.3b Build scope-aware review/backup/diagnostic adapters around that evidence,
     retaining inactive split writes until the journaled transaction layer exists.
 - [ ] M3.4 Implement and validate the journaled multi-file failure/recovery protocol
   selected in the design decision. Separate atomic replacements do not make a
   multi-file transaction atomic.
+  - [ ] M3.4a Define private evidence/journal records and interrupted-state
+    classification before introducing any output publication.
+  - [ ] M3.4b Implement guarded publication and explicitly reviewed resume/rollback,
+    with failure/crash injection and unchanged-scope isolation.
 - [ ] M3.5 Provide a reviewed, opt-in migration from the single file, with rollback
   material and manual loader instructions. Avoid double-loading old/new overrides;
   do not edit the authored entrypoint or silently delete the old file.
@@ -198,8 +204,15 @@ M3.3a adds separate filesystem inspection; `approved_resolved_path` remains only
 declaration until inspected, and even valid inspection evidence is not a write
 permit. No registry file, journal, split write, migration, or loader was installed.
 
-Next is M3.3b's scope-aware review/backup/diagnostic adapters using fresh evidence.
-Then implement M3.4 and M3.6 before offering M3.5 migration. V1 remains the only
+M3.3b adds complete immutable per-scope review plans with fresh route checks,
+pure hash/format/scope backup descriptors, and fresh diagnostic observations with
+an allowlisted report projection. Legacy backups remain whole v1 bundles. Omitted
+proposal scopes retain exact current bytes, hashes, and IDs. No adapter commits,
+compiles Lua, provisions state, or changes active GUI/backup routing.
+
+Next is M3.4a's private journal/evidence model and interruption classification,
+followed by guarded publication/recovery in M3.4b. Implement M3.6 before offering
+M3.5 migration. V1 remains the only
 active write mode. Rollout still requires M0 acceptance; do not run automatic
 loader edits, activation, recovery, or live reloads to satisfy a model checkbox.
 
