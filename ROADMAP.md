@@ -38,6 +38,8 @@ Implemented in the development checkout:
   registry creation, split-write authority, or GUI integration.
 - Inactive scoped group reviews, v1/v2 backup descriptors, and redacted scoped
   diagnostic projections, all without a split commit path.
+- Inactive private transaction evidence/prepared-journal APIs and actual-byte
+  interruption classification. No scope publication or recovery actions yet.
 
 Live display/HDR and animation behavior still requires manual acceptance. Automated
 and isolated GTK checks are not evidence that the workstation integration is done.
@@ -50,7 +52,7 @@ Persistent loading, Stow provisioning, and desktop registration remain opt-in.
 | M0: Validate the foundation | Pending manual acceptance | Existing baseline | Confidence in live previews and recovery |
 | M1: Workstation diagnostics | Implemented: M1.1-M1.7 delivered | Existing baseline; may proceed alongside M0 | Read-only visibility into effective state and integration |
 | M2: Recovery interface | Disk workflows delivered; M2.5 waits for M0 | M1 | Inspect and restore known Attune output through review |
-| M3: Shared/local ownership split | In progress: M3.1-M3.3 inactive foundations delivered | Journal work may proceed; routing rollout requires M0 and M2 | Portable appearance with machine-local display settings |
+| M3: Shared/local ownership split | In progress: M3.4a evidence/classification foundation delivered | Guarded publication work may proceed; routing rollout requires M0 and M2 | Portable appearance with machine-local display settings |
 | M4: Constrained presets | Planned | M0 and M3 | Safe, deliberate visual and display modes |
 | M5: Wisp integration | Planned | M1; preset entry points require M4 | Fast access without a second settings implementation |
 | M6: CARAMEL appearance overview | Later | Existing helper contracts; M3 for saving appearance | Activity-aware presentation using existing tools |
@@ -177,7 +179,7 @@ Goal: keep appearance portable without exporting a machine's display topology.
 - [ ] M3.4 Implement and validate the journaled multi-file failure/recovery protocol
   selected in the design decision. Separate atomic replacements do not make a
   multi-file transaction atomic.
-  - [ ] M3.4a Define private evidence/journal records and interrupted-state
+  - [x] M3.4a Define private evidence/journal records and interrupted-state
     classification before introducing any output publication.
   - [ ] M3.4b Implement guarded publication and explicitly reviewed resume/rollback,
     with failure/crash injection and unchanged-scope isolation.
@@ -210,8 +212,15 @@ an allowlisted report projection. Legacy backups remain whole v1 bundles. Omitte
 proposal scopes retain exact current bytes, hashes, and IDs. No adapter commits,
 compiles Lua, provisions state, or changes active GUI/backup routing.
 
-Next is M3.4a's private journal/evidence model and interruption classification,
-followed by guarded publication/recovery in M3.4b. Implement M3.6 before offering
+M3.4a adds strict ordinary-split-save records, explicit private store initialization,
+durable evidence/prepared-intent creation, historical loading, and read-only
+all-prior/all-proposed/mixed/conflict classification. It supports present-owned
+priors only; migration absence/empty states remain explicitly unsupported. Store
+initialization precedes route review. Prepared evidence is not publication approval,
+and journal progress is not proof of actual outputs or runtime state.
+
+Next is M3.4b's guarded publication and explicitly reviewed resume/rollback, including
+compile preflight and failure/crash injection. Implement M3.6 before offering
 M3.5 migration. V1 remains the only
 active write mode. Rollout still requires M0 acceptance; do not run automatic
 loader edits, activation, recovery, or live reloads to satisfy a model checkbox.

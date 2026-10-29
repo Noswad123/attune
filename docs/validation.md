@@ -318,3 +318,48 @@ Missing, empty, binary, oversized, and unsafe targets remain refused.
   them off GTK; this slice adds no worker or public CLI for the adapters.
 - Pure reports describe recorded collection-time evidence. Rendering alone cannot
   establish current freshness. Counts/timestamps may still identify activity.
+
+## M3.4a: private evidence/journal records and interruption classification
+
+### Verification
+
+- Final full suite: 2,459 passed, 35 skipped.
+- Isolated Broadway smoke: 32 passed, 2 inapplicable recovery-no-op cases skipped.
+- Ruff lint/format, Pyright error checks, whitespace checks, and focused source
+  safety review passed. Existing GI/dependency warnings remain distinct.
+- Private-store tests cover exact ownership/modes, link/Git guards, immutable
+  collisions, missing/corrupt evidence, incomplete predecessors, finite/cancellable
+  locking, write-free no-ops, initialization-before-review, and every preparation
+  fsync boundary. Intent publication follows verified synchronized evidence.
+- Historical record tests reject malformed schemas/types, duplicates, excess depth
+  or size, altered scope bytes/IDs/diffs/counts/bindings, and migration absence/empty
+  priors. Recorded-review validation remains pure; fresh revalidation remains strict.
+- Classification tests simulate every prior/proposed mixture and single-scope
+  change, advisory phase/progress disagreement, safe changed-leaf replacement,
+  unchanged-leaf drift, stale registry/links/parents/Git/protected paths, damaged
+  private evidence, and mutation between observations. Actual bytes determine state.
+- Tests compare scope bytes/inode/mtime/mode before and after private preparation
+  and read-only classification. No production output-publication path exists here.
+
+### Full-suite integration correction
+
+An initial whole-suite run exposed order-dependent fixture registration in the
+new transaction tests. Shared fixtures are now explicitly imported rather than
+registering a collected test module as a plugin. Restrictive-permission tests now
+restore original modes in `finally`; permissions on leftover generated fixtures
+from earlier runs were restored so pytest could clean its own temporary trees.
+The final full-suite run passed without those cleanup warnings.
+
+### Limits
+
+- Evidence initialization/preparation writes only when explicitly invoked. All
+  such calls in this slice used temporary test state, never the live user's state.
+- Only present-owned ordinary split saves are modeled. Migration absence/empty
+  states, output publication, checkpoint advancement, resume/rollback, and startup
+  or UI integration remain unimplemented.
+- Prepared records establish verified private canonical evidence, not Lua compile
+  validation, semantic safety, write authority, or successful publication.
+- Classification is a direct, read-only, non-atomic observation, with no hard
+  filesystem/diff wall-time bound. It cannot establish loaded runtime state.
+- Failures can leave orphan/partial evidence and block preparation; nothing
+  automatically repairs, deletes, resumes, rolls back, or activates anything.

@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Inactive private transaction records and explicitly initialized evidence storage,
+  with verified content-addressed blobs, group snapshots, and prepared intents.
+- Read-only interrupted-state classification from actual scoped bytes and fresh
+  bindings, without trusting journal progress or adding publication/recovery actions.
 - Inactive scoped group-review plans bound to fresh filesystem evidence, with
   complete per-scope diffs and exact unchanged-sibling preservation.
 - Pure v1/v2 backup descriptors and fresh scoped diagnostics with an allowlisted

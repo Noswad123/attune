@@ -193,8 +193,85 @@ errors, registry contents, link targets, and scalar values are omitted.
 
 No adapters write files, enumerate backup directories, compile/execute Lua, run
 IPC, or grant write authority. Direct review/collection I/O and diff computation
-must be supervised off GTK by future clients. Journals, evidence storage, workers,
-publication/recovery, and active UI integration are not implemented by this slice.
+must be supervised off GTK by future clients. The separate private-evidence layer
+below implements storage, not scope publication/recovery or active UI integration.
+
+## Inactive M3.4a transaction evidence
+
+`transaction_records.py` models only ordinary split saves whose two priors are
+present-owned canonical v2. Absence and present-empty are distinct named kinds
+but are refused by this first journal format, not collapsed into empty bytes.
+Frozen/slotted snapshots bind the complete historical group review, both routes,
+registry identity, exact texts/hashes/diffs/counts, and changed scopes. Intents
+reference the content-addressed snapshot, review, registry, transaction ID, phase,
+and fixed-order advisory progress prefix. JSON fields/depth/size/types and hashes
+are strictly validated.
+
+`scoped_review.validate_recorded_review(plan)` now validates historical structure
+and exact complete semantics without filesystem freshness. This permits loading
+evidence after a legitimate proposed-byte replacement. `revalidate_review(plan)`
+still derives a fresh filesystem-backed plan and rejects drift. Neither function
+compiles Lua or grants write authority.
+
+`transaction_store.py` has explicit APIs, never startup/discovery hooks:
+
+- `initialize_store(state_root)` provisions owned private directories and
+  synchronizes their parent entries. It must precede route inspection/review.
+- `inspect_store` / `revalidate_store` observe root identities, excluding unrelated
+  directory timestamps. Preparation never silently initializes behind a review.
+- `prepare_transaction(plan, state_root=...)` revalidates under the shared safe
+  lock, verifies immutable prior/proposed blobs and snapshot, and publishes a
+  prepared/empty-progress intent last. It does not replace either output.
+- `load_transaction(state_root, id)` validates actual private records and every
+  referenced blob, not current output state or publication authority.
+
+The explicit store layout is:
+
+```text
+state_root/attune/
+    blobs/<full-byte-sha256>.lua
+    snapshots/<snapshot-sha256>.json
+    transactions/<32-lowercase-hex-id>/intent.json
+    persistence.lock
+```
+
+Legacy `backups/` and raw `preserved/` data remain separate. Private directories
+require owned `0700`; files require owned single-link regular `0600`. State roots
+and private paths reject unsafe ownership/modes, symlink components, and ancestor
+Git markers. Existing permissions are never repaired. The state root itself must
+already exist and be safe; initialization is an explicit future provisioning action.
+
+Evidence files are created exclusively, byte/hash/canonical verified, and
+synchronized with containing directories before the prepared intent. Safe identical
+immutable collisions may be reused; incompatible/unsafe collisions refuse. The
+shared lock has a cancellable five-second acquisition bound. Unknown/incomplete
+journal directories and unresolved predecessors block further preparation. No-op
+preparation does fresh read-only validation and writes no blobs, intent, or lock.
+Failures may leave partial/orphan evidence; no automatic repair or deletion occurs.
+
+The current kind has an eight-MiB total evidence/record budget, JSON depth 24, and
+1,000-entry journal-scan limit, plus existing per-scope input/diff bounds. Prepared
+means private canonical evidence is complete, not that compile preflight or scope
+publication has occurred. M3.4b must add those checks before replacement.
+
+`transaction_inspection.classify_transaction(state_root, id, config_root=...)`
+reloads the verified private bundle and inspects current scopes in explicit context.
+It classifies changed scopes as prior/proposed/conflict and an untouched sibling
+as unchanged only when its full evidence still matches. Safe changed-leaf atomic
+replacement may change inode/timestamps; all registry, link-chain, parent, Git,
+protected-context, and unchanged-sibling identities remain bound.
+
+The overall result is all-prior, all-proposed, mixed, or conflict, based on actual
+canonical hashes and content IDs rather than recorded phase/progress. Current and
+private evidence are checked again before returning. Corrupt/missing evidence or
+unexpected bytes/context return conflict, not permission to overwrite. No result
+establishes an atomic snapshot, publication history, runtime loading, or recovery
+authorization. This direct API has no worker, CLI, wall-time guarantee, or repair
+actions; future clients must supervise it off GTK.
+
+No active application imports or calls this layer. Tests explicitly initialize
+temporary stores; no real store, registry, scope publication, migration, loader,
+Lua compilation, or compositor operation was added.
 
 ## Data Flow
 

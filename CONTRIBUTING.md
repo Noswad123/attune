@@ -142,6 +142,13 @@ Things to avoid:
   Their hashes and canonical checks do not authorize commits or establish Lua
   semantics/runtime loading. Do not wire them to Save before the journaled writer,
   scope-aware recovery, and migration prerequisites are validated.
+- Private transaction evidence APIs are inactive and must use explicit temporary
+  state in tests. Initialization precedes route review; no startup path may create
+  or repair the store. Recorded-review validation is historical/pure, not filesystem
+  freshness, compilation, publication approval, or a reason to skip writer preflight.
+- Restore restrictive fixture permissions in `finally` and register shared fixtures
+  explicitly. Targeted test success must not depend on a test module being loaded
+  as a plugin in a particular collection order.
 - Do not bypass review, parse/execute main Lua to discover defaults, insert
   includes, enable auto-save/startup reload, or silently register desktop files.
 - Discuss larger changes with the fork owner; an upstream issue is not required.

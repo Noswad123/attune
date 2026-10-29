@@ -179,8 +179,8 @@ def build_review(
     )
 
 
-def revalidate_review(plan: GroupReviewPlan) -> GroupReviewPlan:
-    """Rederive canonical proposals and all review semantics against the filesystem."""
+def validate_recorded_review(plan: GroupReviewPlan) -> GroupReviewPlan:
+    """Validate historical semantics only. No filesystem IO or write authority."""
     if (
         type(plan) is not GroupReviewPlan
         or type(plan.scopes) is not tuple
@@ -196,8 +196,12 @@ def revalidate_review(plan: GroupReviewPlan) -> GroupReviewPlan:
         or datetime.fromisoformat(plan.observed_at).utcoffset() != timedelta(0)
     ):
         raise ValueError("Review observation must be UTC")
-    proposals = {}
-    for scope, review in zip(Scope, plan.scopes, strict=True):
+    if type(plan.evidence) is not InstallationEvidence:
+        raise ValueError("Expected installation evidence")
+    evidence = InstallationEvidence.from_json(plan.evidence.to_json())
+    if evidence != plan.evidence:
+        raise ValueError("Noncanonical evidence structure")
+    for scope, review, route in zip(Scope, plan.scopes, evidence.routes, strict=True):
         if type(review) is not ScopeReview or review.scope is not scope:
             raise ValueError("Expected both scopes in fixed order")
         for name in ScopeReview.__dataclass_fields__:
@@ -213,14 +217,48 @@ def revalidate_review(plan: GroupReviewPlan) -> GroupReviewPlan:
         ):
             raise ValueError("Review diff exceeds limits")
         candidate = scoped_config.read_document(review.proposed_text, expected_scope=scope)
-        if not isinstance(candidate, ScopedConfig):
+        prior = scoped_config.read_document(review.previous_text, expected_scope=scope)
+        if not isinstance(candidate, ScopedConfig) or not isinstance(prior, ScopedConfig):
             raise ValueError("Expected canonical scoped proposal")
-        proposals[scope] = candidate
-    fresh = build_review(plan.evidence, proposals)
+        diff, added, removed = _diff(review.previous_text, review.proposed_text, scope)
+        if (
+            review.lexical_path != route.file.path.lexical_path
+            or review.resolved_path != route.file.path.resolved_path
+            or review.previous_sha256 != route.file.source_sha256
+            or review.previous_sha256 != scoped_config.byte_hash(review.previous_text)
+            or review.proposed_sha256 != scoped_config.byte_hash(review.proposed_text)
+            or review.previous_content_id != prior.content_id
+            or review.previous_content_id != route.content_id
+            or review.proposed_content_id != candidate.content_id
+            or route.counts
+            != tuple(
+                len(getattr(prior, name))
+                for name in ("values", "beziers", "animations", "monitors")
+            )
+            or (review.diff, review.added_lines, review.removed_lines) != (diff, added, removed)
+            or review.diff_sha256 != scoped_config.byte_hash(diff)
+        ):
+            raise ValueError("Recorded scope differs from canonical evidence or exact diff")
+    changed = tuple(r.scope for r in plan.scopes if r.previous_text != r.proposed_text)
     if (
         type(plan.review_hash) is not str
-        or fresh.review_hash != plan.review_hash
-        or _review_hash(plan.evidence, plan.scopes, plan.changed_scopes) != fresh.review_hash
+        or plan.changed_scopes != changed
+        or _review_hash(evidence, plan.scopes, changed) != plan.review_hash
     ):
+        raise ValueError("Review differs from rederived complete plan")
+    return plan
+
+
+def revalidate_review(plan: GroupReviewPlan) -> GroupReviewPlan:
+    """Rederive canonical proposals and all review semantics against the filesystem."""
+    validate_recorded_review(plan)
+    proposals = {}
+    for review in plan.scopes:
+        candidate = scoped_config.read_document(review.proposed_text, expected_scope=review.scope)
+        if not isinstance(candidate, ScopedConfig):
+            raise ValueError("Expected canonical scoped proposal")
+        proposals[review.scope] = candidate
+    fresh = build_review(plan.evidence, proposals)
+    if fresh.review_hash != plan.review_hash:
         raise ValueError("Review differs from rederived complete plan")
     return fresh

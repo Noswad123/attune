@@ -370,11 +370,14 @@ class TestPlanValidation:
             ("scope", "appearance"),
         ],
     )
-    def test_forged_scope_fields(self, evidence, field, value):
+    @pytest.mark.parametrize(
+        "validate", [review.revalidate_review, review.validate_recorded_review]
+    )
+    def test_forged_scope_fields(self, evidence, field, value, validate):
         plan = review.build_review(evidence, {Scope.APPEARANCE: appearance("7")})
         forged = replace(plan.scopes[0], **{field: value})
         with pytest.raises(ValueError):
-            review.revalidate_review(replace(plan, scopes=(forged, plan.scopes[1])))
+            validate(replace(plan, scopes=(forged, plan.scopes[1])))
 
     @pytest.mark.parametrize(
         "changes",
@@ -387,19 +390,25 @@ class TestPlanValidation:
             {"scopes": ()},
         ],
     )
-    def test_forged_group_fields(self, evidence, changes):
+    @pytest.mark.parametrize(
+        "validate", [review.revalidate_review, review.validate_recorded_review]
+    )
+    def test_forged_group_fields(self, evidence, changes, validate):
         plan = review.build_review(evidence, {Scope.APPEARANCE: appearance("7")})
         with pytest.raises(ValueError):
-            review.revalidate_review(replace(plan, **changes))
+            validate(replace(plan, **changes))
 
-    def test_recomputed_fingerprint_does_not_validate_forged_counts(self, evidence):
+    @pytest.mark.parametrize(
+        "validate", [review.revalidate_review, review.validate_recorded_review]
+    )
+    def test_recomputed_fingerprint_does_not_validate_forged_counts(self, evidence, validate):
         plan = review.build_review(evidence, {})
         scopes = (replace(plan.scopes[0], added_lines=10), plan.scopes[1])
         forged = replace(
             plan, scopes=scopes, review_hash=review._review_hash(plan.evidence, scopes, ())
         )
         with pytest.raises(ValueError):
-            review.revalidate_review(forged)
+            validate(forged)
 
 
 class TestLimitsAndIsolation:
