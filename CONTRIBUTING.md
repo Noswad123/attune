@@ -150,6 +150,16 @@ Things to avoid:
   semantics/runtime loading. The journaled backend exists, but Save integration
   still requires pending M3.6b scope-local v2 backup restore/preservation and M3.5
   migration prerequisites. M3.6a does not complete either of those slices.
+- M3.6b1 `scoped_restore.prepare_restore` / `run_prepare` only observe canonical
+  CURRENT -> GOAL pairs from explicit terminal history; use `run_prepare` off GTK.
+  Keep the initialized-store requirement, both read-only pending scans, exact
+  registry/roots and historical both-route binding, and current sibling isolation.
+  Drafts/fingerprints are not write permits. No commit, source browser, compiler,
+  provisioning, foreign preservation, or migration belongs to b1. Future writers
+  must recheck source freshness under lock; foreign current text needs a separate
+  observation/preservation protocol, never a raw blob in canonical snapshots.
+  Exercise `tests/test_scoped_restore.py` and read-only pending-scan regressions in
+  `tests/test_transaction_store.py` alongside existing recovery/persistence tests.
 - Private transaction evidence APIs must use explicit temporary
   state in tests. Initialization precedes route review; no startup path may create
   or repair the store. Recorded-review validation is historical/pure, not filesystem

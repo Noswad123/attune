@@ -281,8 +281,31 @@ Extend M2.6 preservation-first recovery explicitly to registered v2 scopes. Keep
 foreign originals private and separate from canonical blobs, bind scope and route
 identity into preservation evidence, and verify/synchronize it before replacement.
 Do not relax ordinary ownership guards or admit unknown files as scope payloads.
-This scope-local v2 backup restore/preservation work is pending M3.6b, a prerequisite
-before M3.5 migration. M3.6a transaction recovery does not implement it.
+M3.6b remains In progress and a prerequisite before M3.5 migration. Its first
+bounded b1 slice is implemented and validated: read-only
+preparation from an explicitly selected verified terminal transaction's canonical
+prior/proposed scope, with a complete CURRENT -> GOAL review preserving the current
+sibling. It requires safe initialized storage, canonical current outputs, exact
+registry/roots identity and historical both-route bindings, plus before/after
+read-only pending checks. Source fingerprints/phase are local observations, not
+authentication, proof of installation, or write permits. B1 adds no source
+listing/discovery, frontend, commit, compiler, provisioning, or foreign preservation.
+
+The decision is to split canonical restore preparation from foreign recovery.
+`GroupSnapshot` admits present-owned canonical priors only; group review derives
+scope content IDs and exact canonical bytes for both sides, and ordinary publication
+compile-checks current and desired scope text. Foreign current bytes cannot satisfy
+those contracts. Smuggling them into raw canonical rollback blobs would misrepresent
+ownership and feed untrusted original text into the ordinary compiler path. Do not
+relax those invariants or ordinary ownership guards. A separate bounded foreign
+observation/review and verified private preservation protocol must bind original
+status, bytes, scope, and route before any explicit replacement; raw evidence stays
+distinct from canonical backups. That protocol is not implemented by b1.
+
+Next comes scoped source browsing/review and writer source freshness under lock,
+then the separate foreign observation/preservation protocol, before M3.5 migration.
+Preparation-time observations and pure draft decoding cannot replace writer-side
+source and destination rechecks under lock.
 
 Successful restore/recovery and any uncertain write invalidate all cached editors
 until restart. Read-only utilities remain usable. No old editor baseline is marked
@@ -376,8 +399,11 @@ not an in-place concatenation of potentially divergent outputs.
   Independent sticky scope/journal uncertainty invalidates cache/editor without
   marking old baselines saved. Writer-side metadata exclusion fails closed on any
   registry/transaction evidence or uninspectable metadata, including terminal history.
-- M3.6b (pending, next): scope-local v2 backup restore and preservation-first
+- M3.6b (In progress): scope-local v2 backup restore and preservation-first
   recovery with complete scope/route review and unchanged-sibling isolation.
+  B1 read-only canonical preparation is implemented and validated,
+  not the full milestone. Source browsing/review and writer source freshness under
+  lock are next, followed by a separate foreign observation/preservation protocol.
   Complete before M3.5 migration or recommending split rollout.
 - M3.5: reviewed migration/handoff after prerequisites and manual M0 acceptance.
 

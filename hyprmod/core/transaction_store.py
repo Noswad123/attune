@@ -331,19 +331,22 @@ def load_transaction(state_root: Path, transaction_id: str) -> VerifiedTransacti
     return replace(bundle, private_facts=facts)
 
 
-def _pending(binding: StoreBinding, selected: str | None = None) -> None:
-    root = binding.state_root / "attune/transactions"
-    with os.scandir(root) as entries:
-        for index, entry in enumerate(entries):
-            if index >= MAX_JOURNALS:
-                raise ValueError("Journal scan exceeds 1000 entries")
-            validate_transaction_id(entry.name)
-            verified = load_transaction(binding.state_root, entry.name)
-            if entry.name != selected and verified.intent.phase not in (
-                Phase.COMMITTED,
-                Phase.ABORTED,
-            ):
-                raise ValueError("Unresolved prior transaction blocks preparation")
+def _pending(binding: StoreBinding, selected: str | None = None) -> tuple[str, ...]:
+    revalidate_store(binding)
+    ids = list_transaction_ids(binding.state_root)
+    for txid in ids:
+        verified = load_transaction(binding.state_root, txid)
+        if txid != selected and verified.intent.phase not in (Phase.COMMITTED, Phase.ABORTED):
+            raise ValueError("Unresolved prior transaction blocks preparation")
+    if list_transaction_ids(binding.state_root) != ids:
+        raise ValueError("Transaction listing changed during pending scan")
+    revalidate_store(binding)
+    return ids
+
+
+def refuse_pending_readonly(state_root: Path) -> tuple[str, ...]:
+    """Verify every bounded journal and refuse pending work without creating a lock."""
+    return _pending(inspect_store(state_root))
 
 
 class StoreSession:

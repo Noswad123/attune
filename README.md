@@ -66,9 +66,11 @@ appearance overview. M1 diagnostics and M2 disk inspection/restoration/recovery
 are implemented. Shared/local ownership design and pure scoped model/codec work
 are complete, along with read-only route inspection and scoped review/backup/
 diagnostic adapters and the M3.4 journaled publication/recovery backend. M3.6a
-transaction recovery and legacy exclusion are completed in code. M3.6b scope-local
-v2 backup restoration/preservation is next, before M3.5 opt-in migration. Explicit live
-application and routing rollout remain gated by manual acceptance.
+transaction recovery and legacy exclusion are completed in code. M3.6b is In progress:
+b1 read-only canonical scope restore preparation is implemented and validated.
+Source browsing/review, writer source-freshness checks under lock, and a separate
+foreign observation/preservation protocol remain before M3.5 opt-in migration.
+Explicit live application and routing rollout remain gated by manual acceptance.
 Unchecked roadmap items are not yet available features.
 
 ## API / Interfaces
@@ -309,8 +311,14 @@ blocks v1 save, restoration, and preservation-first replacement. Unsafe or
 uninspectable metadata fails closed, not back to v1. The writer rechecks this
 exclusion independently of startup. Legacy backups remain inspectable full bundles;
 they are not implicitly converted or restored into a v2 scope. M3.6b scope-local v2
-backup restore/preservation remains pending before migration. Separate renames are
-not pair-atomic; no reload IPC is sent, but watchers may auto-reload changed files.
+backup restore/preservation remains incomplete before migration. Its first bounded
+b1 slice provides only inactive core preparation from an explicitly selected terminal
+transaction's canonical prior/proposed scope, retaining the current sibling unchanged.
+It requires a safe initialized store, a canonical current pair, and matching registry,
+roots, and historical route bindings. It adds no source browser, frontend, or commit.
+See [the API contract](docs/architecture.md#m36b1-read-only-scoped-restore-preparation).
+Separate renames are not pair-atomic; no reload IPC is sent, but watchers may
+auto-reload changed files.
 
 ### Output contract
 
@@ -421,6 +429,8 @@ line are separate user opt-ins, never automatic Attune setup steps.
 - `hyprmod/core/scoped_recovery.py`, `hyprmod/core/layout_guard.py`,
   `hyprmod/pages/scope_recovery.py`: startup assessment, v1 exclusion, and explicit
   transaction recovery, separate from pending scope-local backup restoration.
+- `hyprmod/core/scoped_restore.py`: inactive read-only canonical restore drafts,
+  not a scope restore writer or foreign-file recovery path.
 - [ROADMAP.md](ROADMAP.md): priorities, milestones, and acceptance criteria.
 - [CONTRIBUTING.md](CONTRIBUTING.md): development commands and verification policy.
 - [docs/architecture.md](docs/architecture.md): current interfaces and persistence boundary.

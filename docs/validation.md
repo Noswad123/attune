@@ -519,3 +519,73 @@ loading nor Lua semantics, and operation bounds are not a total filesystem deadl
 - `hyprmod/pages/scope_recovery.py`, `hyprmod/main.py`, `hyprmod/window.py`.
 - [architecture.md](architecture.md#m36a-transaction-recovery-frontend-and-legacy-exclusion),
   [ADR 0001](decisions/0001-shared-local-ownership.md), and [ROADMAP.md](../ROADMAP.md).
+
+## M3.6b1: read-only scoped restore preparation
+
+### Overview and verification status
+
+B1 is implemented and validated as of 2026-10-30. M3.6b remains In progress.
+
+- Ruff lint with fixes and formatting: passed.
+- Repository-wide Pyright error-level check: zero errors. Unfiltered GI source
+  availability warnings remain as recorded at the M3.6a checkpoint.
+- Full suite, including publication fault/process-death coverage: **2,943 passed,
+  53 skipped**, in about 283 seconds.
+- Isolated Broadway compatibility suites: **50 passed, 2 skipped**, with compositor
+  IPC disabled and service mutators mocked. The daemon was stopped afterward.
+- Wheel build, installed launcher help, internal read-only worker help, and diff
+  whitespace checks: passed. The wheel is under `/tmp/opencode/attune-m36b1-dist`;
+  nothing was installed, registered, staged, or committed.
+- Independent safety review found no blockers. Follow-up tests cover actual later
+  two-scope publications, same-ID unrelated journal corruption between scans,
+  rehashed inconsistent historical snapshots, and nested draft immutability.
+- No live UI, user-state restore/recovery, compositor operations, migration, or
+  authored loader/config changes were performed. Publications in integration
+  tests use temporary outputs/state only. No new GUI behavior is added by b1.
+
+### API / Interfaces and coverage to exercise
+
+- `tests/test_scoped_restore.py` exercises both scopes, prior/proposed selections,
+  COMMITTED/ABORTED sources, complete CURRENT -> GOAL reviews retaining the current
+  sibling, old sources after later terminal history, safe canonical leaf replacement,
+  and mutation-free no-ops without creating a lock or evidence.
+- Refusal/race cases cover missing initialized storage, damaged current selected or
+  sibling output, exact registry/roots and both-route binding, unresolved/corrupt or
+  oversized journal scans, source record/blob replacement, newly added terminal
+  history, damaged unselected blobs, and current-review freshness.
+- Draft/worker cases cover frozen strict nested semantics, rehashed forged goals,
+  descriptors/diffs/counts, duplicate/unknown fields, invalid JSON/types, aggregate
+  eight-MiB ASCII-escaped transport, pure decoding without filesystem access,
+  isolated `-I -B` execution, exact context/selection echo, cancellation/timeouts,
+  and malformed/oversized replies.
+- Forbidden-effect tests guard writes, lock/store creation, compilation, main Lua
+  reads, IPC, and persistence. `tests/test_transaction_store.py` separately covers
+  `refuse_pending_readonly`, including terminal evidence verification without lock
+  acquisition or provisioning.
+
+### Data Flow and example validation
+
+Using exclusively temporary HOME/XDG fixtures, exercise
+`tests/test_scoped_restore.py` and `tests/test_transaction_store.py`, then the
+existing scoped recovery, publication, legacy persistence/restoration/preservation
+regressions and full CONTRIBUTING gate. No live source or store is needed. The API
+sequence and bounds are in
+[architecture.md](architecture.md#m36b1-read-only-scoped-restore-preparation).
+
+### Edge Cases and remaining gates
+
+Terminal phase/fingerprints are local observations, not authentication, proof that
+either historical side was installed, or write permits. Preparation and pure draft
+decoding do not authorize a later write. Source browsing/review and writer source
+freshness under lock are next; a separate foreign observation/preservation protocol
+must follow before M3.5. B1 adds no source discovery/listing, frontend, commit API/CLI,
+compiler, provisioning, foreign preservation, migration, or ownership exception.
+M0 live acceptance and loader/watch rollout gates remain pending.
+
+### Related files
+
+- `hyprmod/core/scoped_restore.py`, `hyprmod/core/transaction_store.py`.
+- `tests/test_scoped_restore.py`, `tests/test_transaction_store.py`.
+- [ADR 0001](decisions/0001-shared-local-ownership.md#6-scope-aware-backup-and-preservation-compatibility)
+  records why foreign originals cannot be admitted to canonical-only snapshots,
+  reviews, or compiler paths as raw blobs.

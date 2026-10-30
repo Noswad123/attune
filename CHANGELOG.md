@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- M3.6b1 inactive read-only scoped restore preparation. Strict frozen drafts bind a
+  verified terminal source's selected canonical prior/proposed scope to a complete
+  CURRENT -> GOAL review with the
+  current sibling unchanged. Safe initialized storage, canonical current outputs,
+  matching installation identity, and before/after pending-evidence checks are
+  required even for no-ops. Isolated `-I -B` preparation has bounded strict transport;
+  fingerprints are observations, not authentication or write permits. No source
+  browser, frontend, commit, compiler, provisioning, foreign preservation, or
+  migration is added. M3.6b remains In progress; ordinary ownership is unchanged.
 - M3.6a transaction recovery frontend, completed in code: bounded asynchronous
   read-only startup assessment opens the v1 editor only for `legacy-clear` and
   otherwise exposes a recovery shell, including on assessment errors. Scope

@@ -56,7 +56,7 @@ Persistent loading, Stow provisioning, and desktop registration remain opt-in.
 | M0: Validate the foundation | Pending manual acceptance | Existing baseline | Confidence in live previews and recovery |
 | M1: Workstation diagnostics | Implemented: M1.1-M1.7 delivered | Existing baseline; may proceed alongside M0 | Read-only visibility into effective state and integration |
 | M2: Recovery interface | Disk workflows delivered; M2.5 waits for M0 | M1 | Inspect and restore known Attune output through review |
-| M3: Shared/local ownership split | In progress: M3.6a completed in code; next M3.6b scope-local backup restore/preservation | Routing rollout requires M0 and recovery/migration prerequisites | Portable appearance with machine-local display settings |
+| M3: Shared/local ownership split | In progress: M3.6b1 read-only restore preparation implemented and validated | Routing rollout requires M0 and recovery/migration prerequisites | Portable appearance with machine-local display settings |
 | M4: Constrained presets | Planned | M0 and M3 | Safe, deliberate visual and display modes |
 | M5: Wisp integration | Planned | M1; preset entry points require M4 | Fast access without a second settings implementation |
 | M6: CARAMEL appearance overview | Later | Existing helper contracts; M3 for saving appearance | Activity-aware presentation using existing tools |
@@ -200,9 +200,19 @@ Goal: keep appearance portable without exporting a machine's display topology.
     or transaction evidence, including terminal history, blocks v1 writes;
     uninspectable metadata fails closed. Full and isolated GTK validation is
     recorded in `docs/validation.md`; live rollout remains gated.
-  - [ ] M3.6b Scope-local v2 backup restore and preservation-first recovery, with
+  - [ ] M3.6b (In progress) Scope-local v2 backup restore and preservation-first recovery, with
     explicit scope/route binding and unchanged-sibling isolation. Prerequisite
     before M3.5 migration and rollout; legacy bundles require explicit conversion.
+    - [x] M3.6b1 Read-only preparation, implemented and validated,
+      from an explicit verified terminal transaction, selecting canonical prior or
+      proposed bytes for one scope in a complete CURRENT -> GOAL pair review.
+      Requires the initialized safe store, canonical current pair, and exact
+      registry/roots plus historical both-route bindings; retains the current sibling.
+      No source discovery/listing, frontend, commit, compilation, or provisioning.
+    - Next: scoped source browsing/review and writer source freshness under lock;
+      then a separate foreign observation/preservation protocol, before M3.5.
+      Canonical-only snapshots/reviews/compilers cannot admit foreign originals as
+      raw rollback blobs. Ordinary ownership guards remain unchanged.
 
 Acceptance: changing only appearance leaves display output unchanged and vice
 versa. Both files work through Stow links. Simulated second-write failures and
@@ -239,9 +249,11 @@ recovery reviews, and crash-resumable journaled rollback. It preserves unchanged
 scopes and does not claim pair atomicity or runtime loading. Full-suite, focused,
 and isolated GTK validation are recorded in `docs/validation.md`.
 M3.6a now integrates startup assessment and explicit transaction recovery, not
-split editing or publication through Save. M3.6b scope-local v2 backup
-restore/preservation is next, before M3.5 opt-in migration. V1 remains the only
-editor Save format and is excluded whenever scoped evidence is present. Rollout
+split editing or publication through Save. M3.6b is In progress, with b1 read-only
+preparation implemented and validated, not restore/preservation
+completion. The remaining scoped writer and separate foreign protocol precede
+M3.5 opt-in migration. V1 remains the only editor Save format and is excluded
+whenever scoped evidence is present. Rollout
 still requires M0 acceptance; do not run automatic loader edits, activation,
 recovery, or live reloads to satisfy a model checkbox.
 

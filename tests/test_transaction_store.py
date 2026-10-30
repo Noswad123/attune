@@ -41,6 +41,36 @@ def root_for(plan):
 
 
 class TestPrivateStore:
+    def test_readonly_pending_scan_no_lock_or_provisioning(self, plan, monkeypatch):
+        state = Path(plan.evidence.state_root)
+
+        def forbidden(*args, **kwargs):
+            pytest.fail("Read-only pending check attempted mutation")
+
+        monkeypatch.setattr(store, "exclusive_store_session", forbidden)
+        monkeypatch.setattr(store, "initialize_store", forbidden)
+        assert store.refuse_pending_readonly(state) == ()
+        assert not (root_for(plan) / "persistence.lock").exists()
+
+    def test_readonly_pending_scan_verifies_selected_and_terminal(self, plan):
+        bundle = prepare(plan)
+        assert bundle is not None
+        state = Path(plan.evidence.state_root)
+        with pytest.raises(ValueError, match="Unresolved"):
+            store.refuse_pending_readonly(state)
+        with store.exclusive_store_session(state) as session:
+            session.refuse_other_pending(bundle.intent.transaction_id)
+            session.checkpoint(
+                bundle,
+                replace(bundle.intent, phase=Phase.ABORTED),
+                fingerprint=store.verified_fingerprint(bundle),
+            )
+        assert store.refuse_pending_readonly(state) == (bundle.intent.transaction_id,)
+        path = root_for(plan) / "transactions" / bundle.intent.transaction_id / "intent.json"
+        path.write_text("{}")
+        with pytest.raises(ValueError):
+            store.refuse_pending_readonly(state)
+
     @pytest.mark.parametrize("changed", [(Scope.APPEARANCE,), (Scope.DISPLAYS,), tuple(Scope)])
     def test_prepare_load_isolation_and_pending(self, plan, changed):
         before = snapshot(plan.evidence)

@@ -484,6 +484,91 @@ to force legacy entry or treat Retry Startup Check as migration or activation.
   `tests/test_startup_layout.py`, `tests/test_scope_recovery_gui.py`: coverage;
   M3.6a validation results are recorded in [validation.md](validation.md).
 
+## M3.6b1 read-only scoped restore preparation
+
+### Overview
+
+This first bounded M3.6b slice is implemented and validated.
+`core/scoped_restore.py` prepares canonical scope-local restore observations only.
+M3.6b remains In progress: there is no restore source browser/discovery, frontend,
+commit API, or commit CLI. Ordinary ownership and active editor routing are unchanged.
+
+### API / Interfaces
+
+| Interface | Contract |
+| --- | --- |
+| `prepare_restore(config_root, state_root, txid, scope, side)` | Direct read-only I/O; explicit normalized absolute roots, transaction ID, typed `Scope`, and `prior`/`proposed` selection. Invoke off GTK. |
+| `run_prepare(..., cancel_event=None, timeout=30)` | Isolated `-I -B` read-only child with process-group cleanup, cancellation, finite positive deadline, eight-MiB stdout cap, strict decoding, and exact context/selection echo checking. |
+| `ScopedRestoreDraft` | Frozen/slotted context and selection, source private digest, terminal phase, historical snapshot/ID, recomputed selected `BackupDescriptor`, and complete both-scope `GroupReviewPlan`. |
+| `transaction_store.refuse_pending_readonly(state_root)` | Requires an existing safe initialized store; verifies every bounded journal, refuses corrupt or unresolved evidence, and returns sorted IDs without acquiring/creating a lock or provisioning state. |
+
+Draft JSON uses exact schema-1 `scoped-restore-draft` fields and pure nested
+semantic validation. Unknown/duplicate fields, invalid types/constants, inconsistent
+hashes/diffs/counts/goals, and excessive nesting are refused. The aggregate eight-MiB
+limit also applies to canonical ASCII-escaped transport, not just input UTF-8 bytes.
+Existing per-side 256-KiB/10,000-line and per-scope complete-diff 256-KiB/4,000-line
+bounds remain; oversize reviews refuse rather than truncate.
+
+### Data Flow
+
+1. Verify all pending evidence read-only, then load the complete selected source,
+   including both scopes' prior/proposed blobs. Require COMMITTED or ABORTED and
+   capture the verified private fingerprint digest. Either historical side can be
+   selected; terminal phase does not prove that side was ever installed.
+2. Verify selected historical canonical bytes/hash/scope and inspect the current
+   registered canonical v2 pair. Require exact roots and registry evidence equality,
+   plus both historical `route_binding()` values. These retain paths, links,
+   ancestors, and Git context but exclude resolved regular-leaf identity, allowing
+   safe canonical leaf replacements and later terminal history.
+3. Build a fresh complete CURRENT -> GOAL plan. Only the selected scope takes exact
+   historical prior/proposed bytes; the sibling takes its exact **current** bytes,
+   not its historical bytes. Recompute descriptor and all plan semantics.
+4. Rescan all journals, require unchanged IDs, reload/fingerprint the source, validate
+   draft transport, and freshly revalidate the current group review before returning.
+
+### Edge Cases
+
+- Missing/unsafe/uninitialized stores, corrupt/unresolved journals (even unrelated
+  or terminal corrupt history), damaged selected or unselected blobs, changed
+  registry/routes, and noncanonical current selected/sibling output refuse.
+- No-ops still perform all checks and return an empty changed-scope set. All
+  preparation is mutation-free: no new lock, snapshot, blob, journal, chmod,
+  compilation, Lua execution, main-config read, IPC, or provisioning. Reads may
+  update atime; direct I/O has no hard wall-time bound.
+- Fingerprints and terminal phases are non-atomic local observations, not
+  authentication, publication-history proof, or write permits. Pure draft decoding
+  does not establish filesystem freshness. Future restore writers must freshly
+  verify source evidence under their own lock; no such writer is added here.
+- Foreign current text is not admitted or preserved. Canonical-only snapshots,
+  reviews, and compiler paths cannot accept raw foreign rollback blobs. A distinct
+  observation/preservation protocol is required, as recorded in ADR 0001.
+
+### Example usage
+
+For an already initialized, exclusively temporary test installation with a verified
+terminal transaction ID, call off GTK:
+
+```python
+draft = scoped_restore.run_prepare(config_root, state_root, txid, Scope.APPEARANCE, "prior")
+plan = draft.plan  # Complete CURRENT -> GOAL observation for both scopes; no commit.
+```
+
+This API sequence performs no installation or activation. Next work is scoped
+source browsing/review and writer source freshness under lock, then the separate
+foreign observation/preservation protocol, before M3.5 migration.
+
+### Related files
+
+- `hyprmod/core/scoped_restore.py`, `tests/test_scoped_restore.py`: preparation,
+  strict drafts/worker transport, race/refusal and forbidden-effect regressions.
+- `hyprmod/core/transaction_store.py`, `tests/test_transaction_store.py`: verified
+  historical evidence, private fingerprints, and lock-free pending checks.
+- `hyprmod/core/scoped_review.py`, `hyprmod/core/scoped_backups.py`,
+  `hyprmod/core/transaction_records.py`, `hyprmod/core/route_approval.py`: complete
+  canonical plans, descriptors, historical route bindings, and fresh installation checks.
+- [ADR 0001](decisions/0001-shared-local-ownership.md#6-scope-aware-backup-and-preservation-compatibility),
+  [validation.md](validation.md#m36b1-read-only-scoped-restore-preparation).
+
 ## Data Flow
 
 1. **Startup:** only after the bounded assessment admits legacy entry, the window
