@@ -1,4 +1,4 @@
-"""Explicit private evidence storage only. No output publication or journal advancement.
+"""Explicit private evidence storage and locked metadata checkpoints, never outputs.
 
 Failures may leave partial/orphan evidence. Nothing here repairs or removes it.
 Checks narrow local filesystem races; they are not hostile-filesystem isolation.
@@ -7,11 +7,13 @@ Checks narrow local filesystem races; they are not hostile-filesystem isolation.
 import fcntl
 import hashlib
 import os
+import re
 import secrets
 import stat
 import threading
 import time
-from dataclasses import dataclass
+from contextlib import contextmanager
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 from hyprmod.core import persistence, scoped_config, scoped_review
@@ -21,7 +23,10 @@ from hyprmod.core.transaction_records import (
     MAX_RECORD_BYTES,
     GroupSnapshot,
     Phase,
+    RollbackCheckpoint,
+    RollbackOperation,
     TransactionIntent,
+    canonical_json,
     decode_json,
     fields,
     validate_digest,
@@ -51,6 +56,9 @@ class VerifiedTransaction:
     snapshot: GroupSnapshot
     blobs: tuple[VerifiedBlob, ...]
     binding: StoreBinding
+    rollback: RollbackOperation | None = None
+    rollback_checkpoint: RollbackCheckpoint | None = None
+    private_facts: tuple = ()
 
 
 # Preparation returns exactly the same verified, read-only evidence as loading.
@@ -193,12 +201,16 @@ def _read(binding: StoreBinding, path: Path, limit: int) -> bytes:
     return raw
 
 
-def _publish(binding: StoreBinding, path: Path, raw: bytes) -> None:
+def _publish(
+    binding: StoreBinding, path: Path, raw: bytes, *, reuse_identical: bool = True
+) -> None:
     revalidate_store(binding)
     _directory(path.parent, private=True)
     try:
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     except FileExistsError:
+        if not reuse_identical:
+            raise FileExistsError(f"Checkpoint scratch already exists: {path}") from None
         if _read(binding, path, len(raw)) != raw:
             raise ValueError(f"Immutable evidence collision: {path}") from None
     else:
@@ -226,18 +238,45 @@ def load_transaction(state_root: Path, transaction_id: str) -> VerifiedTransacti
     root = state_root / "attune"
     directory = root / "transactions" / transaction_id
     directory_fact = _directory(directory, private=True)
+    read_facts = []
+
+    def read_record(path: Path, limit: int) -> bytes:
+        identity = _signature(_file_info(path))
+        raw = _read(binding, path, limit)
+        if _signature(_file_info(path)) != identity:
+            raise ValueError("Private record changed during bundle load")
+        read_facts.append((str(path), identity, hashlib.sha256(raw).hexdigest()))
+        return raw
+
+    names = set()
     with os.scandir(directory) as children:
-        first = next(children, None)
-        if first is None or first.name != "intent.json" or next(children, None) is not None:
-            raise ValueError("Incomplete or unknown transaction directory")
-    intent_raw = _read(binding, directory / "intent.json", MAX_RECORD_BYTES)
+        for index, child in enumerate(children):
+            if index >= MAX_JOURNALS:
+                raise ValueError("Transaction entry limit exceeded")
+            if re.fullmatch(
+                r"\.(intent|rollback|rollback-checkpoint)\.json\.[0-9a-f]{32}\.tmp", child.name
+            ):
+                # Unpublished scratch is never authority, promoted, or cleaned on load.
+                if _file_info(Path(child.path)).st_size > MAX_RECORD_BYTES:
+                    raise ValueError("Oversized checkpoint scratch")
+            else:
+                names.add(child.name)
+    if "intent.json" not in names or names - {
+        "intent.json",
+        "rollback.json",
+        "rollback-checkpoint.json",
+    }:
+        raise ValueError("Incomplete or unknown transaction directory")
+    if "rollback-checkpoint.json" in names and "rollback.json" not in names:
+        raise ValueError("Orphan rollback checkpoint")
+    intent_raw = read_record(directory / "intent.json", MAX_RECORD_BYTES)
     data = fields(
         decode_json(intent_raw.decode("utf-8")),
         {"schema", "kind", *TransactionIntent.__dataclass_fields__},
     )
     snapshot_id = validate_digest(data["snapshot_id"])
-    snapshot_raw = _read(
-        binding, root / "snapshots" / (snapshot_id + ".json"), MAX_RECORD_BYTES - len(intent_raw)
+    snapshot_raw = read_record(
+        root / "snapshots" / (snapshot_id + ".json"), MAX_RECORD_BYTES - len(intent_raw)
     )
     if hashlib.sha256(snapshot_raw).hexdigest() != snapshot_id:
         raise ValueError("Snapshot filename hash mismatch")
@@ -256,8 +295,7 @@ def load_transaction(state_root: Path, transaction_id: str) -> VerifiedTransacti
         ):
             if any(b.sha256 == digest for b in blobs):
                 continue
-            raw = _read(
-                binding,
+            raw = read_record(
                 root / "blobs" / (digest + ".lua"),
                 min(scoped_review.MAX_INPUT_BYTES, budget),
             )
@@ -269,10 +307,31 @@ def load_transaction(state_root: Path, transaction_id: str) -> VerifiedTransacti
     revalidate_store(binding)
     if _directory(directory, private=True) != directory_fact:
         raise ValueError("Transaction directory identity changed during load")
-    return VerifiedTransaction(intent, snapshot, tuple(blobs), binding)
+    rollback = checkpoint = None
+    if "rollback.json" in names:
+        rollback = RollbackOperation.from_json(
+            read_record(directory / "rollback.json", MAX_RECORD_BYTES).decode("ascii"),
+            snapshot=snapshot,
+        )
+        if intent.phase is Phase.COMMITTED:
+            raise ValueError("Committed transaction has rollback operation")
+        if "rollback-checkpoint.json" in names:
+            checkpoint = RollbackCheckpoint.from_json(
+                read_record(directory / "rollback-checkpoint.json", MAX_RECORD_BYTES).decode(
+                    "ascii"
+                ),
+                operation=rollback,
+            )
+        if intent.phase is Phase.ABORTED and (checkpoint is None or not checkpoint.complete):
+            raise ValueError("Aborted parent has incomplete rollback")
+    bundle = VerifiedTransaction(intent, snapshot, tuple(blobs), binding, rollback, checkpoint)
+    facts = _capture_private_facts(bundle)
+    if facts != (directory_fact, tuple(read_facts)):
+        raise ValueError("Private evidence changed across bundle load")
+    return replace(bundle, private_facts=facts)
 
 
-def _pending(binding: StoreBinding) -> None:
+def _pending(binding: StoreBinding, selected: str | None = None) -> None:
     root = binding.state_root / "attune/transactions"
     with os.scandir(root) as entries:
         for index, entry in enumerate(entries):
@@ -280,54 +339,50 @@ def _pending(binding: StoreBinding) -> None:
                 raise ValueError("Journal scan exceeds 1000 entries")
             validate_transaction_id(entry.name)
             verified = load_transaction(binding.state_root, entry.name)
-            if verified.intent.phase not in (Phase.COMMITTED, Phase.ABORTED):
+            if entry.name != selected and verified.intent.phase not in (
+                Phase.COMMITTED,
+                Phase.ABORTED,
+            ):
                 raise ValueError("Unresolved prior transaction blocks preparation")
 
 
-def prepare_transaction(
-    plan: scoped_review.GroupReviewPlan,
-    *,
-    state_root: Path,
-    transaction_id: str | None = None,
-    cancel_event: threading.Event | None = None,
-) -> PreparedEvidence | None:
-    """Persist prepared/empty-progress evidence only; partial writes may remain on failure."""
-    scoped_review.validate_recorded_review(plan)
-    if not isinstance(state_root, Path) or str(state_root) != plan.evidence.state_root:
-        raise ValueError("Explicit state context differs from review")
-    if transaction_id is not None:
-        validate_transaction_id(transaction_id)
+class StoreSession:
+    """Exclusive, bounded-lock session. Construct through exclusive_store_session only."""
 
-    def check() -> None:
-        if cancel_event is not None and cancel_event.is_set():
-            raise InterruptedError("Evidence preparation cancelled")
+    def __init__(self, binding: StoreBinding, fd: int, cancel_event: threading.Event | None):
+        self.binding = binding
+        self.fd = fd
+        self.cancel_event = cancel_event
+        self.lock_identity = _signature(os.fstat(fd))
 
-    check()
-    if not plan.changed_scopes:
-        scoped_review.revalidate_review(plan)
+    def check(self) -> None:
+        if self.cancel_event is not None and self.cancel_event.is_set():
+            raise InterruptedError("Transaction cancelled")
+        revalidate_store(self.binding)
+        path = self.binding.state_root / "attune/persistence.lock"
+        if self.lock_identity != _signature(_file_info(path)) or self.lock_identity != _signature(
+            os.fstat(self.fd)
+        ):
+            raise ValueError("Persistence lock identity changed")
+        fcntl.flock(self.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+    def refuse_other_pending(self, selected: str | None = None) -> None:
+        self.check()
+        _pending(self.binding, selected)
+
+    def prepare(
+        self, plan: scoped_review.GroupReviewPlan, transaction_id: str | None = None
+    ) -> PreparedEvidence:
+        scoped_review.validate_recorded_review(plan)
+        binding = self.binding
+        state_root = binding.state_root
+        if str(state_root) != plan.evidence.state_root or not plan.changed_scopes:
+            raise ValueError("Expected changed plan in explicit store context")
+        if transaction_id is not None:
+            validate_transaction_id(transaction_id)
+        check = self.check
         check()
-        return None
-    binding = inspect_store(state_root)
-    root = state_root / "attune"
-    lock_path = root / "persistence.lock"
-    fd = os.open(lock_path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
-    with os.fdopen(fd, "a+b") as lock:
-        if _signature(os.fstat(lock.fileno())) != _signature(_file_info(lock_path)):
-            raise ValueError("Unsafe or changed persistence lock")
-        deadline = time.monotonic() + LOCK_TIMEOUT
-        while True:
-            check()
-            try:
-                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                break
-            except BlockingIOError:
-                if time.monotonic() >= deadline:
-                    raise TimeoutError("Persistence lock timed out") from None
-                time.sleep(0.05)
-        check()
-        revalidate_store(binding)
-        if _signature(os.fstat(lock.fileno())) != _signature(_file_info(lock_path)):
-            raise ValueError("Persistence lock changed while waiting")
+        root = state_root / "attune"
         scoped_review.revalidate_review(plan)
         _pending(binding)
         snapshot = GroupSnapshot(plan)
@@ -376,3 +431,232 @@ def prepare_transaction(
         check()
         _publish(binding, directory / "intent.json", intent_raw)
         return load_transaction(state_root, txid)
+
+    def sync_evidence(self, bundle: VerifiedTransaction) -> None:
+        self.check()
+        before = verified_fingerprint(bundle)
+        root = self.binding.state_root / "attune"
+        for blob in bundle.blobs:
+            _publish(self.binding, root / "blobs" / (blob.sha256 + ".lua"), blob.raw)
+        _publish(
+            self.binding,
+            root / "snapshots" / (bundle.snapshot.snapshot_id + ".json"),
+            bundle.snapshot.to_json().encode("ascii"),
+        )
+        directory = root / "transactions" / bundle.intent.transaction_id
+        _publish(self.binding, directory / "intent.json", bundle.intent.to_json().encode("ascii"))
+        if bundle.rollback is not None:
+            _publish(
+                self.binding, directory / "rollback.json", bundle.rollback.to_json().encode("ascii")
+            )
+        if bundle.rollback_checkpoint is not None:
+            _publish(
+                self.binding,
+                directory / "rollback-checkpoint.json",
+                bundle.rollback_checkpoint.to_json().encode("ascii"),
+            )
+        if (
+            verified_fingerprint(
+                load_transaction(self.binding.state_root, bundle.intent.transaction_id)
+            )
+            != before
+        ):
+            raise ValueError("Private evidence changed during synchronization")
+
+    def checkpoint(
+        self,
+        expected: VerifiedTransaction,
+        record: TransactionIntent | RollbackOperation | RollbackCheckpoint,
+        *,
+        fingerprint: tuple,
+    ) -> VerifiedTransaction:
+        self.check()
+        state = self.binding.state_root
+        txid = expected.intent.transaction_id
+        if (
+            verified_fingerprint(expected) != fingerprint
+            or verified_fingerprint(load_transaction(state, txid)) != fingerprint
+        ):
+            raise ValueError("Private checkpoint compare failed")
+        if isinstance(record, TransactionIntent):
+            record.validate_snapshot(expected.snapshot)
+            old = expected.intent
+            if old.phase in (Phase.COMMITTED, Phase.ABORTED) or record.transaction_id != txid:
+                raise ValueError("Terminal or mismatched checkpoint")
+            if expected.rollback is not None:
+                if (
+                    record.phase is not Phase.ABORTED
+                    or expected.rollback_checkpoint is None
+                    or not expected.rollback_checkpoint.complete
+                ):
+                    raise ValueError("Rollback direction is locked")
+            elif record.phase not in (Phase.PUBLISHING, Phase.COMMITTED, Phase.ABORTED):
+                raise ValueError("Illegal journal transition")
+            name = "intent.json"
+        elif isinstance(record, RollbackOperation):
+            record.validate_snapshot(expected.snapshot)
+            if expected.rollback is not None or expected.intent.phase in (
+                Phase.COMMITTED,
+                Phase.ABORTED,
+            ):
+                raise ValueError("Rollback already exists or parent terminal")
+            name = "rollback.json"
+        else:
+            if expected.rollback is None:
+                raise ValueError("Missing rollback operation")
+            record.validate_operation(expected.rollback)
+            old_checkpoint = expected.rollback_checkpoint
+            if old_checkpoint is not None and old_checkpoint.complete:
+                raise ValueError("Illegal rollback checkpoint transition")
+            name = "rollback-checkpoint.json"
+        directory = state / "attune/transactions" / txid
+        raw = record.to_json().encode("ascii")
+        if len(raw) > MAX_RECORD_BYTES:
+            raise ValueError("Checkpoint exceeds limit")
+        temporary = directory / ("." + name + "." + secrets.token_hex(16) + ".tmp")
+        _publish(self.binding, temporary, raw, reuse_identical=False)
+        self.check()
+        if verified_fingerprint(load_transaction(state, txid)) != fingerprint:
+            raise ValueError("Private evidence changed before checkpoint replacement")
+        temporary_identity = _signature(_file_info(temporary))
+        if _read(self.binding, temporary, MAX_RECORD_BYTES) != raw:
+            raise ValueError("Checkpoint scratch changed")
+        if _signature(_file_info(temporary)) != temporary_identity:
+            raise ValueError("Checkpoint scratch identity changed")
+        os.replace(temporary, directory / name)
+        _sync_directory(directory)
+        loaded = load_transaction(state, txid)
+        after = verified_fingerprint(loaded)
+        changed_path = str(directory / name)
+        if (
+            after[1] != fingerprint[1]
+            or tuple(f for f in after[2] if f[0] != changed_path)
+            != tuple(f for f in fingerprint[2] if f[0] != changed_path)
+            or (
+                loaded.intent
+                if name == "intent.json"
+                else loaded.rollback
+                if name == "rollback.json"
+                else loaded.rollback_checkpoint
+            )
+            != record
+        ):
+            raise ValueError("Unrelated private evidence changed during checkpoint")
+        return loaded
+
+
+@contextmanager
+def exclusive_store_session(state_root: Path, *, cancel_event: threading.Event | None = None):
+    if cancel_event is not None and cancel_event.is_set():
+        raise InterruptedError("Transaction cancelled")
+    binding = inspect_store(state_root)
+    path = state_root / "attune/persistence.lock"
+    fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
+    try:
+        if _signature(os.fstat(fd)) != _signature(_file_info(path)):
+            raise ValueError("Unsafe or changed persistence lock")
+        deadline = time.monotonic() + LOCK_TIMEOUT
+        while True:
+            if cancel_event is not None and cancel_event.is_set():
+                raise InterruptedError("Transaction cancelled")
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError("Persistence lock timed out") from None
+                time.sleep(0.05)
+        session = StoreSession(binding, fd, cancel_event)
+        session.check()
+        yield session
+    finally:
+        os.close(fd)
+
+
+def _capture_private_facts(bundle: VerifiedTransaction) -> tuple:
+    root = bundle.binding.state_root / "attune"
+    directory = root / "transactions" / bundle.intent.transaction_id
+    records = [
+        (directory / "intent.json", MAX_RECORD_BYTES),
+        (root / "snapshots" / (bundle.snapshot.snapshot_id + ".json"), MAX_RECORD_BYTES),
+    ]
+    records.extend(
+        (root / "blobs" / (b.sha256 + ".lua"), scoped_review.MAX_INPUT_BYTES) for b in bundle.blobs
+    )
+    if bundle.rollback is not None:
+        records.append((directory / "rollback.json", MAX_RECORD_BYTES))
+    if bundle.rollback_checkpoint is not None:
+        records.append((directory / "rollback-checkpoint.json", MAX_RECORD_BYTES))
+    facts = []
+    for path, limit in records:
+        before = _signature(_file_info(path))
+        raw = _read(bundle.binding, path, limit)
+        if before != _signature(_file_info(path)):
+            raise ValueError("Private evidence changed during fingerprint")
+        facts.append((str(path), before, hashlib.sha256(raw).hexdigest()))
+    return (_directory(directory, private=True), tuple(facts))
+
+
+def verified_fingerprint(bundle: VerifiedTransaction) -> tuple:
+    """Bind private record identities and exact bytes, excluding unpublished scratch."""
+    facts = _capture_private_facts(bundle)
+    if facts != bundle.private_facts:
+        raise ValueError("Private evidence identity or bytes changed since load")
+    return (replace(bundle, private_facts=()), *facts)
+
+
+def verified_fingerprint_digest(bundle: VerifiedTransaction) -> str:
+    """Stable local identity/record-hash transport, never repr or serialized authority."""
+    verified_fingerprint(bundle)
+    directory, records = bundle.private_facts
+    payload = {
+        "schema": 1,
+        "binding": asdict(bundle.binding),
+        "directory": asdict(directory),
+        "records": records,
+    }
+    payload["binding"]["state_root"] = str(bundle.binding.state_root)
+    return hashlib.sha256(canonical_json(payload).encode("ascii")).hexdigest()
+
+
+def list_transaction_ids(state_root: Path) -> tuple[str, ...]:
+    """Bounded read-only listing. Unknown/unsafe entries are errors, never skipped."""
+    binding = inspect_store(state_root)
+    directory = state_root / "attune/transactions"
+    before = directory.lstat()
+    names = []
+    with os.scandir(directory) as entries:
+        for index, entry in enumerate(entries):
+            if index >= MAX_JOURNALS:
+                raise ValueError("Journal scan exceeds 1000 entries")
+            validate_transaction_id(entry.name)
+            _directory(Path(entry.path), private=True)
+            names.append(entry.name)
+    revalidate_store(binding)
+    if directory.lstat() != before:
+        raise ValueError("Transaction listing changed during observation")
+    return tuple(sorted(names))
+
+
+def prepare_transaction(
+    plan: scoped_review.GroupReviewPlan,
+    *,
+    state_root: Path,
+    transaction_id: str | None = None,
+    cancel_event: threading.Event | None = None,
+) -> PreparedEvidence | None:
+    """Persist prepared evidence only; partial writes may remain on failure."""
+    scoped_review.validate_recorded_review(plan)
+    if not isinstance(state_root, Path) or str(state_root) != plan.evidence.state_root:
+        raise ValueError("Explicit state context differs from review")
+    if transaction_id is not None:
+        validate_transaction_id(transaction_id)
+    if cancel_event is not None and cancel_event.is_set():
+        raise InterruptedError("Evidence preparation cancelled")
+    if not plan.changed_scopes:
+        scoped_review.revalidate_review(plan)
+        if cancel_event is not None and cancel_event.is_set():
+            raise InterruptedError("Evidence preparation cancelled")
+        return None
+    with exclusive_store_session(state_root, cancel_event=cancel_event) as session:
+        return session.prepare(plan, transaction_id)

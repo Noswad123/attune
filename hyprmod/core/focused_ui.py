@@ -6,7 +6,7 @@ from pathlib import Path
 
 SCHEMA_PAGES = ("general", "decoration", "animations")
 SECTION_PAGES = ("monitors",)
-UTILITY_PAGES = ("pending", "health", "backups", "settings")
+UTILITY_PAGES = ("pending", "health", "backups", "scope-recovery", "settings")
 PAGE_IDS = frozenset((*SCHEMA_PAGES, *SECTION_PAGES, *UTILITY_PAGES, "search"))
 GENERAL_OPTIONS = frozenset(
     (

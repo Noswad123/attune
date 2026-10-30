@@ -3,6 +3,7 @@
 import hashlib
 import json
 import re
+import stat
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 
@@ -78,6 +79,22 @@ def validate_digest(value: str) -> str:
     return value
 
 
+def route_binding(file: FileEvidence) -> tuple:
+    """Exclude only the resolved regular leaf; preserve every link and ancestor."""
+    proof = file.path
+    return (
+        proof.lexical_path,
+        proof.resolved_path,
+        tuple(
+            (fact.path, (), None)
+            if fact.path == proof.resolved_path and fact.identity and stat.S_ISREG(fact.identity[2])
+            else (fact.path, fact.identity, fact.link_target)
+            for fact in proof.facts
+        ),
+        file.git_context,
+    )
+
+
 def _scopes(value: object) -> tuple[Scope, ...]:
     if type(value) is not list or any(type(s) is not str for s in value):
         raise ValueError("Expected scope array")
@@ -111,10 +128,24 @@ def _plan_from(value: object) -> GroupReviewPlan:
     return GroupReviewPlan(
         evidence,
         tuple(reviews),
-        _scopes(data["changed_scopes"]),
+        () if data["changed_scopes"] == [] else _scopes(data["changed_scopes"]),
         data["review_hash"],
         data["observed_at"],
     )
+
+
+def plan_to_json(plan: GroupReviewPlan) -> str:
+    validate_recorded_review(plan)
+    text = canonical_json(_plan_data(plan))
+    decode_json(text)
+    return text
+
+
+def plan_from_json(text: str) -> GroupReviewPlan:
+    try:
+        return validate_recorded_review(_plan_from(decode_json(text)))
+    except (TypeError, KeyError, OverflowError, RecursionError) as exc:
+        raise ValueError(f"Invalid recorded plan: {exc}") from exc
 
 
 class PriorKind(StrEnum):
@@ -252,4 +283,117 @@ class TransactionIntent:
             tuple(Scope(s) for s in progress),
         )
         result.validate_snapshot(snapshot)
+        return result
+
+
+@dataclass(frozen=True, slots=True)
+class RollbackOperation:
+    snapshot_id: str
+    original_review_hash: str
+    private_fingerprint_sha256: str
+    initial_review: GroupReviewPlan
+    restore_scopes: tuple[Scope, ...]
+
+    @property
+    def operation_sha256(self) -> str:
+        return hashlib.sha256(self.to_json().encode("ascii")).hexdigest()
+
+    def validate_snapshot(self, snapshot: GroupSnapshot) -> None:
+        validate_digest(self.private_fingerprint_sha256)
+        validate_recorded_review(self.initial_review)
+        original = snapshot.plan
+        if (
+            self.snapshot_id != snapshot.snapshot_id
+            or self.original_review_hash != original.review_hash
+            or self.initial_review.evidence.registry != original.evidence.registry
+            or self.initial_review.evidence.config_root != original.evidence.config_root
+            or self.initial_review.evidence.state_root != original.evidence.state_root
+            or self.initial_review.evidence.protected != original.evidence.protected
+            or self.restore_scopes != self.initial_review.changed_scopes
+            or not self.restore_scopes
+            or any(s not in original.changed_scopes for s in self.restore_scopes)
+        ):
+            raise ValueError("Rollback does not bind original transaction")
+        for prior, actual in zip(
+            original.evidence.routes, self.initial_review.evidence.routes, strict=True
+        ):
+            if route_binding(prior.file) != route_binding(actual.file) or (
+                prior.scope not in original.changed_scopes and prior != actual
+            ):
+                raise ValueError("Rollback initial evidence differs from original bindings")
+        for old, review in zip(original.scopes, self.initial_review.scopes, strict=True):
+            if review.proposed_text != old.previous_text or review.previous_text not in (
+                old.previous_text,
+                old.proposed_text,
+            ):
+                raise ValueError("Rollback goals must be verified original prior bytes")
+
+    def to_json(self) -> str:
+        return canonical_json(
+            {
+                "schema": 1,
+                "kind": "ordinary-rollback",
+                "snapshot_id": self.snapshot_id,
+                "original_review_hash": self.original_review_hash,
+                "private_fingerprint_sha256": self.private_fingerprint_sha256,
+                "initial_review": _plan_data(self.initial_review),
+                "restore_scopes": self.restore_scopes,
+            }
+        )
+
+    @classmethod
+    def from_json(cls, text: str, *, snapshot: GroupSnapshot) -> "RollbackOperation":
+        data = fields(decode_json(text), {"schema", "kind", *cls.__dataclass_fields__})
+        if (
+            type(data["schema"]) is not int
+            or data["schema"] != 1
+            or data["kind"] != "ordinary-rollback"
+        ):
+            raise ValueError("Unsupported rollback record")
+        result = cls(
+            data["snapshot_id"],
+            data["original_review_hash"],
+            data["private_fingerprint_sha256"],
+            _plan_from(data["initial_review"]),
+            _scopes(data["restore_scopes"]),
+        )
+        result.validate_snapshot(snapshot)
+        return result
+
+
+@dataclass(frozen=True, slots=True)
+class RollbackCheckpoint:
+    operation_sha256: str
+    progress: tuple[Scope, ...] = ()
+    complete: bool = False
+
+    def validate_operation(self, operation: RollbackOperation) -> None:
+        if (
+            self.operation_sha256 != operation.operation_sha256
+            or type(self.progress) is not tuple
+            or any(type(s) is not Scope for s in self.progress)
+            or self.progress != operation.restore_scopes[: len(self.progress)]
+            or type(self.complete) is not bool
+            or (self.complete and self.progress != operation.restore_scopes)
+        ):
+            raise ValueError("Invalid rollback checkpoint")
+
+    def to_json(self) -> str:
+        return canonical_json({"schema": 1, "kind": "rollback-checkpoint", **asdict(self)})
+
+    @classmethod
+    def from_json(cls, text: str, *, operation: RollbackOperation) -> "RollbackCheckpoint":
+        data = fields(decode_json(text), {"schema", "kind", *cls.__dataclass_fields__})
+        if (
+            type(data["schema"]) is not int
+            or data["schema"] != 1
+            or data["kind"] != "rollback-checkpoint"
+        ):
+            raise ValueError("Unsupported rollback checkpoint")
+        if type(data["progress"]) is not list:
+            raise ValueError("Expected rollback progress array")
+        result = cls(
+            data["operation_sha256"], tuple(Scope(s) for s in data["progress"]), data["complete"]
+        )
+        result.validate_operation(operation)
         return result

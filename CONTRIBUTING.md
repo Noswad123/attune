@@ -70,6 +70,11 @@ ATTUNE_GUI_SMOKE=1 GDK_BACKEND=broadway BROADWAY_DISPLAY=:8 GSK_RENDERER=cairo \
 Stop the Broadway daemon when finished. These tests cover page construction,
 review/save/reopen, and foreign-file recovery, not live monitor/HDR correctness.
 The suite isolates HOME and XDG paths; never remove those test safety fixtures.
+For M3.6a's separate opt-in recovery widgets, use the same Broadway environment
+with `tests/test_scope_recovery_gui.py`. Focused service/wiring coverage is in
+`tests/test_scoped_recovery.py`, `tests/test_layout_guard.py`, and
+`tests/test_startup_layout.py`; run these alongside legacy persistence, restoration,
+and recovery regressions. Coverage is not a claim that final validation passed.
 
 New pure logic under `core/` should ship with tests in `tests/`, following the existing class-based style. GTK page and widget code does not need unit tests.
 
@@ -126,8 +131,10 @@ Things to avoid:
 - Follow the [current scope](README.md#current-scope). Keep hand-authored
   bindings, workspaces, rules, autostart, environment, and other behavior outside
   the focused GUI. Inherited modules/tests do not imply supported GUI features.
-- This milestone emits one dedicated `attune.lua` for monitors and appearance.
-  Shared/machine splitting is future work, not an existing interface.
+- The active application emits one dedicated v1 `attune.lua` for monitors and
+  appearance through editor Save, only when legacy layout exclusion is clear.
+  Split publication remains an explicit core API, not an editor Save feature.
+  M3.6a integrates read-only startup assessment and explicit transaction recovery.
 - Follow [ADR 0001](docs/decisions/0001-shared-local-ownership.md) for M3 development.
   Model/codec work must not activate the proposed split layout, registry, journal,
   or migration as a side effect. Existing v1 persistence remains the default.
@@ -136,16 +143,37 @@ Things to avoid:
   regenerate their expected bytes to make compatibility tests pass.
 - `route_approval` separately inspects explicit filesystem context without mutation.
   Its transient evidence is not a write permit or activation token. Supervise
-  filesystem work off GTK; future writers must recheck under their own lock and
+  filesystem work off GTK; writers must recheck under their own lock and
   account explicitly for any intended state-directory transitions.
 - Scoped review/backup/diagnostic adapters are inactive read-only foundations.
   Their hashes and canonical checks do not authorize commits or establish Lua
-  semantics/runtime loading. Do not wire them to Save before the journaled writer,
-  scope-aware recovery, and migration prerequisites are validated.
-- Private transaction evidence APIs are inactive and must use explicit temporary
+  semantics/runtime loading. The journaled backend exists, but Save integration
+  still requires pending M3.6b scope-local v2 backup restore/preservation and M3.5
+  migration prerequisites. M3.6a does not complete either of those slices.
+- Private transaction evidence APIs must use explicit temporary
   state in tests. Initialization precedes route review; no startup path may create
   or repair the store. Recorded-review validation is historical/pure, not filesystem
   freshness, compilation, publication approval, or a reason to skip writer preflight.
+- M3.4b publication/recovery mutators write only on explicit invocation. Keep all
+  test outputs and state exclusively temporary. M3.6a's GUI integrates recovery
+  only; do not activate split editing/publication Save, CLI mutation, registry
+  activation, migration, or v2 editor routing as a side effect.
+  Callers must invoke mutators directly on non-daemon workers, never
+  timeout-killable children. Five-second lock waits and ten-second compile checks
+  do not bound total filesystem time. Honor independent sticky scope/journal
+  uncertainty flags: invalidate editors on scope change or uncertainty, never mark
+  old baselines Saved. M3.6a wires direct recovery workers, close veto, and
+  owner-aware exclusion so legacy restoration cannot release a scope writer.
+- Startup assessment and review preparation must stay isolated, bounded, read-only,
+  and off GTK. Only `legacy-clear` permits v1 editor construction; scoped/blocked
+  observations and errors use the recovery shell. Any registry or transaction
+  evidence, including terminal history, excludes v1 save/restoration/preservation.
+  Uninspectable metadata fails closed. Keep writer-side exclusion rechecks even
+  after startup succeeds. Never infer loader choice from absence of evidence.
+- Preserve untouched scopes' bytes/inode/mtime/mode and lexical symlinks. Separate
+  renames are not pair-atomic; no reload IPC does not prevent watcher auto-reload.
+  Recovery always needs a fresh complete CURRENT -> GOAL review. Never auto-repair,
+  resume, roll back, delete evidence, or promote/reuse preexisting checkpoint scratch.
 - Restore restrictive fixture permissions in `finally` and register shared fixtures
   explicitly. Targeted test success must not depend on a test module being loaded
   as a plugin in a particular collection order.

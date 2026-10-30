@@ -52,6 +52,7 @@ class TestFocusedNavigation:
             "SettingsPage",
             "HealthPage",
             "BackupsPage",
+            "ScopeRecoveryPage",
         ):
             monkeypatch.setattr(window_module, name, MagicMock())
         HyprModWindow._build_pages(win)

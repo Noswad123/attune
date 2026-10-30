@@ -18,14 +18,17 @@ generic configuration helpers are not the focused application's feature contract
 Hand-authored behavior remains outside the GUI.
 
 The first milestone has **one output file for both monitors and appearance**.
-A shared/machine-specific split is future work, not an implemented routing layer.
+A shared/machine-specific split is not active editor routing. Split publication
+remains separate from GUI Save; M3.6a integrates only startup assessment and
+explicit transaction recovery from the backend.
 The selected future design is
 [ADR 0001](decisions/0001-shared-local-ownership.md). It chooses two explicitly
 registered scope outputs and journaled recovery, with manual loader handoff and
 no claim of pair-atomic or runtime snapshot loading. The interfaces below remain
-the shipped single-output implementation.
-M3.2's pure models and codec are implemented separately below; no active app path
-discovers or selects their registry or writes their v2 output.
+the active single-output implementation unless explicitly labeled inactive.
+M3.2's pure models and codec are implemented separately below. Startup now inspects
+the configured registry and private journals without selecting a split editor,
+activating a registry, or creating state. Explicit recovery may write v2 scopes.
 
 ## API / Interfaces
 
@@ -63,11 +66,11 @@ managed-data caching. It still contains legacy generic helpers such as
 `write_all`, path overrides, and format conversion. Those are not the GUI's
 reviewed persistence API. Settings exposes neither path editing nor auto-save.
 
-## Inactive M3.2 data APIs
+## M3.2 data foundations
 
 These pure interfaces perform no filesystem operations, subprocess calls, Lua
-evaluation, registry creation, discovery, or activation. They are not wired into
-the GUI or existing read/write routing.
+evaluation, registry creation, discovery, or activation. M3.6a consumes them for
+assessment/recovery validation, not editor Save or split installation activation.
 
 | Interface | Role |
 | --- | --- |
@@ -99,18 +102,19 @@ aliases, permissions, protected targets, and outside-Git policy are **not** veri
 by these pure declarations; the separate inspector below observes those facts
 without granting write authority.
 
-The v1 reader/writer is unchanged apart from promoting its pure document builder
-to public `build_document` for renderer reuse. It still rejects v2 on active paths.
+The v1 format remains unchanged, with public `build_document` for renderer reuse.
+The v1 reader still rejects v2; M3.6a adds writer-side layout exclusion separately.
 Literal combined/empty v1 fixtures lock historical emitted bytes and backup
-validation. No split cache, journal, runtime loader, migration, or v2 writer is
-activated by these models. Canonical validation is not live compositor acceptance.
+validation. The models themselves activate no split cache, journal, runtime loader,
+migration, or writer. Canonical validation is not live compositor acceptance.
 
-## Inactive M3.3a route inspection
+## M3.3a route inspection foundation
 
-`core/route_approval.py` is not imported by active GUI/configuration routing. Its
+`core/route_approval.py` is used by M3.6a assessment/recovery, not editor routing. Its
 public APIs require explicit normalized absolute `registry_path`, `config_root`,
 and `state_root`; the registry must be at `config_root/attune/installation.json`.
-There is no environment-based installation discovery or filename-based activation.
+Callers supply context; startup derives those roots from XDG defaults. There is no
+filename-based activation or automatic provisioning.
 
 - `inspect_installation(...)` directly observes an existing canonical v2 pair.
 - `run_inspect(...)` performs the same read-only work in an isolated supervised
@@ -145,18 +149,20 @@ variables or nonstandard configuration.
 Limits are 64 KiB registry bytes, 1 MiB per output/evidence transport, 128 path
 components, and 40 symlink hops. Direct calls have no hard filesystem-latency bound;
 clients should use the supervised API off GTK. Serialized hashes are not authentication
-or a durable permit. Inspection is transient and non-atomic; future writers must
+or a durable permit. Inspection is transient and non-atomic; writers must
 revalidate under lock and again before replacement, accounting for intentional state
 provisioning rather than blindly ignoring changed evidence.
 
 The layer never writes files, creates state, executes/compiles Lua, runs compositor
 queries, or activates split routing. The adapters below consume its evidence;
-active GUI integration and the journaled writer remain future M3 work. V1 stays
-the only active write mode.
+the journaled writer is implemented below. Only transaction recovery has GUI
+integration; v1 remains the sole editor Save format, subject to layout exclusion.
 
-## Inactive M3.3b scoped adapters
+## M3.3b scoped adapters
 
-These are separate core APIs, not active GUI features or new output routing:
+These core APIs do not activate split editing or new Save routing. M3.6a consumes
+group reviews for explicit transaction recovery; backup/diagnostic adapters remain
+separate from active legacy utilities:
 
 | Interface | Role |
 | --- | --- |
@@ -193,10 +199,11 @@ errors, registry contents, link targets, and scalar values are omitted.
 
 No adapters write files, enumerate backup directories, compile/execute Lua, run
 IPC, or grant write authority. Direct review/collection I/O and diff computation
-must be supervised off GTK by future clients. The separate private-evidence layer
-below implements storage, not scope publication/recovery or active UI integration.
+must be supervised off GTK. M3.6a supervises recovery review preparation. The
+separate private-evidence layer below implements storage; ordinary split
+publication still has no editor Save integration.
 
-## Inactive M3.4a transaction evidence
+## M3.4a transaction evidence foundation
 
 `transaction_records.py` models only ordinary split saves whose two priors are
 present-owned canonical v2. Absence and present-empty are distinct named kinds
@@ -231,7 +238,10 @@ The explicit store layout is:
 state_root/attune/
     blobs/<full-byte-sha256>.lua
     snapshots/<snapshot-sha256>.json
-    transactions/<32-lowercase-hex-id>/intent.json
+    transactions/<32-lowercase-hex-id>/
+        intent.json
+        rollback.json             # optional immutable reverse operation
+        rollback-checkpoint.json  # optional reverse progress/completion
     persistence.lock
 ```
 
@@ -239,7 +249,7 @@ Legacy `backups/` and raw `preserved/` data remain separate. Private directories
 require owned `0700`; files require owned single-link regular `0600`. State roots
 and private paths reject unsafe ownership/modes, symlink components, and ancestor
 Git markers. Existing permissions are never repaired. The state root itself must
-already exist and be safe; initialization is an explicit future provisioning action.
+already exist and be safe; initialization is an explicit API, not startup provisioning.
 
 Evidence files are created exclusively, byte/hash/canonical verified, and
 synchronized with containing directories before the prepared intent. Safe identical
@@ -252,7 +262,7 @@ Failures may leave partial/orphan evidence; no automatic repair or deletion occu
 The current kind has an eight-MiB total evidence/record budget, JSON depth 24, and
 1,000-entry journal-scan limit, plus existing per-scope input/diff bounds. Prepared
 means private canonical evidence is complete, not that compile preflight or scope
-publication has occurred. M3.4b must add those checks before replacement.
+publication has occurred. M3.4b separately performs those checks before replacement.
 
 `transaction_inspection.classify_transaction(state_root, id, config_root=...)`
 reloads the verified private bundle and inspects current scopes in explicit context.
@@ -267,15 +277,217 @@ private evidence are checked again before returning. Corrupt/missing evidence or
 unexpected bytes/context return conflict, not permission to overwrite. No result
 establishes an atomic snapshot, publication history, runtime loading, or recovery
 authorization. This direct API has no worker, CLI, wall-time guarantee, or repair
-actions; future clients must supervise it off GTK.
+actions; M3.6a supervises assessment off GTK.
 
-No active application imports or calls this layer. Tests explicitly initialize
-temporary stores; no real store, registry, scope publication, migration, loader,
-Lua compilation, or compositor operation was added.
+M3.6a uses this layer to inspect existing evidence, never initialize it at startup.
+Tests explicitly initialize temporary stores. The publisher below compiles and writes only when
+explicitly invoked; no live store, registry activation, migration, or loader was installed.
+
+## M3.4b publication and reviewed recovery backend
+
+### Overview
+
+`core/transaction_publication.py` implements the ordinary present-owned split-save
+backend, not a new application mode. Explicit mutator calls can replace scope
+files and private journals. M3.6a integrates explicit recovery and read-only
+startup assessment, not ordinary split publication. Split editor Save, CLI
+mutation, registry activation, migration, and v2 editor routing remain unavailable.
+M3.6b scope-local backup restore/preservation precedes M3.5 and M0-gated rollout.
+
+### API / Interfaces
+
+| Interface | Contract |
+| --- | --- |
+| `publish_reviewed(plan, *, state_root, config_root, transaction_id=None, cancel_event=None)` | Requires explicit context matching a fresh complete `GroupReviewPlan`; prepares evidence or selects the exact matching PREPARED transaction, then publishes changed scopes. |
+| `review_recovery(state_root, txid, action, *, config_root)` | Read-only preparation of a frozen `RecoveryReview` with the full CURRENT -> GOAL group plan and private fingerprint; actions are `resume`, `rollback`, `finalize`, `abandon`. Invalid/conflicting/terminal states raise errors. |
+| `commit_recovery(review, *, cancel_event=None)` | Rederives the exact recovery review and private fingerprint under lock before the selected operation. Every attempt requires a fresh review. |
+| `PublicationResult` | Frozen `transaction_id`, `outcome`, `pending`, independent `scope_may_have_changed` and `journal_may_have_changed`, plus optional `error`. Outcomes are `no-op`, `committed`, `aborted`, or `failed`. |
+
+The two flags are conservative and sticky within an attempt, not inferred from
+each other, outcome, or advisory progress. A journal-only change does not establish
+a scope replacement; a failed rename/sync/checkpoint can still mean scopes changed.
+Callers **must invalidate editors on scope change or uncertainty**, never
+mark old baselines Saved. M3.6a also invalidates on independent journal uncertainty.
+Mutators must run
+directly on non-daemon workers, never in timeout-killable children. Lock acquisition
+is cancellable with a five-second bound; each compile check has a ten-second bound.
+There is no hard total deadline for filesystem work or an automatic worker wrapper.
+
+### Data Flow
+
+1. Explicitly initialize the private store before route inspection/review. Under
+   the shared lock, revalidate the full review and reject other unresolved or
+   malformed transactions. Prepare and verify private canonical evidence as needed.
+2. Compile-check all current and desired scope texts before any scope replacement
+   or staging. This never executes generated Lua and is not semantic validation.
+   The sole exception is all-prior `abandon`, a metadata closure that deliberately
+   skips compilation so failed/missing compiler preflight cannot trap an intent.
+3. Synchronize private evidence; exclusively create owner-only `0600` staged files
+   beside approved resolved targets **only for necessary changed scopes**. Flush
+   and fsync every output stage before the first replacement.
+4. Replace in fixed appearance-then-displays order. Recheck full expected
+   intermediate group, registry, source/route/alias/protected context, private
+   evidence, and stage identity/bytes immediately before each replacement. Fsync
+   the output directory, inspect the resulting group, then atomically publish and
+   directory-sync its private progress checkpoint. Repeat with updated expected facts.
+5. Verify goal hashes/bindings, synchronize both outputs and their directories,
+   and recheck before terminal recording. Reverse completion is recorded before
+   parent ABORTED; forward completion records COMMITTED. A final route recheck
+   follows the terminal checkpoint. Failures report uncertainty, not automatic rollback.
+
+Lexical file/parent symlinks are preserved by replacing approved resolved leaves.
+Untouched siblings and already-goal scopes receive no staging, replacement, chmod,
+or mtime change. Reads and final fsyncs can affect atime. Publication no-ops replace
+no scopes and create no transaction evidence, but the publisher enters the store
+session and may create its lock file; this differs from read-only no-op preparation.
+
+### Edge Cases
+
+- Forward resume changes only original changed scopes still at prior bytes. It
+  leaves already-proposed and unchanged inodes alone. Classification uses actual
+  known prior/proposed states, even non-prefix mixtures, not recorded progress.
+- All-proposed `finalize` is metadata-only with compile preflight. All-prior
+  `abandon` is metadata-only and compiler-independent. Terminal transactions
+  cannot be replayed as historical recovery operations.
+- Rollback writes immutable `rollback.json` plus `rollback-checkpoint.json` in the
+  original transaction directory, retaining schema-1 ordinary-intent compatibility.
+  Its initial restore set includes only originally changed scopes actually at
+  proposed bytes when rollback starts. Recording the operation locks direction.
+  Missing first reverse checkpoint means implicit prepared/zero progress, not a
+  conflict. Fresh reviews can continue partial reverse known states, writing only
+  remaining goal changes within that initial set. A crash after reverse completion
+  but before parent ABORTED requires explicit same-action rollback finish.
+- Checkpoint publication uses the current writer's fresh `O_EXCL` private scratch
+  followed by rename into the canonical checkpoint and directory fsync. Recognized
+  `.<intent|rollback|rollback-checkpoint>.json.<32-lowercase-hex>.tmp` files are
+  ignored as abandoned unpublished artifacts only if owned, `0600`, single-link,
+  regular, and bounded to the record limit. They never supply authority. Existing
+  scratch cannot be reused, promoted, or deleted, even if its bytes are identical;
+  a name collision fails without altering its name/inode/bytes. Unknown/unsafe
+  entries conflict. Immutable content-addressed blob reuse is a separate policy.
+- Nothing automatically repairs, resumes, rolls back, or deletes evidence.
+  Abrupt termination can leave output stages or private scratch alongside an old
+  valid checkpoint. Recovery always reloads actual files and needs explicit review.
+- Separate file renames are **not pair-atomic**. No reload/live-apply IPC is sent,
+  but watchers may auto-reload intermediate mixed output. Canonical hashes and
+  compile success establish neither runtime loading nor hostile-race isolation.
+
+### Example usage
+
+For an exclusively temporary test installation, initialize the store, inspect
+explicit routes, and build a complete scoped plan before calling
+`publish_reviewed(plan, state_root=state, config_root=config)` directly on the
+mutating worker. Inspect all result fields. For an interrupted transaction, first
+classify actual bytes, explicitly select an allowed action, display the complete
+`review_recovery(state, txid, action, config_root=config).plan`, and only then pass
+that exact review to `commit_recovery`. A stale review requires fresh preparation.
+This is an API sequence, not installation, live activation, or a new CLI command.
+
+### Related files
+
+- `core/transaction_records.py`, `core/transaction_store.py`: immutable evidence,
+  reverse-operation records, safe locked sessions, and atomic private checkpoints.
+- `core/transaction_inspection.py`, `core/route_approval.py`: actual-byte
+  classification and full route/context revalidation.
+- `core/scoped_review.py`, `core/scopes.py`, `core/persistence.py`: complete plans,
+  fixed scope order, stable reads, and compile-only checks.
+- `tests/test_transaction_publication.py`, `tests/test_transaction_store.py`:
+  temporary-only protocol, failure injection, scratch collision, and real
+  process-death recovery coverage. See [validation.md](validation.md) for status.
+
+## M3.6a transaction recovery frontend and legacy exclusion
+
+### Overview
+
+Completed in code, this slice provides startup assessment and explicit journal
+recovery, not a split editor, migration, activation, or scope-local backup restore.
+M3.6b v2 backup restore/preservation remains a prerequisite before M3.5 migration.
+
+### API / Interfaces
+
+| Interface | Contract |
+| --- | --- |
+| `layout_guard.block_reason(config_root, state_root)` | Metadata-only v1 exclusion. Any registry or nonempty transaction directory blocks, including terminal evidence. Unsafe/uninspectable metadata returns a blocking reason. |
+| `scoped_recovery.LayoutAssessment` | Strict immutable context, mode, registry condition/canonical pair, bounded transaction rows, truncation, and notes. Modes are `legacy-clear`, `scope-recovery-required`, and `blocked`. |
+| `scoped_recovery.run_assess(...)` | Read-only isolated child, default 15-second deadline, one-MiB assessment transport, at most 32 rows; context echo is checked. |
+| `scoped_recovery.run_prepare_action(..., txid, action)` | Read-only isolated child, default 30-second deadline; returns a strict `ScopedRecoveryDraft` binding action/context, private digest, snapshot/original review identities, and complete `GroupReviewPlan`. |
+| `scoped_recovery.commit_action(draft)` | Direct non-daemon mutator; reconstructs and freshly rechecks the draft before backend delegation. Preserves independent backend uncertainty flags. No commit child/CLI exists. |
+| `ScopeRecoveryPage` | Separate assessment, review, and commit actions, lifecycle cancellation, one read slot, close veto during writes, and owner callbacks for exclusion/invalidation. |
+
+### Data Flow
+
+1. `main.py` presents Checking Attune Layout before editor construction. A
+   non-daemon thread supervises read-only assessment off GTK. Only `legacy-clear`
+   proceeds to the v1 editor. Scoped/blocked results and errors open a recovery
+   shell with Scope Recovery, Legacy Backups (v1), Health, and Retry Startup Check.
+   Nothing initializes or repairs the store or automatically invokes a mutator.
+2. The assessment reports registry/canonical identities and verified or invalid
+   transaction rows, actual status, advisory phase, and recorded rollback direction.
+   It does not establish runtime loading, publication history, or write authority.
+3. Explicit action preparation asks the backend for resume, rollback, finalize,
+   or abandon. It verifies private evidence stability and transports a complete
+   CURRENT -> GOAL review. GTK renders both scopes, including unchanged scopes,
+   lexical/resolved paths, hashes/content IDs, diffs, and evidence identities.
+4. A separate commit consumes the draft and rechecks permission. Dirty edits and
+   pending monitor previews block it. Window ownership excludes legacy restoration
+   and scoped recovery from one another. The commit is direct on a non-daemon
+   worker, never a timeout-killed child; GTK does not join it and closure is vetoed.
+5. Scope and journal flags accumulate independently and remain sticky on the page.
+   Either uncertainty invalidates the cache/editor without marking old baselines
+   saved. Unexpected worker exceptions conservatively set both. A new action
+    requires a fresh review; refresh assessment to update advisory rows. Invalidated
+    editor state does not itself prohibit subsequent explicit journal recovery.
+
+### Edge Cases
+
+- Terminal rows can be observed but cannot be replayed. Conflicts, stale reviews,
+  locked rollback direction, or incompatible actual bytes refuse preparation or
+  commit. Action buttons are not evidence that every action is allowed.
+- Registry evidence alone excludes v1, even if valid and no transaction is pending.
+  Terminal transaction history also excludes v1 with no registry. An empty safe
+  transaction directory alone does not block; unsafe ancestors, links, permissions,
+  inspection failures, and truncated assessments fail closed. Absence proves no
+  runtime loader choice.
+- `persistence._persist_snapshot` rechecks layout exclusion before side effects,
+  under its lock, and before replacement. This covers v1 save, restoration, and
+  preservation-first recovery, independently of startup or cached UI observations.
+  `LayoutBlockedError` reports no output replacement and clean scope/journal flags.
+  Failures later in a write can still leave locks/evidence; no cleanup is implied.
+- Discovery of scoped evidence or failed reassessment in a running legacy window
+  invalidates caches and disables editing while retaining pending changes. A failed
+  assessment also revokes stale transaction rows and reviews. Owner-aware finish callbacks
+  prevent a refused legacy attempt from releasing a scope writer's exclusion gate.
+- Read cancellation/closure rejects late callbacks and retains the read slot until
+  completion, preventing overlapping page children. Mutating filesystem work has
+  no hard total deadline despite five-second lock and ten-second compile limits.
+- Legacy backup inspection remains available, but v1 bundles are not implicitly
+  converted to v2 scopes. Separate renames are not pair-atomic. No reload IPC is
+  sent; watchers may load intermediate changed files. Hashes and compilation are
+  not proof of Lua semantics, runtime loading, or hostile-race isolation.
+
+### Example usage
+
+In the recovery shell, open Scope Recovery, refresh assessment, select a transaction
+and Review rollback (or another permitted action), inspect both CURRENT -> GOAL
+scope reviews, then explicitly choose Commit Reviewed Scope Recovery. Cancel writes
+nothing. After an outcome, inspect its pending and independent uncertainty fields,
+refresh, and prepare a fresh review before further recovery. Do not delete evidence
+to force legacy entry or treat Retry Startup Check as migration or activation.
+
+### Related files
+
+- `hyprmod/core/scoped_recovery.py`, `hyprmod/core/layout_guard.py`: service DTOs,
+  supervised reads, explicit commit, and metadata-only exclusion.
+- `hyprmod/pages/scope_recovery.py`, `hyprmod/main.py`, `hyprmod/window.py`:
+  review rendering, startup gate, writer ownership, lifecycle, and invalidation.
+- `tests/test_scoped_recovery.py`, `tests/test_layout_guard.py`,
+  `tests/test_startup_layout.py`, `tests/test_scope_recovery_gui.py`: coverage;
+  M3.6a validation results are recorded in [validation.md](validation.md).
 
 ## Data Flow
 
-1. **Startup:** the window warms the managed cache using the restricted reader,
+1. **Startup:** only after the bounded assessment admits legacy entry, the window
+   warms the managed cache using the restricted reader,
    constructs IPC-only `HyprlandState` with an empty `/dev/null` document rather
    than executing any Lua, and loads a version-aware, filtered schema. Supported live options
    seed session baselines. Startup does not reload the compositor, migrate main

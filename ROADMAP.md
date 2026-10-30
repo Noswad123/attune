@@ -1,6 +1,6 @@
 # Attune roadmap
 
-Updated: 2026-10-27
+Updated: 2026-10-30
 
 ## Direction
 
@@ -37,9 +37,13 @@ Implemented in the development checkout:
 - Inactive read-only route inspection and stale-evidence revalidation, without
   registry creation, split-write authority, or GUI integration.
 - Inactive scoped group reviews, v1/v2 backup descriptors, and redacted scoped
-  diagnostic projections, all without a split commit path.
+  diagnostic projections, separate from active application routing.
 - Inactive private transaction evidence/prepared-journal APIs and actual-byte
-  interruption classification. No scope publication or recovery actions yet.
+  interruption classification, plus M3.4b guarded scope publication and reviewed
+  recovery. Split publication remains an explicit core API, not GUI Save.
+- M3.6a transaction recovery frontend and legacy exclusion, completed in code:
+  bounded asynchronous startup assessment, explicit both-scope recovery reviews,
+  protected direct commits, and cache/editor invalidation on uncertainty.
 
 Live display/HDR and animation behavior still requires manual acceptance. Automated
 and isolated GTK checks are not evidence that the workstation integration is done.
@@ -52,7 +56,7 @@ Persistent loading, Stow provisioning, and desktop registration remain opt-in.
 | M0: Validate the foundation | Pending manual acceptance | Existing baseline | Confidence in live previews and recovery |
 | M1: Workstation diagnostics | Implemented: M1.1-M1.7 delivered | Existing baseline; may proceed alongside M0 | Read-only visibility into effective state and integration |
 | M2: Recovery interface | Disk workflows delivered; M2.5 waits for M0 | M1 | Inspect and restore known Attune output through review |
-| M3: Shared/local ownership split | In progress: M3.4a evidence/classification foundation delivered | Guarded publication work may proceed; routing rollout requires M0 and M2 | Portable appearance with machine-local display settings |
+| M3: Shared/local ownership split | In progress: M3.6a completed in code; next M3.6b scope-local backup restore/preservation | Routing rollout requires M0 and recovery/migration prerequisites | Portable appearance with machine-local display settings |
 | M4: Constrained presets | Planned | M0 and M3 | Safe, deliberate visual and display modes |
 | M5: Wisp integration | Planned | M1; preset entry points require M4 | Fast access without a second settings implementation |
 | M6: CARAMEL appearance overview | Later | Existing helper contracts; M3 for saving appearance | Activity-aware presentation using existing tools |
@@ -176,18 +180,29 @@ Goal: keep appearance portable without exporting a machine's display topology.
     evidence for both correctly scoped outputs, registry, and protected paths.
   - [x] M3.3b Build scope-aware review/backup/diagnostic adapters around that evidence,
     retaining inactive split writes until the journaled transaction layer exists.
-- [ ] M3.4 Implement and validate the journaled multi-file failure/recovery protocol
+- [x] M3.4 Implement and validate the journaled multi-file failure/recovery protocol
   selected in the design decision. Separate atomic replacements do not make a
   multi-file transaction atomic.
   - [x] M3.4a Define private evidence/journal records and interrupted-state
     classification before introducing any output publication.
-  - [ ] M3.4b Implement guarded publication and explicitly reviewed resume/rollback,
+  - [x] M3.4b Implement guarded publication and explicitly reviewed resume/rollback,
     with failure/crash injection and unchanged-scope isolation.
 - [ ] M3.5 Provide a reviewed, opt-in migration from the single file, with rollback
   material and manual loader instructions. Avoid double-loading old/new overrides;
   do not edit the authored entrypoint or silently delete the old file.
 - [ ] M3.6 Extend recovery to understand both the existing format and new output
   groups. Complete migration tests before recommending the new default.
+  - [x] M3.6a Transaction recovery frontend and legacy exclusion, completed in code.
+    Assess startup off GTK; construct the v1 editor only for `legacy-clear`.
+    Expose explicit resume/rollback/finalize/abandon with complete CURRENT -> GOAL
+    reviews of both scopes, direct non-daemon commits, close veto, owner-aware
+    exclusion, and independent scope/journal uncertainty invalidation. Any registry
+    or transaction evidence, including terminal history, blocks v1 writes;
+    uninspectable metadata fails closed. Full and isolated GTK validation is
+    recorded in `docs/validation.md`; live rollout remains gated.
+  - [ ] M3.6b Scope-local v2 backup restore and preservation-first recovery, with
+    explicit scope/route binding and unchanged-sibling isolation. Prerequisite
+    before M3.5 migration and rollout; legacy bundles require explicit conversion.
 
 Acceptance: changing only appearance leaves display output unchanged and vice
 versa. Both files work through Stow links. Simulated second-write failures and
@@ -219,11 +234,16 @@ priors only; migration absence/empty states remain explicitly unsupported. Store
 initialization precedes route review. Prepared evidence is not publication approval,
 and journal progress is not proof of actual outputs or runtime state.
 
-Next is M3.4b's guarded publication and explicitly reviewed resume/rollback, including
-compile preflight and failure/crash injection. Implement M3.6 before offering
-M3.5 migration. V1 remains the only
-active write mode. Rollout still requires M0 acceptance; do not run automatic
-loader edits, activation, recovery, or live reloads to satisfy a model checkbox.
+M3.4b implements compile-only preflight, durable ordered publication, fresh complete
+recovery reviews, and crash-resumable journaled rollback. It preserves unchanged
+scopes and does not claim pair atomicity or runtime loading. Full-suite, focused,
+and isolated GTK validation are recorded in `docs/validation.md`.
+M3.6a now integrates startup assessment and explicit transaction recovery, not
+split editing or publication through Save. M3.6b scope-local v2 backup
+restore/preservation is next, before M3.5 opt-in migration. V1 remains the only
+editor Save format and is excluded whenever scoped evidence is present. Rollout
+still requires M0 acceptance; do not run automatic loader edits, activation,
+recovery, or live reloads to satisfy a model checkbox.
 
 ## M4: Constrained visual and display presets
 

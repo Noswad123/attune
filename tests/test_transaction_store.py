@@ -207,6 +207,86 @@ class TestPrivateStore:
 
 
 class TestEvidenceFailures:
+    @pytest.mark.parametrize("identical", [False, True])
+    def test_checkpoint_never_reuses_or_consumes_existing_scratch(
+        self, plan, monkeypatch, identical
+    ):
+        prepared = prepare(plan)
+        assert prepared is not None
+        record = replace(prepared.intent, phase=Phase.PUBLISHING)
+        token = "b" * 32
+        directory = root_for(plan) / "transactions" / prepared.intent.transaction_id
+        scratch = directory / f".intent.json.{token}.tmp"
+        raw = record.to_json().encode("ascii") if identical else b"unpublished bytes"
+        scratch.write_bytes(raw)
+        scratch.chmod(0o600)
+        inode = scratch.stat().st_ino
+        monkeypatch.setattr(store.secrets, "token_hex", lambda _size: token)
+        with store.exclusive_store_session(Path(plan.evidence.state_root)) as session:
+            with pytest.raises(FileExistsError, match="scratch already exists"):
+                session.checkpoint(
+                    prepared, record, fingerprint=store.verified_fingerprint(prepared)
+                )
+        assert scratch.stat().st_ino == inode
+        assert scratch.read_bytes() == raw
+        assert stat.S_IMODE(scratch.stat().st_mode) == 0o600
+        assert (
+            store.load_transaction(
+                Path(plan.evidence.state_root), prepared.intent.transaction_id
+            ).intent.phase
+            is Phase.PREPARED
+        )
+
+    @pytest.mark.parametrize("name", ["intent", "rollback", "rollback-checkpoint"])
+    def test_checkpoint_scratch_is_unpublished_not_authority(self, plan, name):
+        prepared = prepare(plan)
+        assert prepared is not None
+        fingerprint = store.verified_fingerprint(prepared)
+        path = (
+            root_for(plan)
+            / "transactions"
+            / prepared.intent.transaction_id
+            / ("." + name + ".json." + "c" * 32 + ".tmp")
+        )
+        path.write_bytes(b"not JSON: unpublished")
+        path.chmod(0o600)
+        loaded = store.load_transaction(
+            Path(plan.evidence.state_root), prepared.intent.transaction_id
+        )
+        assert loaded == prepared
+        assert store.verified_fingerprint(loaded) == fingerprint
+        path.write_bytes(b"different unpublished bytes")
+        assert store.verified_fingerprint(prepared) == fingerprint
+        assert path.read_bytes() == b"different unpublished bytes"
+
+    @pytest.mark.parametrize(
+        "kind", ["mode", "hardlink", "symlink", "oversize", "unknown", "orphan-checkpoint"]
+    )
+    def test_unsafe_or_unknown_scratch_still_conflicts(self, plan, tmp_path, kind):
+        prepared = prepare(plan)
+        assert prepared is not None
+        directory = root_for(plan) / "transactions" / prepared.intent.transaction_id
+        path = directory / (".intent.json." + "c" * 32 + ".tmp")
+        if kind == "unknown":
+            path = directory / ".intent.json.not-reserved.tmp"
+        elif kind == "orphan-checkpoint":
+            path = directory / "rollback-checkpoint.json"
+        path.write_bytes(b"unpublished")
+        path.chmod(0o600)
+        if kind == "mode":
+            path.chmod(0o644)
+        elif kind == "hardlink":
+            os.link(path, tmp_path / "scratch-hardlink")
+        elif kind == "symlink":
+            path.unlink()
+            path.symlink_to(tmp_path / "absent")
+        elif kind == "oversize":
+            with path.open("r+b") as stream:
+                stream.truncate(store.MAX_RECORD_BYTES + 1)
+        with pytest.raises((OSError, ValueError)):
+            store.load_transaction(Path(plan.evidence.state_root), prepared.intent.transaction_id)
+        assert path.is_symlink() or path.exists()
+
     @pytest.mark.parametrize("kind", ["partial", "unknown", "extra", "scan-limit"])
     def test_conflicting_journal_entries(self, plan, kind, monkeypatch):
         transactions = root_for(plan) / "transactions"

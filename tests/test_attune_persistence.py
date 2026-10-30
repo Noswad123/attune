@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from hyprmod.core import config, persistence, restoration, settings
+from hyprmod.core import config, persistence, recovery, restoration, settings
 from hyprmod.core.focused_ui import ReviewSnapshot
 from hyprmod.window import HyprModWindow
 
@@ -50,6 +50,131 @@ def review(path, value="5", sections=None):
 
 
 class TestSafeSave:
+    @pytest.mark.parametrize("evidence", ["registry", "journal"])
+    @pytest.mark.parametrize("when", ["start", "under-lock", "before-replace"])
+    def test_layout_guard_blocks_legacy_save(
+        self, destination, tmp_path, monkeypatch, evidence, when
+    ):
+        persistence.persist_snapshot(review(destination)[0])
+        snapshot = review(destination, "9")[0]
+        previous = destination.read_bytes()
+        archives = tmp_path / "state/attune/backups"
+        archives.mkdir()
+        archive = archives / "historical.lua"
+        archive.write_bytes(b"untouched")
+        before = archive.stat()
+
+        def introduce():
+            path = (
+                tmp_path / "config/attune/installation.json"
+                if evidence == "registry"
+                else tmp_path / "state/attune/transactions/unknown"
+            )
+            path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            path.touch()
+
+        if when == "start":
+            introduce()
+        elif when == "under-lock":
+            flock = persistence.fcntl.flock
+
+            def lock(*args):
+                flock(*args)
+                introduce()
+
+            monkeypatch.setattr(persistence.fcntl, "flock", lock)
+        else:
+            atomic = persistence._atomic_write
+
+            def write(path, content, **kwargs):
+                if path == destination:
+                    introduce()
+                return atomic(path, content, **kwargs)
+
+            monkeypatch.setattr(persistence, "_atomic_write", write)
+        with pytest.raises(persistence.LayoutBlockedError, match="output not replaced") as error:
+            persistence.persist_snapshot(snapshot)
+        assert not error.value.output_replaced
+        assert destination.read_bytes() == previous
+        assert archive.stat() == before and archive.read_bytes() == b"untouched"
+
+    @pytest.mark.parametrize("api", ["restore", "recovery"])
+    @pytest.mark.parametrize("evidence", ["registry", "journal"])
+    @pytest.mark.parametrize("when", ["start", "under-lock", "before-replace"])
+    def test_m2_commits_block_new_scope_evidence(
+        self, destination, tmp_path, monkeypatch, api, evidence, when
+    ):
+        persistence.persist_snapshot(review(destination)[0])
+        persistence.persist_snapshot(review(destination, "9")[0])
+        backups = tmp_path / "state/attune/backups"
+        candidate = next(backups.glob("*.lua"))
+        if api == "recovery":
+            destination.write_text("-- foreign original\n")
+            draft = recovery.prepare_recovery(destination, candidate.name)
+        else:
+            draft = restoration.prepare_restore(destination, candidate.name)
+        previous = destination.read_bytes()
+        preserved = tmp_path / "state/attune/preserved"
+        preserved.mkdir(mode=0o700)
+        historical = preserved / "historical.bin"
+        historical.write_bytes(b"untouched preservation evidence\r\n")
+        historical.chmod(0o600)
+        before = {
+            p: (p.read_bytes(), p.stat())
+            for directory in (backups, preserved)
+            for p in directory.iterdir()
+        }
+        path = (
+            tmp_path / "config/attune/installation.json"
+            if evidence == "registry"
+            else tmp_path / "state/attune/transactions/unknown"
+        )
+
+        def introduce():
+            path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            path.write_bytes(b"new scoped layout evidence\n")
+
+        if when == "start":
+            introduce()
+        elif when == "under-lock":
+            flock = persistence.fcntl.flock
+
+            def lock(*args):
+                flock(*args)
+                introduce()
+
+            monkeypatch.setattr(persistence.fcntl, "flock", lock)
+        else:
+            atomic = persistence._atomic_write
+
+            def write(target, content, **kwargs):
+                if target == destination:
+                    introduce()
+                return atomic(target, content, **kwargs)
+
+            monkeypatch.setattr(persistence, "_atomic_write", write)
+        failure = recovery.RecoveryFailure if api == "recovery" else restoration.RestoreFailure
+        with pytest.raises(failure, match="Legacy write blocked") as error:
+            if isinstance(draft, recovery.RecoveryDraft):
+                recovery.commit_recovery(draft)
+            else:
+                restoration.commit_restore(draft)
+        assert error.value.may_have_written is False
+        assert isinstance(error.value.__cause__, persistence.LayoutBlockedError)
+        assert error.value.__cause__.output_replaced is False
+        assert destination.read_bytes() == previous
+        assert path.read_bytes() == b"new scoped layout evidence\n"
+        for archive, (raw, info) in before.items():
+            assert archive.stat() == info
+            assert archive.read_bytes() == raw
+        expected = {p: raw for p, (raw, _) in before.items()}
+        if when == "before-replace":
+            directory, suffix = (preserved, ".bin") if api == "recovery" else (backups, ".lua")
+            expected[directory / (draft.previous_sha256 + suffix)] = previous
+        assert {
+            p: p.read_bytes() for directory in (backups, preserved) for p in directory.iterdir()
+        } == expected
+
     @pytest.mark.parametrize("api", ["reviewed", "snapshot", "restore"])
     @pytest.mark.parametrize("original", ["foreign Lua!", persistence.MARKER + "invalid JSON!"])
     def test_recovery_does_not_weaken_ordinary_guards(self, destination, api, original):

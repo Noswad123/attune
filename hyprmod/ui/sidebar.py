@@ -129,6 +129,12 @@ class Sidebar:
         self._pinned_list.append(backups_row)
         self._rows_by_id["backups"] = backups_row
 
+        scope_row = SidebarRow(group_id="scope-recovery", title="Scope Recovery")
+        scope_row.set_activatable(True)
+        scope_row.add_prefix(Gtk.Image.new_from_icon_name("document-revert-symbolic"))
+        self._pinned_list.append(scope_row)
+        self._rows_by_id["scope-recovery"] = scope_row
+
         settings_row = SidebarRow(group_id="settings", title="Settings")
         settings_row.set_activatable(True)
         settings_row.add_prefix(Gtk.Image.new_from_icon_name(SETTINGS_ICON))

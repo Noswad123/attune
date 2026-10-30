@@ -363,3 +363,159 @@ The final full-suite run passed without those cleanup warnings.
   filesystem/diff wall-time bound. It cannot establish loaded runtime state.
 - Failures can leave orphan/partial evidence and block preparation; nothing
   automatically repairs, deletes, resumes, rolls back, or activates anything.
+
+## M3.4b: inactive guarded publication and reviewed recovery
+
+This checkpoint supersedes M3.4a's publication/checkpoint/recovery limitations,
+not its historical full-suite count. Application routing remains v1-only.
+
+### Verification status
+
+- Final full suite: **2,717 passed, 35 skipped**, completed in about 227 seconds.
+- Focused publication + store tests: **336 passed** (about 198 seconds).
+- Isolated GTK smoke: **32 passed, 2 skipped** (inapplicable recovery
+  no-ops). These are isolated widget results, not live Wayland acceptance.
+- Ruff lint/format, Pyright error checks, and whitespace checks passed. Existing
+  GI/dependency warnings remain distinct from passing type-error checks.
+- The initial full-suite runner's 120-second timeout was a runner deadline, not
+  a recorded test failure. The longer-deadline full-suite rerun completed above.
+
+### Coverage and protocol evidence
+
+- Publication tests cover all current/desired compile checks before staging or
+  replacement, missing/invalid/timed-out validators, and compiler-independent
+  all-prior abandon after failed preflight. All-proposed finalize is metadata-only
+  but still compile-checks. Terminal transactions cannot be replayed.
+- Failure injection covers fsync calls and atomic checkpoint staging/replacement
+  boundaries, output staging/replacement/sync, progress and terminal recording.
+  Scope and journal uncertainty are independently sticky, including failure after
+  a rename. Stale source, registry, private bytes/identity/mode, parent, Git,
+  protected paths, forged reviews, lock timeout, and cancellation are covered.
+- Real `os._exit`/SIGKILL cases stop after the first forward output replacement
+  before checkpointing, during forward checkpoint scratch synchronization, after
+  the first reverse restoration, and during reverse checkpoint scratch sync.
+  Fresh parent-side loading/classification and reviewed resume/rollback complete
+  only remaining changes despite old valid checkpoints, orphan staging files,
+  and known mixed states, including non-prefix actual progress.
+- Rollback tests cover direction locking, immutable initial restore scope selection,
+  missing first checkpoint, partial reversal, and explicit same-action completion
+  after reverse completion but before parent ABORTED. Already-goal and unchanged
+  sibling bytes/inode/mtime/mode remain untouched; file/parent Stow links survive.
+- Store regressions accept only recognized safe bounded unpublished checkpoint
+  scratch as non-authoritative artifacts. Unknown/unsafe entries conflict. A fresh
+  writer's scratch collision fails even for identical bytes and preserves the
+  preexisting name, inode, bytes, and mode; it is not reused, promoted, or deleted.
+
+### Safety boundary and remaining gates
+
+All backend test outputs and private state are exclusively temporary. No live
+mode, registry, loader, GUI Save/startup/CLI integration, migration, v1 reader
+change, compositor reload, or user-state mutation was performed for this slice.
+The new core mutators do write scopes when explicitly invoked; they are not
+read-only. Separate renames are not pair-atomic and watchers may auto-reload even
+without reload IPC. Filesystem reads/fsync may affect atime.
+
+At this historical checkpoint, M3.6 scope-aware recovery/frontend/cache exclusion
+integration was next, before M3.5 opt-in migration. Mutating callers must use direct non-daemon workers
+and invalidate editors on scope changes/uncertainty without marking old baselines
+Saved. Five-second locks and ten-second validator limits are not a hard filesystem
+total deadline. M0 live acceptance, M2.5 live application, loader/watch validation,
+and explicit rollout permission remain pending. Nothing auto-repairs, resumes,
+rolls back, deletes evidence, or activates split routing.
+
+## M3.6a: transaction recovery frontend and legacy exclusion
+
+### Overview and verification status
+
+Completed and validated as of 2026-10-30:
+
+- Ruff lint with fixes and formatting: passed.
+- Pyright over `hyprmod/` and `tests/`: zero errors. The unfiltered run reports
+  162 `reportMissingModuleSource` warnings for dynamically supplied GI modules.
+- Full suite, including publication fault/process-death coverage: **2,810 passed,
+  53 skipped**. The opt-in GTK cases are skipped without an isolated display.
+- Isolated Broadway widget suites: **50 passed, 2 skipped**, with compositor IPC
+  disabled and service mutators mocked. The two skips are recovery/no-op combinations
+  that cannot occur. The temporary Broadway daemon was stopped afterward.
+- Independent backend and frontend safety review completed. Diagnostic markup
+  handling was corrected; error paths and toast copy payloads are covered literally.
+- Wheel build and installed launcher's `--help`: passed. The wheel was written
+  under `/tmp/opencode/attune-m36a-dist`; nothing was installed or registered.
+- No live Hyprland UI, user-state publication/recovery, migration, loader edit, or
+  compositor mutation was performed. GTK checks are not manual live acceptance.
+
+Dependency deprecation warnings remain for PyGI/GLib, Gio desktop APIs, Python
+asyncio policy APIs, and GTK help overlays; they did not fail the checks.
+
+### API / Interfaces and coverage to exercise
+
+- `tests/test_scoped_recovery.py`: read-only assessment/preparation, strict immutable
+  DTO round trips, complete both-scope reviews, actual-byte versus advisory-phase
+  classification, corrupt evidence, terminal history without registry, row/scan
+  limits, stale/forged drafts, context echo, cancellation/timeouts, and direct
+  non-daemon commit with independent backend flags. No mutating child CLI exists.
+- `tests/test_layout_guard.py`: metadata-only exclusion without registry/Lua byte
+  reads, absent layouts without creation, safe empty transaction directories,
+  registry files/directories/dangling links/FIFOs, nonempty or unsafe journals,
+  symlink ancestors, and invalid context. Legacy backup/preserved archives alone
+  do not imply a scoped installation.
+- `tests/test_startup_layout.py`: assessment off GTK before editor construction,
+  coalesced activation, non-clear/error fail-closed shell routing, cancellation and
+  stale callbacks, retry veto during writes, and owner-aware recovery exclusion.
+- `tests/test_scope_recovery_gui.py`: opt-in isolated Broadway coverage of explicit
+  complete review without implicit commit, preparation refusal, writer lifetime
+  and close veto, independent uncertainty invalidation, repeat recovery, permission
+  rechecks, cancellation/late callbacks, discovery retaining pending edits, and
+  failed reassessment locking the legacy editor and revoking stale rows/reviews.
+  Services are mocked and compositor IPC disabled; these are not live recovery tests.
+- Existing persistence/restoration/preservation regression suites remain required
+  alongside these tests. Save, restoration, and preservation commits cover registry
+  and journal exclusion at entry, under lock, and immediately before replacement,
+  with unchanged destination/evidence and clean output-uncertainty flags on refusal.
+
+### Data Flow and example validation commands
+
+Run from the checkout using the isolated HOME/XDG test fixtures:
+
+```bash
+uv run ruff check hyprmod/ tests/
+uv run ruff format --check hyprmod/ tests/
+uv run pyright hyprmod/ tests/
+uv run pytest tests/test_scoped_recovery.py tests/test_layout_guard.py tests/test_startup_layout.py -v
+uv run pytest tests/ -v
+```
+
+With a separately started isolated `gtk4-broadwayd :8`, run:
+
+```bash
+ATTUNE_GUI_SMOKE=1 GDK_BACKEND=broadway BROADWAY_DISPLAY=:8 GSK_RENDERER=cairo \
+  uv run pytest tests/test_scope_recovery_gui.py tests/test_gui_smoke.py -v
+```
+
+Stop the isolated daemon afterward. Do not launch a live compositor UI or commit
+recovery against user state without explicit permission. See CONTRIBUTING for
+the full self-review gate and local lint/format fixing commands.
+
+### Edge Cases and remaining gates
+
+Only `legacy-clear` admits editor construction. Scoped/blocked/error results stay
+in recovery; any registry or transaction evidence, even terminal history, excludes
+v1 save/restoration/preservation. Uninspectable metadata fails closed. Assessment
+and review are bounded read-only child work; commits are direct non-daemon workers
+with close veto and owner-aware exclusion. Either independent scope or journal
+uncertainty invalidates cache/editor without marking old baselines saved.
+
+No split editing, split publication through Save, registry activation, migration,
+or scope-local v2 backup restore/preservation is completed by this slice. M3.6b
+backup restore/preservation is next and a prerequisite before M3.5. M0 live
+acceptance, M2.5 live application, loader/watch validation, and M3.5 migration and
+rollout gates remain pending. No reload IPC does not prevent watcher auto-reload;
+separate renames are not pair-atomic. Hashes/compilation prove neither runtime
+loading nor Lua semantics, and operation bounds are not a total filesystem deadline.
+
+### Related files
+
+- `hyprmod/core/scoped_recovery.py`, `hyprmod/core/layout_guard.py`.
+- `hyprmod/pages/scope_recovery.py`, `hyprmod/main.py`, `hyprmod/window.py`.
+- [architecture.md](architecture.md#m36a-transaction-recovery-frontend-and-legacy-exclusion),
+  [ADR 0001](decisions/0001-shared-local-ownership.md), and [ROADMAP.md](../ROADMAP.md).

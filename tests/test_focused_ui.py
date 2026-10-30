@@ -60,6 +60,7 @@ class TestFocusedSchema:
             "pending",
             "health",
             "backups",
+            "scope-recovery",
             "settings",
             "search",
         }

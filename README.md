@@ -29,6 +29,8 @@ Historical upstream releases remain in [CHANGELOG.md](CHANGELOG.md).
   separately reviewed disk-only restoration of existing owned output.
 - Explicit preservation-first recovery for foreign/invalid text, using a separate
   acknowledgment and verified private evidence before replacement.
+- Bounded read-only startup layout assessment and a Scope Recovery page for
+  separately reviewed transaction resume, rollback, finalize, and abandon.
 
 Bindings, workspaces, layouts, rules, autostart, environment, plugins, and other
 hand-authored behavior stay outside the GUI. There are no profiles or profile CLI,
@@ -37,20 +39,23 @@ automatic include insertion in the focused application. Launching does not silen
 register a desktop entry.
 
 **First milestone: one `attune.lua` containing both monitor and appearance overrides.**
-A shared-appearance/machine-specific-monitor split is future work, not delivered.
+A shared-appearance/machine-specific-monitor split is not an active application mode.
 Its accepted design is recorded in
 [ADR 0001](docs/decisions/0001-shared-local-ownership.md); the proposed two-file
-layout, registry activation, and transaction journal are not available yet.
-Pure scoped models, registry parsing, and a v2 codec exist as inactive development
-foundations, not a new installation mode or UI feature.
+layout and registry activation are not available through the application.
+Pure scoped models, registry parsing, and a v2 codec exist as development
+foundations, not a split editing or installation mode.
 An inactive read-only inspector can now verify explicitly supplied routes and
 revalidate captured evidence. It does not discover, create, approve for writing,
 or activate an installation, and is not a new GUI/launcher command.
 Inactive adapters also prepare exact scoped review plans, describe v1/v2 backup
-metadata, and project scoped diagnostics. They do not provide a split commit path.
-The inactive transaction foundation can explicitly store private evidence and
-prepared intents and classify interrupted disk states. It still cannot publish,
-resume, roll back, or activate scope output through the application.
+metadata, and project scoped diagnostics. The separate M3.4 backend
+provides guarded split publication and explicitly reviewed resume, rollback,
+finalize, and abandon operations. These core APIs write scopes/private journals
+when explicitly invoked; they are not read-only. M3.6a now exposes only explicit
+transaction recovery through the GUI and read-only assessment at startup. Split
+editing, split publication through Save, CLI mutation, registry activation,
+migration, and v2 editor routing remain unavailable.
 
 ### Roadmap
 
@@ -60,8 +65,9 @@ settings, then introduce constrained presets, Wisp entry points, and a CARAMEL
 appearance overview. M1 diagnostics and M2 disk inspection/restoration/recovery
 are implemented. Shared/local ownership design and pure scoped model/codec work
 are complete, along with read-only route inspection and scoped review/backup/
-diagnostic adapters and private transaction evidence/classification. Guarded
-publication and reviewed interruption recovery are next. Explicit live
+diagnostic adapters and the M3.4 journaled publication/recovery backend. M3.6a
+transaction recovery and legacy exclusion are completed in code. M3.6b scope-local
+v2 backup restoration/preservation is next, before M3.5 opt-in migration. Explicit live
 application and routing rollout remain gated by manual acceptance.
 Unchecked roadmap items are not yet available features.
 
@@ -148,7 +154,7 @@ deadline. Closing its window requests cancellation without waiting on the UI
 thread. Responses may be explicitly truncated to keep the view bounded.
 
 If a foreign or invalid managed file prevents editor startup, choose **Open Health**
-from the recovery screen. **Back** returns to **Try Again** without weakening the
+from the recovery screen. **Back** returns to **Retry Startup Check** without weakening the
 foreign-file overwrite guard. Copy/export, saved/runtime drift comparison, and
 output-opening actions are available in both views:
 
@@ -171,7 +177,7 @@ output-opening actions are available in both views:
 
 ### Backups and reviewed disk restoration
 
-Select **Backups** in the sidebar, or the **Backups** button on the startup recovery
+Select **Backups** in the sidebar, or **Legacy Backups (v1)** on the startup recovery
 screen. The first visit loads the configured backup directory; **Refresh** requests
 another observation. Missing directories remain missing and show an empty result.
 Backups appear only after prior nonempty output has been backed up by a save.
@@ -272,6 +278,40 @@ canonical candidate is compile-checked; the original is preserved as raw evidenc
 No live-apply/reload commands or general recovery CLI are added. Hyprland's own
 watcher may nevertheless auto-reload the replacement.
 
+### Scope Recovery and legacy exclusion
+
+Startup first shows **Checking Attune Layout**. Its bounded, read-only assessment
+creates or repairs no state. Only `legacy-clear` permits construction of the v1
+editor. Scoped evidence, blocked observations, and assessment errors open the
+recovery shell with **Scope Recovery**, **Legacy Backups (v1)**, **Open Health**,
+and **Retry Startup Check** instead. This does not select a runtime loader.
+
+In Scope Recovery, refresh the assessment, choose a transaction and **Review
+resume**, **Review rollback**, **Review finalize**, or **Review abandon**. The
+backend refuses actions incompatible with actual bytes, locked rollback direction,
+or terminal/conflicting evidence. Inspect the complete **CURRENT -> GOAL** review
+for both appearance and displays, including unchanged scopes, paths, hashes,
+content IDs, and review/private-evidence identities. Only the separate **Commit
+Reviewed Scope Recovery** action writes. Canceling assessment/review writes nothing.
+
+Assessment and review preparation use isolated, cancellable read-only children
+with default deadlines of 15 and 30 seconds. Assessment shows at most 32 transaction
+rows; truncation blocks legacy entry. Commits run directly on non-daemon workers,
+not timeout-killed children. Close requests are vetoed while writing. Owner-aware
+exclusion prevents legacy restoration and scope recovery from overlapping or
+releasing each other's writer gate. Pending editor changes and monitor previews
+block recovery. Scope or journal uncertainty independently invalidates caches and
+locks the old editor without marking its baseline saved. Refresh and prepare a
+fresh review before another action.
+
+Any installation registry or transaction evidence, including terminal history,
+blocks v1 save, restoration, and preservation-first replacement. Unsafe or
+uninspectable metadata fails closed, not back to v1. The writer rechecks this
+exclusion independently of startup. Legacy backups remain inspectable full bundles;
+they are not implicitly converted or restored into a v2 scope. M3.6b scope-local v2
+backup restore/preservation remains pending before migration. Separate renames are
+not pair-atomic; no reload IPC is sent, but watchers may auto-reload changed files.
+
 ### Output contract
 
 The GUI's fixed default output is `$XDG_CONFIG_HOME/hypr/attune.lua`, falling back
@@ -294,8 +334,9 @@ to `~/.config/hypr/attune.lua`. Settings does not offer path editing.
 
 ## Data Flow
 
-1. Startup reads Attune's managed data and samples supported live options. It does
-   not parse the hand-authored main Lua configuration or reload the compositor.
+1. Startup assesses layout off GTK before constructing an editor. Only a clear
+   legacy layout proceeds to reading v1 managed data and sampling live options.
+   Other results open recovery. No main Lua parsing or compositor reload occurs.
 2. Interactive edits can immediately change compositor state via IPC, without
    writing any config file. Undo/discard operate on captured session baselines.
 3. **Ctrl+S opens Pending Changes**, not a disk write. Review the exact diff,
@@ -373,8 +414,13 @@ line are separate user opt-ins, never automatic Attune setup steps.
 
 ## Related files
 
-- [ADR 0001](docs/decisions/0001-shared-local-ownership.md): selected future ownership,
-  loader, transaction, and migration design; not current behavior.
+- [ADR 0001](docs/decisions/0001-shared-local-ownership.md): accepted ownership,
+  transaction, loader, and migration design, with inactive implementation status.
+- `hyprmod/core/transaction_publication.py`: explicit split writer and
+  reviewed recovery backend; only recovery is integrated into the GUI.
+- `hyprmod/core/scoped_recovery.py`, `hyprmod/core/layout_guard.py`,
+  `hyprmod/pages/scope_recovery.py`: startup assessment, v1 exclusion, and explicit
+  transaction recovery, separate from pending scope-local backup restoration.
 - [ROADMAP.md](ROADMAP.md): priorities, milestones, and acceptance criteria.
 - [CONTRIBUTING.md](CONTRIBUTING.md): development commands and verification policy.
 - [docs/architecture.md](docs/architecture.md): current interfaces and persistence boundary.

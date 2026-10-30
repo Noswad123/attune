@@ -28,6 +28,7 @@ from hyprland_config import (
     serialize_lua,
 )
 
+from hyprmod.core import layout_guard
 from hyprmod.core.focused_ui import GENERAL_OPTIONS, ReviewSnapshot
 
 if TYPE_CHECKING:
@@ -414,6 +415,15 @@ def persist_snapshot(
         raise
 
 
+class LayoutBlockedError(ValueError):
+    """Legacy output was not replaced because scoped layout evidence blocks writing."""
+
+    output_replaced = False
+    may_have_written = False
+    scope_may_have_changed = False
+    journal_may_have_changed = False
+
+
 def _persist_snapshot(
     snapshot: ReviewSnapshot,
     expected_source: Callable[[], None] | None,
@@ -421,6 +431,15 @@ def _persist_snapshot(
     replacing: list[bool],
     preservation: RecoveryPreservation | None = None,
 ) -> Path | None:
+    config_root = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+    state_root = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state"))
+
+    def guard():
+        reason = layout_guard.block_reason(config_root, state_root)
+        if reason is not None:
+            raise LayoutBlockedError(f"Legacy write blocked; output not replaced. {reason}")
+
+    guard()
     if snapshot.resolved_path is None:
         raise ValueError("Review is not bound to a resolved destination; review again")
     target = resolve_target(snapshot.path)
@@ -433,6 +452,7 @@ def _persist_snapshot(
             raise InterruptedError("Save cancelled before replacement")
         if expected_source is not None:
             expected_source()
+        guard()
 
     check()
     read_document(proposed)
@@ -446,7 +466,7 @@ def _persist_snapshot(
         if resolve_target(snapshot.path) != target or read_stable(target).decode() != proposed:
             raise ValueError("Output file changed; review again")
         return None
-    state = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")) / "attune"
+    state = state_root / "attune"
     resolved_backups = (state / "backups").resolve()
     for parent in (state.resolve(), resolved_backups):
         for ancestor in (parent, *parent.parents):
@@ -525,16 +545,19 @@ def _persist_snapshot(
         if preservation is not None:
             _verify_preservation(preservation, previous)
 
-            def before_replace():
-                check()
+        def before_replace():
+            check()
+            if preservation is not None:
                 _verify_preservation(preservation, previous)
-                if resolve_target(snapshot.path) != target or read_stable(target) != previous:
-                    raise ValueError("Output file changed immediately before recovery")
-                if cancel_event is not None and cancel_event.is_set():
-                    raise InterruptedError("Recovery cancelled before replacement")
+            if (
+                resolve_target(snapshot.path) != target
+                or (read_stable(target) if target.exists() else b"") != previous
+            ):
+                raise ValueError("Output file changed immediately before replacement")
+            if cancel_event is not None and cancel_event.is_set():
+                raise InterruptedError("Save cancelled before replacement")
+            guard()
 
-            _atomic_write(target, proposed.encode("utf-8"), before_replace=before_replace)
-        else:
-            _atomic_write(target, proposed.encode("utf-8"))
+        _atomic_write(target, proposed.encode("utf-8"), before_replace=before_replace)
         replacing[0] = True
         return backup

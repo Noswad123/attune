@@ -10,10 +10,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- M3.6a transaction recovery frontend, completed in code: bounded asynchronous
+  read-only startup assessment opens the v1 editor only for `legacy-clear` and
+  otherwise exposes a recovery shell, including on assessment errors. Scope
+  Recovery requires separate complete CURRENT -> GOAL review of both scopes and
+  explicit commit for resume, rollback, finalize, or abandon. Read-only workers
+  are isolated and bounded; commits are direct non-daemon workers with close veto,
+  owner-aware exclusion, and independent scope/journal uncertainty invalidation.
+  Split editing, split publication through Save, activation, and migration remain
+  unavailable. M3.6b scope-local v2 backup restore/preservation is still pending.
+- Inactive M3.4b guarded split publication and explicit complete CURRENT -> GOAL
+  recovery reviews for resume, rollback, finalize, and abandon. Compile-only
+  preflight, synchronized staging, private atomic checkpoints, and crash-resumable
+  rollback preserve unchanged scopes without claiming pair-atomic publication.
+  These core APIs write when explicitly called; M3.6a later integrates recovery
+  only. Split Save/CLI publication, activation, migration, and v2 editor routing
+  remain unavailable.
+- Failure-boundary and real process-death recovery coverage using exclusively
+  temporary outputs/state, including checkpoint scratch collision refusal even
+  for identical bytes. Existing scratch is never promoted, reused, or deleted.
 - Inactive private transaction records and explicitly initialized evidence storage,
   with verified content-addressed blobs, group snapshots, and prepared intents.
 - Read-only interrupted-state classification from actual scoped bytes and fresh
-  bindings, without trusting journal progress or adding publication/recovery actions.
+  bindings, without trusting journal progress; publication/recovery is a separate API.
 - Inactive scoped group-review plans bound to fresh filesystem evidence, with
   complete per-scope diffs and exact unchanged-sibling preservation.
 - Pure v1/v2 backup descriptors and fresh scoped diagnostics with an allowlisted
@@ -63,10 +82,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   review, symlink-preserving writes, and hash-named backups outside Git.
 - Local-source setup, explicit manual Lua integration instructions, development
   guidance, and an architecture reference. Shared/machine output splitting is
-  future work, not part of this milestone.
+  not active application behavior; the inactive backend is documented separately.
 
 ### Changed
 
+- Any registry or transaction evidence, including terminal history, now excludes
+  v1 save, restoration, and preservation-first replacement. Unsafe or uninspectable
+  metadata fails closed. Discovery of scoped evidence locks the legacy editor
+  while retaining pending changes; old baselines are never marked saved by recovery.
 - Ordinary saves now also invalidate cached editor state on possibly-written
   persistence failures rather than leaving an already-written draft editable.
 - Moved the development checkout to `~/Projects/attune`, rebuilt its environment,

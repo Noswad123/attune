@@ -1,4 +1,4 @@
-"""Inactive, read-only interrupted-state observations, never recovery authority.
+"""Read-only interrupted-state observations, never recovery authority.
 
 Direct calls have no filesystem/diff wall-clock guarantee. Repeated observations
 narrow local races, not an atomic snapshot or hostile-filesystem isolation. No
@@ -7,7 +7,6 @@ Evidence hashes are fingerprints, not authentication or serialized authority.
 """
 
 import os
-import stat
 import unicodedata
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -15,10 +14,9 @@ from enum import StrEnum
 from pathlib import Path
 
 from hyprmod.core import route_approval, transaction_store
-from hyprmod.core.route_approval import FileEvidence
 from hyprmod.core.scopes import Scope
-from hyprmod.core.transaction_records import validate_transaction_id
-from hyprmod.core.transaction_store import StoreBinding, VerifiedTransaction
+from hyprmod.core.transaction_records import route_binding, validate_transaction_id
+from hyprmod.core.transaction_store import StoreBinding
 
 
 class OverallStatus(StrEnum):
@@ -73,54 +71,20 @@ def _explicit_path(value: Path) -> None:
         raise ValueError("Expected explicit bounded normalized absolute context")
 
 
-def _route_binding(file: FileEvidence) -> tuple:
-    """Exclude only the resolved regular leaf; preserve every link and ancestor."""
-    proof = file.path
-    return (
-        proof.lexical_path,
-        proof.resolved_path,
-        tuple(
-            (fact.path, (), None)
-            if fact.path == proof.resolved_path and fact.identity and stat.S_ISREG(fact.identity[2])
-            else (fact.path, fact.identity, fact.link_target)
-            for fact in proof.facts
-        ),
-        file.git_context,
-    )
-
-
-def _private_facts(bundle: VerifiedTransaction) -> tuple:
-    root = bundle.binding.state_root / "attune"
-    directory = root / "transactions" / bundle.intent.transaction_id
-    paths = (
-        directory / "intent.json",
-        root / "snapshots" / (bundle.snapshot.snapshot_id + ".json"),
-        *(root / "blobs" / (blob.sha256 + ".lua") for blob in bundle.blobs),
-    )
-    facts = []
-    for path in (directory, *paths):
-        info = path.lstat()
-        identity = (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid)
-        if path != directory:
-            identity += (info.st_nlink, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
-        facts.append((str(path), identity))
-    return tuple(facts)
-
-
 def classify_transaction(
     state_root: Path, transaction_id: str, *, config_root: Path
 ) -> TransactionObservation:
     """Reload private evidence and classify actual canonical bytes in explicit context.
 
     Phase/progress are advisory even when recorded as committed. Known mixtures
-    imply no repair action. Recovery APIs and UI are not available in this slice.
+    imply no repair action. This API never invokes publication or recovery.
     """
     bundle = None
     current = None
     statuses: dict[Scope, ScopeStatus] = {}
     notes = [
         "Read-only, non-atomic local observation, not a write permit or runtime claim. "
-        "Journal phase/progress are advisory; recovery actions are not available."
+        "Journal phase/progress are advisory; recovery requires a separate explicit review."
     ]
     try:
         _explicit_path(state_root)
@@ -134,7 +98,7 @@ def classify_transaction(
             raise ValueError("Stored review differs from explicit config/state context")
         if not plan.changed_scopes:
             raise ValueError("No-op journals are unsupported")
-        private_facts = _private_facts(bundle)
+        private_facts = transaction_store.verified_fingerprint(bundle)
         registry_path = config_root / "attune/installation.json"
         current = route_approval.inspect_installation(
             registry_path, config_root=config_root, state_root=state_root
@@ -153,13 +117,21 @@ def classify_transaction(
             if review.scope not in plan.changed_scopes:
                 if actual == prior:
                     status = ScopeStatus.UNCHANGED
-            elif _route_binding(actual.file) == _route_binding(prior.file):
+            elif route_binding(actual.file) == route_binding(prior.file):
                 identity = (actual.file.source_sha256, actual.content_id)
                 if identity == (review.previous_sha256, review.previous_content_id):
                     status = ScopeStatus.PRIOR
                 elif identity == (review.proposed_sha256, review.proposed_content_id):
                     status = ScopeStatus.PROPOSED
             statuses[review.scope] = status
+        if bundle.rollback is not None:
+            initial = bundle.rollback.initial_review
+            for scope, actual, first in zip(
+                Scope, current.routes, initial.evidence.routes, strict=True
+            ):
+                if scope not in bundle.rollback.restore_scopes and actual != first:
+                    statuses[scope] = ScopeStatus.CONFLICT
+            notes.append("Rollback direction locked; explicit fresh rollback completion required")
         fresh = route_approval.inspect_installation(
             registry_path, config_root=config_root, state_root=state_root
         )
@@ -169,7 +141,7 @@ def classify_transaction(
             )
         transaction_store.revalidate_store(bundle.binding)
         reloaded = transaction_store.load_transaction(state_root, transaction_id)
-        if reloaded != bundle or _private_facts(reloaded) != private_facts:
+        if reloaded != bundle or transaction_store.verified_fingerprint(reloaded) != private_facts:
             raise ValueError(
                 "Private transaction changed during classification; fresh review needed"
             )

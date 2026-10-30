@@ -1,5 +1,6 @@
 """Main application window with sidebar navigation."""
 
+import os
 from collections import Counter
 from pathlib import Path
 
@@ -8,7 +9,7 @@ from hyprland_config import ParseError, Rule, coerce_config_value
 from hyprland_socket import HyprlandError
 from hyprland_state import ANIM_LOOKUP, HyprlandState
 
-from hyprmod.core import config, persistence, schema
+from hyprmod.core import config, persistence, schema, scoped_recovery
 from hyprmod.core.focused_ui import PAGE_IDS, ReviewSnapshot, filter_schema
 from hyprmod.core.state import AppState
 from hyprmod.core.undo import OptionChange, PairedOptionChange, UndoManager
@@ -19,6 +20,7 @@ from hyprmod.pages.cursor import CursorPage
 from hyprmod.pages.health import HealthPage
 from hyprmod.pages.monitors import MonitorsPage
 from hyprmod.pages.pending import PendingChangesPage
+from hyprmod.pages.scope_recovery import ScopeRecoveryPage
 from hyprmod.pages.section import SectionPage
 from hyprmod.pages.settings import SettingsPage
 from hyprmod.ui import (
@@ -73,6 +75,7 @@ class HyprModWindow(Adw.ApplicationWindow):
         self._key_to_group: dict[str, str] = {}  # option key -> sidebar group_id
         self._undo = UndoManager()
         self._restore_in_progress = False
+        self._restore_owner: str | None = None
         self._editor_invalidated = False
 
         # Optional page/widget references (populated during _build_ui)
@@ -86,6 +89,7 @@ class HyprModWindow(Adw.ApplicationWindow):
         self._pending_page: PendingChangesPage | None = None
         self._health_page: HealthPage | None = None
         self._backups_page: BackupsPage | None = None
+        self._scope_recovery_page: ScopeRecoveryPage | None = None
         self._pre_search_page_id: str | None = None
         self._search_results: list | None = None
         # Populated at the end of _build_ui() once section pages exist;
@@ -97,6 +101,8 @@ class HyprModWindow(Adw.ApplicationWindow):
         self._register_state()
         self._refresh_all_modified_indicators()
         self.connect("close-request", self._on_close_request)
+        if self._scope_recovery_page is not None:
+            self._scope_recovery_page.ensure_loaded()
 
     def _on_close_request(self, *_args) -> bool:
         if self._restore_in_progress:
@@ -125,9 +131,51 @@ class HyprModWindow(Adw.ApplicationWindow):
     def begin_restore(self) -> None:
         self.restore_permission()
         self._restore_in_progress = True
+        self._restore_owner = "backups"
         self._set_editor_sensitive(False)
 
+    def scope_restore_permission(self) -> None:
+        # Invalidated baselines must not prevent subsequent explicit journal recovery.
+        if self._restore_in_progress:
+            raise ValueError("Another restoration or recovery owns this window")
+        if self.has_dirty():
+            raise ValueError("Pending editor changes are retained; restart or resolve them first")
+        if self._monitors_page and self._monitors_page.is_confirm_pending():
+            raise ValueError("Keep or revert the monitor preview before scope recovery")
+
+    def begin_scope_restore(self) -> None:
+        self.scope_restore_permission()
+        self._restore_in_progress = True
+        self._restore_owner = "scope"
+        self._set_editor_sensitive(False)
+
+    def finish_scope_restore(self, invalidate: bool) -> None:
+        if self._restore_owner != "scope":
+            return
+        self._restore_owner = None
+        self.finish_restore(invalidate)
+
+    def scope_assessed(self, assessment: scoped_recovery.LayoutAssessment) -> None:
+        if assessment.mode != "legacy-clear":
+            self._lock_legacy_editor(
+                "Scoped evidence discovered. Legacy editor locked; pending changes retained. "
+                "Use Scope Recovery explicitly. No runtime loading or activation is established."
+            )
+
+    def _lock_legacy_editor(self, message: str) -> None:
+        config.invalidate_cache()
+        self._editor_invalidated = True
+        self._set_editor_sensitive(False)
+        self._hyprland_banner.set_title(message)
+        self._hyprland_banner.set_revealed(True)
+
     def finish_restore(self, invalidate: bool) -> None:
+        # Backups calls finish even after a refused begin; it cannot release a scoped writer.
+        if self._restore_owner == "scope":
+            return
+        self._restore_owner = None
+        if invalidate:
+            config.invalidate_cache()
         self._editor_invalidated |= invalidate
         self._restore_in_progress = False
         self._set_editor_sensitive(not self._editor_invalidated)
@@ -141,7 +189,7 @@ class HyprModWindow(Adw.ApplicationWindow):
 
     def _set_editor_sensitive(self, sensitive: bool) -> None:
         for name in self._page_titles:
-            if name not in {"health", "backups", "settings"}:
+            if name not in {"health", "backups", "scope-recovery", "settings"}:
                 page = self._page_stack.get_child_by_name(name)
                 if page is not None:
                     page.set_sensitive(sensitive)
@@ -345,6 +393,24 @@ class HyprModWindow(Adw.ApplicationWindow):
         )
         self._page_titles["backups"] = "Backups"
         self._backups_page.bind_lifecycle(self)
+        self._scope_recovery_page = ScopeRecoveryPage(
+            Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")),
+            Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")),
+            restore_permission=self.scope_restore_permission,
+            begin_restore=self.begin_scope_restore,
+            finish_restore=self.finish_scope_restore,
+        )
+        self._scope_recovery_page.on_assessment = self.scope_assessed
+        self._scope_recovery_page.on_assessment_error = lambda error: self._lock_legacy_editor(
+            f"Layout assessment failed: {error}. Legacy editor locked; pending changes retained. "
+            "Inspect Scope Recovery and restart Attune after resolving the layout."
+        )
+        self._page_stack.add_named(
+            self._scope_recovery_page.build(header=self._make_page_header("Scope Recovery")),
+            "scope-recovery",
+        )
+        self._page_titles["scope-recovery"] = "Scope Recovery"
+        self._scope_recovery_page.bind_lifecycle(self)
         standalone_page_specs: list[tuple[type, str, str, str]] = [
             (PendingChangesPage, "_pending_page", "pending", "Pending Changes"),
             (SettingsPage, "_settings_page", "settings", "Settings"),
@@ -787,6 +853,8 @@ class HyprModWindow(Adw.ApplicationWindow):
                 self._health_page.ensure_loaded()
             if gid == "backups" and self._backups_page is not None:
                 self._backups_page.ensure_loaded()
+            if gid == "scope-recovery" and self._scope_recovery_page is not None:
+                self._scope_recovery_page.ensure_loaded()
             self._page_stack.set_visible_child_name(gid)
             self._content_nav.set_title(self._page_titles[gid])
 
@@ -1072,7 +1140,7 @@ class HyprModWindow(Adw.ApplicationWindow):
 
     def show_toast(self, message: str, timeout: int = 2, *, copy: bool = False):
         """Show a transient toast. With *copy*, add a Copy button for *message*."""
-        toast = Adw.Toast(title=message, timeout=timeout)
+        toast = Adw.Toast(title=message, timeout=timeout, use_markup=False)
         if copy:
             toast.set_button_label("Copy")
             toast.connect("button-clicked", lambda _t: self.get_clipboard().set(message))

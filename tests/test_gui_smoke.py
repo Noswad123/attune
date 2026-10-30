@@ -15,7 +15,7 @@ from gi.repository import Adw, Gio, GLib, Gtk
 from hyprland_socket import HyprlandError
 
 from hyprmod import main as main_module
-from hyprmod.core import backups, config, health, persistence, restoration
+from hyprmod.core import backups, config, health, persistence, restoration, scoped_recovery
 from hyprmod.core import recovery as recovery_module
 from hyprmod.core.diagnostics import build_diagnostics_report
 from hyprmod.core.focused_ui import PAGE_IDS
@@ -27,6 +27,30 @@ pytestmark = pytest.mark.skipif(
     os.environ.get("ATTUNE_GUI_SMOKE") != "1",
     reason="set ATTUNE_GUI_SMOKE=1 with an isolated GTK display",
 )
+
+
+@pytest.fixture(autouse=True)
+def startup_assessment(monkeypatch, isolated_user_paths):
+    assessment = scoped_recovery.LayoutAssessment(
+        config_root=os.environ["XDG_CONFIG_HOME"],
+        state_root=os.environ["XDG_STATE_HOME"],
+        mode="legacy-clear",
+        registry_condition="absent",
+        canonical_pair=(),
+        registry_error=None,
+        transactions=(),
+        truncated=False,
+        notes=(),
+    )
+    collector = MagicMock(return_value=assessment)
+    monkeypatch.setattr(scoped_recovery, "run_assess", collector)
+    for name in ("run_prepare_action", "commit_action"):
+        monkeypatch.setattr(
+            scoped_recovery,
+            name,
+            MagicMock(side_effect=AssertionError("Mock scoped recovery API explicitly")),
+        )
+    return collector
 
 
 @pytest.fixture(autouse=True)
@@ -119,6 +143,111 @@ def _widgets(widget):
 
 
 class TestWidgetSmoke:
+    @pytest.mark.parametrize(
+        "route", ["legacy-clear", "scope-recovery-required", "blocked", "error"]
+    )
+    def test_async_startup_routes_after_responsive_checking_window(
+        self, app, startup_assessment, monkeypatch, route
+    ):
+        entered = threading.Event()
+        release = threading.Event()
+        message = "R&D <literal>"
+        assessment = replace(
+            startup_assessment.return_value,
+            mode="legacy-clear" if route == "error" else route,
+            transactions=(
+                (
+                    scoped_recovery.TransactionRow(
+                        "a" * 32, "verified", "prepared", False, "all-prior", ()
+                    ),
+                )
+                if route == "scope-recovery-required"
+                else ()
+            ),
+        )
+
+        def assess(config_root, state_root, **kwargs):
+            assert threading.current_thread() is not threading.main_thread()
+            assert not threading.current_thread().daemon
+            assert str(config_root) == assessment.config_root
+            assert str(state_root) == assessment.state_root
+            entered.set()
+            if not release.wait(3):
+                raise TimeoutError("Test worker not released")
+            if route == "error":
+                raise ValueError(message)
+            return assessment
+
+        startup_assessment.side_effect = assess
+        app._integration_shown = True
+        monkeypatch.setattr(main_module, "has_cairo_support", lambda: True)
+        if route != "legacy-clear":
+            monkeypatch.setattr(
+                "hyprmod.window.HyprlandState",
+                MagicMock(side_effect=AssertionError("Blocked startup must not build editor")),
+            )
+        try:
+            app.do_activate()
+            assert entered.wait(3)
+            checking = app._config_error_window
+            assert checking is not None
+            assert not isinstance(checking, main_module.RecoveryWindow)
+            assert any(
+                isinstance(w, Gtk.Label) and w.get_text() == "Checking Attune Layout"
+                for w in _widgets(checking)
+            )
+            app.do_activate()
+            assert app._config_error_window is checking
+            ticked = []
+            GLib.idle_add(lambda: ticked.append(True))
+            _wait_for(lambda: bool(ticked))
+            assert not any(isinstance(w, HyprModWindow) for w in app.get_windows())
+            startup_assessment.assert_called_once_with(
+                Path(assessment.config_root),
+                Path(assessment.state_root),
+                cancel_event=app._startup_cancel,
+                timeout=15,
+            )
+        finally:
+            release.set()
+        _wait_for(lambda: app._startup_cancel is None)
+        assert checking not in app.get_windows()
+        if route == "legacy-clear":
+            assert app._config_error_window is None
+            assert any(isinstance(w, HyprModWindow) for w in app.get_windows())
+        else:
+            shell = app._config_error_window
+            if not isinstance(shell, main_module.RecoveryWindow):
+                pytest.fail("Startup did not route to the recovery shell")
+            labels = [w for w in _widgets(shell) if isinstance(w, Gtk.Label)]
+            assert any(w.get_text() == "Attune Recovery" for w in labels)
+            if route == "error":
+                description = next(w for w in labels if "Read-only shell." in w.get_label())
+                expected = (
+                    f"{message}\n\nRead-only shell. Recovery requires a separate review "
+                    "and explicit commit. Nothing is activated or migrated automatically."
+                )
+                assert description.get_text() == expected
+                assert description.get_label() == GLib.markup_escape_text(expected)
+            assert not any(isinstance(w, HyprModWindow) for w in app.get_windows())
+        assert not config.managed_path().exists()
+        assert not Path(assessment.state_root).exists()
+
+    def test_toast_literal_text_and_unchanged_copy_payload(self, app, monkeypatch):
+        window = HyprModWindow(application=app)
+        clipboard = MagicMock()
+        monkeypatch.setattr(window, "get_clipboard", lambda: clipboard)
+        toasts = []
+        monkeypatch.setattr(window, "add_toast", toasts.append)
+        message = "R&D <literal>"
+        window.show_toast(message, copy=True)
+        toast = toasts[0]
+        assert toast.get_title() == message
+        clipboard.set.assert_not_called()
+        toast.emit("button-clicked")
+        clipboard.set.assert_called_once_with(message)
+        assert not toast.get_use_markup()
+
     @pytest.mark.parametrize("recover_output", [False, True])
     @pytest.mark.parametrize("recovery", [False, True])
     @pytest.mark.parametrize("outcome", ["cancel", "restored", "unchanged", "uncertain"])
@@ -189,12 +318,13 @@ class TestWidgetSmoke:
         if recovery:
             config.managed_path().write_text("foreign output\n")
             app.do_activate()
+            _wait_for(lambda: isinstance(app._config_error_window, main_module.RecoveryWindow))
             window = app._config_error_window
             assert window is not None
             button = next(
                 w
                 for w in _widgets(window.get_content())
-                if isinstance(w, Gtk.Button) and w.get_label() == "Backups"
+                if isinstance(w, Gtk.Button) and w.get_label() == "Legacy Backups (v1)"
             )
             button.emit("clicked")
             page = app._recovery_backups
@@ -324,6 +454,7 @@ class TestWidgetSmoke:
             config.managed_path().write_text(text)
             monkeypatch.setattr("hyprmod.window.HyprlandState", live_state)
             main_module.HyprModApp.do_activate(app)
+            _wait_for(lambda: isinstance(app._config_error_window, main_module.RecoveryWindow))
             window = app._config_error_window
             assert window is not None
             stack = window.get_content()
@@ -331,7 +462,7 @@ class TestWidgetSmoke:
             button = next(
                 w
                 for w in _widgets(stack.get_visible_child())
-                if isinstance(w, Gtk.Button) and w.get_label() == "Backups"
+                if isinstance(w, Gtk.Button) and w.get_label() == "Legacy Backups (v1)"
             )
             listing.assert_not_called()
             button.emit("clicked")
@@ -396,7 +527,7 @@ class TestWidgetSmoke:
             next(
                 w
                 for w in _widgets(stack.get_visible_child())
-                if isinstance(w, Gtk.Button) and w.get_label() == "Backups"
+                if isinstance(w, Gtk.Button) and w.get_label() == "Legacy Backups (v1)"
             ).emit("clicked")
             assert stack.get_child_by_name("backups") is view
             live_state.assert_not_called()
@@ -488,6 +619,7 @@ class TestWidgetSmoke:
         if recovery:
             config.managed_path().write_text("foreign Lua; must not execute")
             main_module.HyprModApp.do_activate(app)
+            _wait_for(lambda: isinstance(app._config_error_window, main_module.RecoveryWindow))
             window = app._config_error_window
             assert isinstance(window, Adw.ApplicationWindow)
             next(
@@ -684,6 +816,7 @@ class TestWidgetSmoke:
         live_state = MagicMock(side_effect=AssertionError("Recovery must not construct live state"))
         monkeypatch.setattr("hyprmod.window.HyprlandState", live_state)
         main_module.HyprModApp.do_activate(app)
+        _wait_for(lambda: isinstance(app._config_error_window, main_module.RecoveryWindow))
         recovery = app._config_error_window
         assert recovery is not None
         _render()
@@ -722,11 +855,13 @@ class TestWidgetSmoke:
         retry = next(
             widget
             for widget in _widgets(stack.get_visible_child())
-            if isinstance(widget, Gtk.Button) and widget.get_label() == "Try Again"
+            if isinstance(widget, Gtk.Button) and widget.get_label() == "Retry Startup Check"
         )
         retry.emit("clicked")
         assert app._config_error_window is not None
         assert app._config_error_window is not recovery
+        assert not isinstance(app._config_error_window, main_module.RecoveryWindow)
+        _wait_for(lambda: isinstance(app._config_error_window, main_module.RecoveryWindow))
         assert health_collector.call_count == 2
         live_state.assert_not_called()
         assert not sentinel.exists()

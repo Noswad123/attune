@@ -1,9 +1,9 @@
-"""Inactive, read-only canonical v2 group review, not commit or file-load approval.
+"""Read-only canonical v2 group review, not commit or file-load approval.
 
 This is a non-atomic local advisory observation, not a security permit. Neither
 Lua compilation nor semantic/write validation is performed. Size/line limits do
-not bound direct filesystem latency or diff CPU wall time. Future M3.4 clients
-must supervise this work off GTK; this slice deliberately has no worker or wiring.
+not bound direct filesystem latency or diff CPU wall time. Frontend callers
+supervise read-only work off GTK through the scoped recovery service.
 """
 
 import difflib

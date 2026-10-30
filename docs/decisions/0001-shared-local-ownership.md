@@ -1,6 +1,6 @@
 # ADR 0001: Shared appearance and machine-local displays
 
-- Status: accepted; foundations and M3.4a private evidence implemented, split publication not activated
+- Status: accepted; M3.6a transaction recovery frontend/legacy exclusion completed in code; split editing/publication Save inactive
 - Date: 2026-10-27
 - Roadmap: M3.1; follow-on implementation spans M3.2-M3.6
 - Runtime rollout: gated by M0 acceptance and an explicit, reviewed migration
@@ -55,9 +55,10 @@ transaction ID or shared generation counter.
 
 Introduce a local installation registry at
 `$XDG_CONFIG_HOME/attune/installation.json`, with `~/.config` as the XDG fallback.
-Its schema has an inactive pure parser and a separate explicit read-only filesystem
-inspector. No registry file is created or read by the active app. Activation and
-write authorization remain future work.
+Its schema has a pure parser and a separate explicit read-only filesystem
+inspector. M3.6a startup assessment reads existing registry evidence without
+creating, repairing, or activating it. The backend revalidates explicit routes
+under lock; split editing/publication Save and activation remain future work.
 
 The strict schema has exactly these fields:
 
@@ -108,9 +109,12 @@ The first inspector requires private `0600` registry storage and safe owned outp
 permissions. Its evidence can be revalidated but neither authorizes writing nor
 automatically persists a destination approval.
 
-An absent registry preserves current legacy v1 behavior only when no blocking
-transaction or migration handoff is pending. Startup checks that durable state
-first. A present but invalid registry blocks writes and exposes diagnostics; it
+M3.6a permits legacy v1 entry only when no registry or transaction evidence is
+present and metadata is safely inspectable. Even terminal transaction history
+excludes v1 save/restoration/preservation; absence is not proof of loader choice.
+Startup assesses this off GTK before constructing the editor. Migration handoff
+precedence described below is still a future M3.5 requirement, not implemented
+migration-state inspection. A present but invalid registry blocks writes and exposes diagnostics; it
 does not silently fall back to writing v1. Merely finding new filenames does not
 activate split mode.
 
@@ -229,7 +233,9 @@ even if the preceding rename returned successfully.
 
 ### Explicit interruption handling
 
-Startup and Health report unresolved transactions and block editing. They never
+Startup and Scope Recovery report transaction evidence and block legacy editing.
+Health remains a separate read-only utility, not the transaction action frontend.
+They never
 resume, roll back, finalize, or delete evidence automatically. Read actual output
 hashes and bindings; journal progress alone is insufficient after a crash.
 
@@ -240,7 +246,11 @@ hashes and bindings; journal progress alone is insufficient after a crash.
 | Known prior/proposed mixture | Resume remaining changed scopes, or roll back changed scopes currently at proposed bytes |
 | Unexpected bytes, missing/corrupt evidence, changed registry/route | Conflict; refuse automated overwrite and require fresh preservation-first review or manual intervention |
 
-These are designs for future recovery APIs, not currently available buttons.
+M3.4b implements these ordinary present-owned recovery actions. M3.6a exposes
+them through Scope Recovery with a complete fresh CURRENT -> GOAL review of both
+scopes and a separate explicit commit. Invalid/terminal states and disallowed
+actions refuse rather than becoming recovery authority. Migration/provisioning
+remains future work.
 For migration/provisioning, an explicitly recorded `absent` state counts as the
 expected prior state; an unrecorded missing file is a conflict. Empty prior content
 is distinct from absence. A guarded unlink is available only for an explicitly
@@ -271,6 +281,8 @@ Extend M2.6 preservation-first recovery explicitly to registered v2 scopes. Keep
 foreign originals private and separate from canonical blobs, bind scope and route
 identity into preservation evidence, and verify/synchronize it before replacement.
 Do not relax ordinary ownership guards or admit unknown files as scope payloads.
+This scope-local v2 backup restore/preservation work is pending M3.6b, a prerequisite
+before M3.5 migration. M3.6a transaction recovery does not implement it.
 
 Successful restore/recovery and any uncertain write invalidate all cached editors
 until restart. Read-only utilities remain usable. No old editor baseline is marked
@@ -340,21 +352,33 @@ not an in-place concatenation of potentially divergent outputs.
 
 ## 8. Implementation sequence and acceptance
 
-- M3.2 (implemented, inactive): pure scoped models, strict structural registry
+- M3.2 (implemented foundation): pure scoped models, strict structural registry
   validation, v1/v2 readers/renderers, explicit partition, and frozen v1 fixtures.
-  Existing v1 behavior remains the only active write mode.
-- M3.3a (implemented, inactive): explicit read-only destination inspection and
+  V1 remains the only editor Save format, subject to M3.6a exclusion.
+- M3.3a (implemented foundation): explicit read-only destination inspection and
   transient evidence revalidation, without provisioning or write authority.
-- M3.3b (implemented, inactive): complete scope-aware group reviews, pure legacy/v2
+- M3.3b (implemented foundation): complete scope-aware group reviews, pure legacy/v2
   backup descriptors, and fresh scoped diagnostics with redacted report projection.
-- M3.4a (implemented, inactive): explicit private evidence storage, ordinary
+- M3.4a (implemented foundation): explicit private evidence storage, ordinary
   present-owned transaction records, historical validation, and actual-byte
   interruption classification. Prepared evidence alone is not publication approval.
-- M3.4b: the guarded writer and explicitly reviewed recovery with failure/crash
-  tests. Add compile preflight; do not infer it from a prepared intent.
-- M3.6: scope-aware diagnostics, backup/restore/preservation, cache/exclusion,
-  and recovery UI before migration is offered. Implement this ahead of rollout
-  even though its roadmap number follows M3.5.
+- M3.4b (implemented backend; only recovery integrated by M3.6a): guarded publication and explicitly reviewed recovery
+  with compile preflight and failure/crash tests. Prepared intent alone remains
+  insufficient. Rollback has an immutable operation and separate checkpoints in
+  the original transaction directory; direction is locked once recorded. All-prior
+  abandon closes metadata without a compiler; all-proposed finalize still compiles
+  but replaces no scopes. See architecture for API and scratch-file details.
+- M3.6a (implemented and validated; live rollout gated): bounded asynchronous
+  read-only startup assessment, recovery shell for scoped/blocked/error results,
+  and explicit transaction action review/commit. Only `legacy-clear` constructs
+  the v1 editor. Read-only children are isolated and bounded; commits are direct
+  non-daemon workers with close veto and owner-aware legacy/scope exclusion.
+  Independent sticky scope/journal uncertainty invalidates cache/editor without
+  marking old baselines saved. Writer-side metadata exclusion fails closed on any
+  registry/transaction evidence or uninspectable metadata, including terminal history.
+- M3.6b (pending, next): scope-local v2 backup restore and preservation-first
+  recovery with complete scope/route review and unchanged-sibling isolation.
+  Complete before M3.5 migration or recommending split rollout.
 - M3.5: reviewed migration/handoff after prerequisites and manual M0 acceptance.
 
 Required tests include scope rejection; frozen v1 compatibility; malformed v2;
@@ -384,8 +408,11 @@ The initial outside-Git display policy deliberately excludes versioned host-spec
 display packages until an explicit policy extension is designed.
 
 The M3.1 decision itself created no configuration/state files or codec. Subsequent
-M3.2 work implements inactive pure models and codecs, not a registry file, journal,
-split writer, or loader. No current output or live configuration has changed, and
+M3.2-M3.4b work implements models, route checks, private evidence, and an
+explicit split writer/recovery backend. M3.6a adds startup assessment and explicit
+transaction recovery UI. Recovery can write when committed, but no split editor,
+split publication Save, registry activation, migration, or loader is installed.
+Test outputs/state are exclusively temporary. No live configuration has changed, and
 no permission for state-changing validation is implied. See
 [architecture.md](../architecture.md) for implemented APIs and
 [ROADMAP.md](../../ROADMAP.md) for remaining work.

@@ -8,13 +8,15 @@ from pathlib import Path
 
 import pytest
 
-from hyprmod.core import scoped_review
+from hyprmod.core import route_approval, scoped_config, scoped_review
 from hyprmod.core.scopes import Scope
 from hyprmod.core.transaction_records import (
     MAX_RECORD_BYTES,
     GroupSnapshot,
     Phase,
     PriorKind,
+    RollbackCheckpoint,
+    RollbackOperation,
     TransactionIntent,
     canonical_json,
     decode_json,
@@ -36,6 +38,70 @@ def intent_for(snapshot):
         snapshot.plan.evidence.registry,
         snapshot.plan.changed_scopes,
     )
+
+
+@pytest.fixture
+def rollback(snapshot):
+    original = snapshot.plan
+    Path(original.scopes[0].resolved_path).write_text(original.scopes[0].proposed_text)
+    current = route_approval.inspect_installation(
+        Path(original.evidence.registry.path.lexical_path),
+        config_root=Path(original.evidence.config_root),
+        state_root=Path(original.evidence.state_root),
+    )
+    goal = scoped_config.read_document(
+        original.scopes[0].previous_text, expected_scope=Scope.APPEARANCE
+    )
+    if not isinstance(goal, scoped_config.ScopedConfig):
+        pytest.fail("Expected canonical prior")
+    plan = scoped_review.build_review(current, {Scope.APPEARANCE: goal})
+    return RollbackOperation(
+        snapshot.snapshot_id, original.review_hash, "a" * 64, plan, plan.changed_scopes
+    )
+
+
+class TestRollbackRecords:
+    def test_roundtrip_and_prepared_zero_progress(self, snapshot, rollback):
+        rollback.validate_snapshot(snapshot)
+        assert RollbackOperation.from_json(rollback.to_json(), snapshot=snapshot) == rollback
+        for checkpoint in (
+            RollbackCheckpoint(rollback.operation_sha256),
+            RollbackCheckpoint(rollback.operation_sha256, rollback.restore_scopes),
+            RollbackCheckpoint(rollback.operation_sha256, rollback.restore_scopes, True),
+        ):
+            checkpoint.validate_operation(rollback)
+            assert (
+                RollbackCheckpoint.from_json(checkpoint.to_json(), operation=rollback) == checkpoint
+            )
+
+    @pytest.mark.parametrize(
+        "field,value",
+        [
+            ("snapshot_id", "0" * 64),
+            ("original_review_hash", "0" * 64),
+            ("private_fingerprint_sha256", "invalid"),
+            ("restore_scopes", (Scope.DISPLAYS,)),
+            ("restore_scopes", ()),
+        ],
+    )
+    def test_original_and_restore_bindings(self, snapshot, rollback, field, value):
+        with pytest.raises(ValueError):
+            replace(rollback, **{field: value}).validate_snapshot(snapshot)
+
+    @pytest.mark.parametrize(
+        "progress,complete",
+        [
+            ((Scope.DISPLAYS,), False),
+            ((Scope.APPEARANCE, Scope.DISPLAYS), False),
+            ((), True),
+            ((Scope.APPEARANCE, Scope.APPEARANCE), False),
+        ],
+    )
+    def test_checkpoint_is_restore_prefix(self, rollback, progress, complete):
+        with pytest.raises(ValueError):
+            RollbackCheckpoint(rollback.operation_sha256, progress, complete).validate_operation(
+                rollback
+            )
 
 
 class TestRecords:
