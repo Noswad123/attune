@@ -31,6 +31,8 @@ Historical upstream releases remain in [CHANGELOG.md](CHANGELOG.md).
   acknowledgment and verified private evidence before replacement.
 - Bounded read-only startup layout assessment and a Scope Recovery page for
   separately reviewed transaction resume, rollback, finalize, and abandon.
+- Explicit historical source browsing, complete both-scope reviews, and a separate
+  **Commit Reviewed Historical Restore** action in Scope Recovery.
 
 Bindings, workspaces, layouts, rules, autostart, environment, plugins, and other
 hand-authored behavior stay outside the GUI. There are no profiles or profile CLI,
@@ -52,8 +54,8 @@ Inactive adapters also prepare exact scoped review plans, describe v1/v2 backup
 metadata, and project scoped diagnostics. The separate M3.4 backend
 provides guarded split publication and explicitly reviewed resume, rollback,
 finalize, and abandon operations. These core APIs write scopes/private journals
-when explicitly invoked; they are not read-only. M3.6a now exposes only explicit
-transaction recovery through the GUI and read-only assessment at startup. Split
+when explicitly invoked; they are not read-only. M3.6a exposes explicit transaction
+recovery and read-only startup assessment; M3.6b4 adds historical restore commits. Split
 editing, split publication through Save, CLI mutation, registry activation,
 migration, and v2 editor routing remain unavailable.
 
@@ -68,8 +70,11 @@ are complete, along with read-only route inspection and scoped review/backup/
 diagnostic adapters and the M3.4 journaled publication/recovery backend. M3.6a
 transaction recovery and legacy exclusion are completed in code. M3.6b is In progress:
 b1 read-only canonical scope restore preparation is implemented and validated.
-Source browsing/review, writer source-freshness checks under lock, and a separate
-foreign observation/preservation protocol remain before M3.5 opt-in migration.
+B2 historical source browsing/read-only review is implemented and validated.
+B3 canonical backend restore commits are implemented and validated.
+B4's distinct GUI historical restore action and writer-lifetime handling are
+implemented and validated. Next is a separate foreign-current route
+observation/private-preservation-first protocol before M3.5 opt-in migration.
 Explicit live application and routing rollout remain gated by manual acceptance.
 Unchecked roadmap items are not yet available features.
 
@@ -311,12 +316,51 @@ blocks v1 save, restoration, and preservation-first replacement. Unsafe or
 uninspectable metadata fails closed, not back to v1. The writer rechecks this
 exclusion independently of startup. Legacy backups remain inspectable full bundles;
 they are not implicitly converted or restored into a v2 scope. M3.6b scope-local v2
-backup restore/preservation remains incomplete before migration. Its first bounded
-b1 slice provides only inactive core preparation from an explicitly selected terminal
-transaction's canonical prior/proposed scope, retaining the current sibling unchanged.
-It requires a safe initialized store, a canonical current pair, and matching registry,
-roots, and historical route bindings. It adds no source browser, frontend, or commit.
-See [the API contract](docs/architecture.md#m36b1-read-only-scoped-restore-preparation).
+backup restore/preservation remains incomplete before migration. B1 provides canonical
+preparation; b2 adds **Browse Historical Sources** only on explicit user request,
+never during startup or as provisioning. The listing safety-checks all journals
+within the 1,000-entry limit, displaying at most 32 transactions with four sources
+each: appearance/displays, prior/proposed. Display truncation alone does not mean
+an incomplete scan. Pending/corrupt evidence anywhere blocks all source reviews;
+an incompatible historical route blocks only that row when global inspection is safe.
+An old terminal transaction's recovery `actual_status=conflict` is not its historical
+source eligibility.
+
+Choose **Review appearance prior** (or another eligible scope/side) to inspect the
+complete **CURRENT -> GOAL** pair, retaining the current sibling unchanged. A safe
+initialized store, canonical current pair, matching registry/roots, and historical
+both-route bindings are required. Phase and hashes prove neither installation of
+either side, runtime loading, Lua/compiler validity, nor authentication. Historical
+reviews cannot populate the transaction recovery draft or enable its commit button.
+Only **Commit Reviewed Historical Restore** consumes the separate `ScopedRestoreDraft`;
+browsing or preparing a review never implicitly commits. Assessment, listing, and preparation share one
+asynchronous read-only slot, retained through cancellation cleanup. Listing/preparation
+children default to 30-second deadlines with 1 MiB/8 MiB transport limits respectively.
+See [the browsing/review API contract](docs/architecture.md#m36b2-historical-source-browsing-and-read-only-review)
+and its b1 preparation contract above it.
+The explicit backend `scoped_restore.commit_restore(draft, cancel_event=...)`
+can write the selected canonical scope through a new ordinary transaction. It
+rechecks the complete historical source and current review under lock throughout
+publication, preserves the current sibling and Stow links, and leaves source
+evidence unchanged. It is a direct non-daemon mutator, never a timeout-killable
+child or CLI command. No-op commits still validate and compile-check, but create
+no journal or stages; a lock file may be created. Failures may leave a new pending
+transaction requiring a fresh explicit existing-recovery review, never source replay.
+Backend uncertainty flags are returned unchanged; callers must invalidate stale
+editors. The GUI rechecks dirty/monitor-preview permission and writer exclusion,
+consumes reviews and action rows, and holds closure until its direct worker completes.
+It validates exact typed results, transaction identities, and flags; invalid results
+or exceptions after delegation conservatively set both sticky uncertainty flags.
+A worker start failure before delegation adds no uncertainty. Matching-owner release
+and sticky editor locking precede fallible cache/widget notifications. No old baseline
+is marked Saved. Outcomes distinguish the historical source from the new restore
+transaction; a pending new transaction needs **Refresh Scope Assessment**, a fresh
+recovery review for that new ID, and explicit recovery commit. Nothing auto-recovers.
+Refresh/re-browse and prepare a fresh review before another action.
+There is no hard total filesystem deadline. See
+[the b3 backend contract](docs/architecture.md#m36b3-canonical-backend-restore-commit).
+The [b4 GUI contract](docs/architecture.md#m36b4-explicit-gui-historical-restore)
+is implemented and validated; live GUI behavior is not verified.
 Separate renames are not pair-atomic; no reload IPC is sent, but watchers may
 auto-reload changed files.
 
@@ -425,12 +469,12 @@ line are separate user opt-ins, never automatic Attune setup steps.
 - [ADR 0001](docs/decisions/0001-shared-local-ownership.md): accepted ownership,
   transaction, loader, and migration design, with inactive implementation status.
 - `hyprmod/core/transaction_publication.py`: explicit split writer and
-  reviewed recovery backend; only recovery is integrated into the GUI.
+  reviewed recovery backend, also used by explicit GUI historical restore.
 - `hyprmod/core/scoped_recovery.py`, `hyprmod/core/layout_guard.py`,
   `hyprmod/pages/scope_recovery.py`: startup assessment, v1 exclusion, and explicit
-  transaction recovery, separate from pending scope-local backup restoration.
-- `hyprmod/core/scoped_restore.py`: inactive read-only canonical restore drafts,
-  not a scope restore writer or foreign-file recovery path.
+  transaction recovery and separate reviewed canonical historical restore.
+- `hyprmod/core/scoped_restore.py`: read-only historical listings/drafts and explicit
+  canonical restore commits used by the GUI, not foreign-current recovery.
 - [ROADMAP.md](ROADMAP.md): priorities, milestones, and acceptance criteria.
 - [CONTRIBUTING.md](CONTRIBUTING.md): development commands and verification policy.
 - [docs/architecture.md](docs/architecture.md): current interfaces and persistence boundary.

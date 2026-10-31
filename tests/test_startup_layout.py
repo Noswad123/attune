@@ -184,7 +184,8 @@ class TestStartupGate:
 
 class TestRecoveryWriters:
     @pytest.mark.parametrize("owner,other", [("scope", "backups"), ("backups", "scope")])
-    def test_owner_exclusion_and_refused_finish(self, owner, other, monkeypatch):
+    @pytest.mark.parametrize("cache_error", [False, True])
+    def test_owner_exclusion_and_refused_finish(self, owner, other, monkeypatch, cache_error):
         # Property semantics without constructing a GTK window.
         class Owner:
             restore_writing = main.RecoveryWindow.restore_writing
@@ -194,17 +195,32 @@ class TestRecoveryWriters:
             _restore_owner = None
 
         window = Owner()
-        invalidate = MagicMock()
-        monkeypatch.setattr(main.config, "invalidate_cache", invalidate)
+
+        def clear_cache():
+            assert not window.restore_writing
+            window.begin_restore(other)
+            if cache_error:
+                raise RuntimeError("cache failed")
+
+        invalidate = MagicMock(side_effect=clear_cache)
+        monkeypatch.setattr(main, "config", SimpleNamespace(invalidate_cache=invalidate))
         window.begin_restore(owner)
         with pytest.raises(ValueError, match="owns"):
             window.begin_restore(other)
         window.finish_restore(other, True)
         assert window.restore_writing
         invalidate.assert_not_called()
-        window.finish_restore(owner, True)
-        assert not window.restore_writing
+        if cache_error:
+            with pytest.raises(RuntimeError, match="cache failed"):
+                window.finish_restore(owner, True)
+        else:
+            window.finish_restore(owner, True)
+        assert window._restore_owner == other
         invalidate.assert_called_once_with()
+        window.finish_restore(owner, False)
+        assert window._restore_owner == other
+        window.finish_restore(other, False)
+        assert not window.restore_writing
         window.begin_restore("scope")
         window.finish_restore("scope", False)
 

@@ -51,9 +51,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
         # Legacy Backups also finishes refused attempts; only the owner can release.
         if self._restore_owner != owner:
             return
+        self._restore_owner = None
         if invalidate:
             config.invalidate_cache()
-        self._restore_owner = None
 
 
 class HyprModApp(Adw.Application):

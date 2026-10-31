@@ -132,7 +132,13 @@ class HyprModWindow(Adw.ApplicationWindow):
         self.restore_permission()
         self._restore_in_progress = True
         self._restore_owner = "backups"
-        self._set_editor_sensitive(False)
+        try:
+            self._set_editor_sensitive(False)
+        except Exception:
+            self._restore_owner = None
+            self._restore_in_progress = False
+            self._set_editor_sensitive(not self._editor_invalidated)
+            raise
 
     def scope_restore_permission(self) -> None:
         # Invalidated baselines must not prevent subsequent explicit journal recovery.
@@ -147,7 +153,13 @@ class HyprModWindow(Adw.ApplicationWindow):
         self.scope_restore_permission()
         self._restore_in_progress = True
         self._restore_owner = "scope"
-        self._set_editor_sensitive(False)
+        try:
+            self._set_editor_sensitive(False)
+        except Exception:
+            self._restore_owner = None
+            self._restore_in_progress = False
+            self._set_editor_sensitive(not self._editor_invalidated)
+            raise
 
     def finish_scope_restore(self, invalidate: bool) -> None:
         if self._restore_owner != "scope":
@@ -163,8 +175,8 @@ class HyprModWindow(Adw.ApplicationWindow):
             )
 
     def _lock_legacy_editor(self, message: str) -> None:
-        config.invalidate_cache()
         self._editor_invalidated = True
+        config.invalidate_cache()
         self._set_editor_sensitive(False)
         self._hyprland_banner.set_title(message)
         self._hyprland_banner.set_revealed(True)
@@ -173,11 +185,11 @@ class HyprModWindow(Adw.ApplicationWindow):
         # Backups calls finish even after a refused begin; it cannot release a scoped writer.
         if self._restore_owner == "scope":
             return
+        self._editor_invalidated |= invalidate
         self._restore_owner = None
+        self._restore_in_progress = False
         if invalidate:
             config.invalidate_cache()
-        self._editor_invalidated |= invalidate
-        self._restore_in_progress = False
         self._set_editor_sensitive(not self._editor_invalidated)
         if self._editor_invalidated:
             self._hyprland_banner.set_title(
@@ -401,6 +413,11 @@ class HyprModWindow(Adw.ApplicationWindow):
             finish_restore=self.finish_scope_restore,
         )
         self._scope_recovery_page.on_assessment = self.scope_assessed
+        self._scope_recovery_page.on_scoped_evidence = lambda: self._lock_legacy_editor(
+            "Historical scoped evidence discovered. "
+            "Legacy editor locked; pending changes retained. "
+            "Canonical history is not proof of publication or runtime loading."
+        )
         self._scope_recovery_page.on_assessment_error = lambda error: self._lock_legacy_editor(
             f"Layout assessment failed: {error}. Legacy editor locked; pending changes retained. "
             "Inspect Scope Recovery and restart Attune after resolving the layout."

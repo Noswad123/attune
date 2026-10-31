@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from hyprmod import window as window_module
 from hyprmod.core import backups, recovery, restoration
 from hyprmod.pages import backups as page_module
 from hyprmod.pages.backups import BackupsPage
@@ -79,12 +80,124 @@ def page(tmp_path):
 def window():
     win = MagicMock()
     win._restore_in_progress = False
+    win._restore_owner = None
     win._editor_invalidated = False
     win.has_dirty.return_value = False
     win._monitors_page.is_confirm_pending.return_value = False
-    for name in ("editor_edit_allowed", "restore_permission", "begin_restore", "finish_restore"):
+    for name in (
+        "editor_edit_allowed",
+        "restore_permission",
+        "begin_restore",
+        "finish_restore",
+        "scope_restore_permission",
+        "begin_scope_restore",
+        "finish_scope_restore",
+        "_lock_legacy_editor",
+    ):
         setattr(win, name, MethodType(getattr(HyprModWindow, name), win))
     return win
+
+
+class TestWindowWriterExceptions:
+    @pytest.mark.parametrize("owner", ["scope", "backups", None])
+    @pytest.mark.parametrize("failure", ["cache", "sensitivity", "title", "revealed", "toast"])
+    def test_finish_retires_owner_and_invalidates_before_fallible_work(
+        self, window, monkeypatch, owner, failure
+    ):
+        cache = MagicMock()
+        monkeypatch.setattr(window_module, "config", MagicMock(invalidate_cache=cache))
+        window._restore_owner = owner
+        window._restore_in_progress = owner is not None
+        notification = {
+            "cache": cache,
+            "sensitivity": window._set_editor_sensitive,
+            "title": window._hyprland_banner.set_title,
+            "revealed": window._hyprland_banner.set_revealed,
+            "toast": window.show_toast,
+        }[failure]
+
+        def fail(*args):
+            assert window._restore_owner is None
+            assert not window._restore_in_progress
+            assert window._editor_invalidated
+            raise RuntimeError("notification failed")
+
+        notification.side_effect = fail
+        finish = window.finish_scope_restore if owner == "scope" else window.finish_restore
+        with pytest.raises(RuntimeError, match="notification failed"):
+            finish(True)
+        assert window._restore_owner is None
+        assert not window._restore_in_progress
+        assert window._editor_invalidated
+
+    @pytest.mark.parametrize("owner", ["scope", "backups"])
+    def test_refused_finish_does_not_touch_owner_or_cache(self, window, monkeypatch, owner):
+        cache = MagicMock(side_effect=RuntimeError("cache failed"))
+        monkeypatch.setattr(window_module, "config", MagicMock(invalidate_cache=cache))
+        window._restore_owner = owner
+        window._restore_in_progress = True
+        finish = window.finish_restore if owner == "scope" else window.finish_scope_restore
+        finish(True)
+        assert window._restore_owner == owner and window._restore_in_progress
+        assert not window._editor_invalidated
+        cache.assert_not_called()
+        window._set_editor_sensitive.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "owner,invalidated", [("backups", False), ("scope", False), ("scope", True)]
+    )
+    @pytest.mark.parametrize("rollback_fails", [False, True])
+    def test_begin_sensitivity_error_rolls_back_ownership(
+        self, window, owner, invalidated, rollback_fails
+    ):
+        window._editor_invalidated = invalidated
+        window._set_editor_sensitive.side_effect = [
+            RuntimeError("sensitivity failed"),
+            RuntimeError("rollback failed") if rollback_fails else None,
+        ]
+        begin = window.begin_scope_restore if owner == "scope" else window.begin_restore
+        with pytest.raises(RuntimeError):
+            begin()
+        assert window._restore_owner is None and not window._restore_in_progress
+        assert window._editor_invalidated is invalidated
+        assert window._set_editor_sensitive.call_args_list[-1].args == (not invalidated,)
+
+    @pytest.mark.parametrize("owner", ["scope", "backups"])
+    @pytest.mark.parametrize("notification_fails", [False, True])
+    def test_finish_notification_cannot_release_reentrant_writer(
+        self, window, owner, notification_fails
+    ):
+        window._restore_owner = owner
+        window._restore_in_progress = True
+
+        def notify(sensitive):
+            if sensitive:
+                window.begin_scope_restore()
+                if notification_fails:
+                    raise RuntimeError("notification failed")
+
+        window._set_editor_sensitive.side_effect = notify
+        finish = window.finish_scope_restore if owner == "scope" else window.finish_restore
+        if notification_fails:
+            with pytest.raises(RuntimeError, match="notification failed"):
+                finish(False)
+        else:
+            finish(False)
+        assert window._restore_owner == "scope" and window._restore_in_progress
+
+    def test_legacy_lock_is_sticky_before_cache_error(self, window, monkeypatch):
+        monkeypatch.setattr(
+            window_module,
+            "config",
+            MagicMock(invalidate_cache=MagicMock(side_effect=RuntimeError("cache failed"))),
+        )
+        with pytest.raises(RuntimeError, match="cache failed"):
+            window._lock_legacy_editor("Scoped evidence")
+        assert window._editor_invalidated
+        assert not window.editor_edit_allowed()
+        window.finish_restore(False)
+        assert window._editor_invalidated
+        window._set_editor_sensitive.assert_called_once_with(False)
 
 
 class TestRestoration:

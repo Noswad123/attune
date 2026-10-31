@@ -150,16 +150,64 @@ Things to avoid:
   semantics/runtime loading. The journaled backend exists, but Save integration
   still requires pending M3.6b scope-local v2 backup restore/preservation and M3.5
   migration prerequisites. M3.6a does not complete either of those slices.
-- M3.6b1 `scoped_restore.prepare_restore` / `run_prepare` only observe canonical
-  CURRENT -> GOAL pairs from explicit terminal history; use `run_prepare` off GTK.
+- M3.6b `scoped_restore.list_sources` / `run_list` and `prepare_restore` /
+  `run_prepare` only observe historical choices and canonical CURRENT -> GOAL pairs;
+  use the supervised wrappers off GTK. Internal worker modes are explicitly `list`
+  and `prepare`, with 1 MiB listing and 8 MiB draft transport limits.
   Keep the initialized-store requirement, both read-only pending scans, exact
   registry/roots and historical both-route binding, and current sibling isolation.
-  Drafts/fingerprints are not write permits. No commit, source browser, compiler,
-  provisioning, foreign preservation, or migration belongs to b1. Future writers
-  must recheck source freshness under lock; foreign current text needs a separate
-  observation/preservation protocol, never a raw blob in canonical snapshots.
-  Exercise `tests/test_scoped_restore.py` and read-only pending-scan regressions in
-  `tests/test_transaction_store.py` alongside existing recovery/persistence tests.
+  Drafts/fingerprints are not write permits or installed/runtime/compiler proof.
+  B2 browsing is explicit user-requested read-only work, never startup provisioning.
+  Preserve the full 1,000-entry safety scan independently of the 32 x 4 display cap:
+  truncation is not incomplete scanning, pending/corrupt evidence globally blocks,
+  and incompatible historical routes are row-local blockers if globally safe.
+  Old terminal recovery actual-conflict classification is not source eligibility.
+  Keep the page's single async read slot through cancellation cleanup. Historical
+  reviews show both scopes but never populate recovery drafts or enable the
+  transaction recovery commit. B4 adds a distinct historical commit below.
+  Bind completions to the requested exact DTO type, roots, and selection before
+  rendering. Unexpected results must clear reviews/choices and disable commit.
+  Positive historical evidence discovery must lock the running legacy editor,
+  retaining dirty state; a blocked empty listing is not evidence of installation.
+  B2 is implemented and validated; M3.6b remains incomplete.
+  B3 `commit_restore` is implemented and validated. It is an explicit
+  backend-only direct non-daemon mutator, never a timeout-killable child or CLI.
+  Validate the original exact immutable draft before JSON copying; preserve delegated
+  result/uncertainty flags unchanged. Recheck complete source fingerprint, snapshot,
+  terminal phase, all blobs, exact review and source binding under lock before new
+  evidence and through compilation, staging/checkpoints, immediately after the final
+  stage read before rename, and before no-op/final success. Generated ID collisions
+  must refuse, never select/reuse a PREPARED transaction. No-ops still compile and
+  recheck with no journal/stages, though the store lock file may be created.
+  Preserve sibling bytes/inode/mtime/mode, Stow links, and historical source evidence.
+  Failures may leave a new pending transaction: use fresh explicit existing recovery,
+  never replay the terminal source. Existing `commit_recovery` behavior is unchanged.
+  B4's distinct GUI historical restore action/shared writer lifetime is implemented
+  and validated. Only **Commit Reviewed Historical Restore** consumes its own
+  `ScopedRestoreDraft`; recovery keeps its own draft/action.
+  Never commit implicitly from listing/preparation. Recheck dirty/monitor-preview
+  permission and owner exclusion; consume reviews/action rows before the attempt.
+  Require exact read DTO/context/selection and exact `PublicationResult` types,
+  boolean flags, outcomes and IDs: historical success uses a new ID, no-op none,
+  recovery its reviewed ID. Invalid results/exceptions after delegation set both
+  independent sticky flags; start failure before delegation adds no uncertainty.
+  Define completion before fallible setup and route setup failure through clean
+  pre-delegation completion. Keep essential authority cleanup independent of
+  individually guarded widget operations. Retire the completion token before
+  callbacks, release only the matching owner, and record sticky editor invalidation
+  before fallible cache/widget notification. Notification failure must not strand
+  closure or let duplicate completion release a newer owner. Never mark old baselines
+  Saved. Require fresh refresh/review; show old source versus new restore ID and
+  direct pending outcomes to explicit fresh recovery of the new transaction, never
+  source replay or automatic recovery. Validated results are in `docs/validation.md`;
+  live GUI behavior is not verified.
+  Next is a SEPARATE foreign-current route observation/private-preservation-first
+  protocol before M3.5, never unknown raw bytes as canonical priors.
+  Exercise `tests/test_scoped_restore_commit.py` (including temporary real `os._exit`
+  interruption), `tests/test_scoped_restore.py`, and read-only pending-scan regressions in
+  `tests/test_transaction_store.py` and isolated `tests/test_scope_recovery_gui.py`
+  alongside existing recovery/persistence tests. No restore writer, compilation,
+  provisioning, foreign preservation, or migration is added by b2.
 - Private transaction evidence APIs must use explicit temporary
   state in tests. Initialization precedes route review; no startup path may create
   or repair the store. Recorded-review validation is historical/pure, not filesystem

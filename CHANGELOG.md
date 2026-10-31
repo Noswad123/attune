@@ -10,6 +10,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- M3.6b4 explicit **Commit Reviewed Historical Restore**, implemented and validated.
+  Complete both-scope review populates its own
+  `ScopedRestoreDraft`, never the transaction recovery draft; neither browsing nor
+  preparation implicitly commits. Both actions share a direct non-daemon writer,
+  permission/exclusion gates, close veto, and exact typed result/ID/flag validation.
+  Invalid post-delegation outcomes set independent sticky scope/journal uncertainty;
+  pre-delegation worker-start failure adds none. Reviews/action rows are consumed;
+  fresh refresh/review is required. Outcomes distinguish old source from new restore
+  transaction and direct pending cases to fresh explicit recovery of the new ID,
+  never automatic recovery. Matching-owner release and sticky editor locking precede
+  fallible cache/widget notifications; old baselines are never marked Saved.
+  Independent review's setup-widget writer leak is fixed: completion is defined
+  before setup, setup failures use pre-delegation cleanup, and essential authority
+  cleanup is independent of individually guarded widget operations. Recheck found
+  no remaining blocking findings; validation results are in `docs/validation.md`.
+  Live GUI behavior is not verified. M3.6b remains incomplete;
+  next is a separate foreign-current route observation/private-preservation-first
+  protocol before M3.5, not unknown raw bytes as canonical priors. No mutator CLI or
+  reload IPC is added; watchers may auto-reload changed files.
+- M3.6b3 canonical backend restore commit, implemented and validated.
+  Explicit `scoped_restore.commit_restore` writes only the selected canonical scope
+  via a new ordinary transaction, preserving the current sibling, Stow links, and
+  historical source evidence. Original immutable draft validation precedes JSON
+  copying; complete source fingerprints/snapshots/phases/blobs and exact review/
+  source binding are rechecked under lock through staging/checkpoints, after the
+  final stage read before rename, and before no-op/final success. Generated ID
+  collisions refuse rather than reuse PREPARED history. Direct non-daemon calls
+  preserve backend result flags; b3 adds no killable commit child, CLI, or GUI
+  historical commit. No-ops compile/recheck without journals/stages, though a lock
+  file is possible. Failures can require explicit existing recovery of the new
+  transaction, never terminal-source replay. Temporary-only fault and real
+  `os._exit` tests are present; no passing b3 results are claimed here. M3.6b remains
+  incomplete: at the b3 checkpoint, b4's distinct GUI action/lifetime tests and
+  separate foreign observation/preservation preceded migration. No total filesystem deadline or
+  reload IPC is promised; watchers may auto-reload replacements.
+- M3.6b2 historical source browsing/review in Scope Recovery. Explicit browsing
+  displays at most 32 transactions with
+  four canonical scope/side sources each after full bounded journal safety scans.
+  Display truncation is separate from scan completeness; pending/corrupt evidence
+  globally blocks, while incompatible historical routes block only their rows when
+  global inspection is safe. Complete read-only CURRENT -> GOAL reviews include the
+  unchanged current sibling and cannot enable transaction recovery commit. Isolated
+  `list`/`prepare` workers share one asynchronous page read slot, with 1 MiB/8 MiB
+  transport limits. B2 adds no startup listing, provisioning, or historical restore commit.
+  Phase/hashes are not installed-byte proof, runtime/compiler validation, or
+  authentication. At the b2 checkpoint, under-lock source freshness and a new
+  restore transaction were next; M3.6b remains incomplete.
+- Strict page read-result mode/context/selection checks prevent historical reads
+  from entering recovery commit paths. Positive scoped history discovery locks
+  running legacy editors while retaining pending changes.
 - M3.6b1 inactive read-only scoped restore preparation. Strict frozen drafts bind a
   verified terminal source's selected canonical prior/proposed scope to a complete
   CURRENT -> GOAL review with the

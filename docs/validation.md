@@ -576,8 +576,8 @@ sequence and bounds are in
 
 Terminal phase/fingerprints are local observations, not authentication, proof that
 either historical side was installed, or write permits. Preparation and pure draft
-decoding do not authorize a later write. Source browsing/review and writer source
-freshness under lock are next; a separate foreign observation/preservation protocol
+decoding do not authorize a later write. At the b1 checkpoint, source browsing/review
+and writer source freshness under lock were next; a separate foreign observation/preservation protocol
 must follow before M3.5. B1 adds no source discovery/listing, frontend, commit API/CLI,
 compiler, provisioning, foreign preservation, migration, or ownership exception.
 M0 live acceptance and loader/watch rollout gates remain pending.
@@ -588,4 +588,263 @@ M0 live acceptance and loader/watch rollout gates remain pending.
 - `tests/test_scoped_restore.py`, `tests/test_transaction_store.py`.
 - [ADR 0001](decisions/0001-shared-local-ownership.md#6-scope-aware-backup-and-preservation-compatibility)
   records why foreign originals cannot be admitted to canonical-only snapshots,
-  reviews, or compiler paths as raw blobs.
+   reviews, or compiler paths as raw blobs.
+
+## M3.6b2: historical source browsing and read-only review
+
+### Overview and verification status
+
+B2 is implemented and validated as of 2026-10-30. M3.6b remains In progress.
+
+- Ruff lint with fixes and formatting: passed.
+- Repository-wide Pyright error-level check: zero errors. Unfiltered GI source
+  availability warnings remain as recorded at the M3.6a checkpoint.
+- Full suite, including publication fault/process-death coverage: **3,039 passed,
+  104 skipped**, in about 354 seconds. Most skips are opt-in isolated GTK cases.
+- Isolated Broadway widget suites: **101 passed, 2 skipped**, with compositor IPC
+  disabled and service mutators mocked. The temporary daemon was stopped afterward.
+- Independent safety review and follow-up completed. Result-mode authority leakage
+  and missing history-discovery editor notification were fixed, with boundary and
+  editor/live-apply exclusion regressions. No blocking findings remain.
+- Actual isolated listing-worker transport, wheel build, installed launcher help,
+  internal worker help, and diff whitespace checks: passed. Build output is under
+  `/tmp/opencode/attune-m36b2-dist`; nothing was installed, registered, staged, or
+  committed by this task.
+- Live Hyprland UI, user-state mutation/recovery, loader edits, reloads, and
+  compositor operations were not performed. Widget checks are not live acceptance.
+
+### API / Interfaces
+
+`scoped_restore.list_sources` / `run_list` return strict immutable listing DTOs;
+the internal worker explicitly selects `list` or `prepare`. Listing has a 1 MiB
+transport cap; preparation retains the 8 MiB draft cap. Both supervised wrappers
+default to 30-second deadlines. `ScopeRecoveryPage.browse_sources` requests history
+explicitly; `prepare_source` selects a reviewable scope/side and shows a full
+read-only CURRENT -> GOAL pair. Startup does not browse or provision history.
+
+### Data Flow and coverage to exercise
+
+- `tests/test_scoped_restore.py`: four sources per verified row, full 1,000-entry
+  safety scan independent of the 32-row display cap, hidden pending/corrupt evidence,
+  scan versus display flags, row-local historical route mismatch, old terminal
+  sources after later publications, evidence races, strict immutable DTOs, transport
+  limits, isolated worker modes/context echo, cancellation, and forbidden effects.
+- `tests/test_scope_recovery_gui.py`: explicit browsing, full precomputed both-scope
+  reviews and current sibling/no-op labels, recovery/history transitions, single
+  async read slot through cancellation, closure/late callbacks, permission rechecks,
+  wrong-mode/type/context/selection and partial-render refusals, historical evidence
+  discovery locking while retaining dirty edits, and historical reviews never
+  populating recovery drafts or invoking commit.
+- Run these with temporary HOME/XDG fixtures alongside transaction-store, scoped
+  recovery, publication, legacy persistence/restoration/preservation regressions,
+  the full CONTRIBUTING gate, and isolated Broadway widget suites.
+
+### Edge Cases
+
+Display truncation does not mean incomplete scanning. Pending/corrupt evidence
+globally blocks, including undisplayed journals; incompatible historical routes
+block only their rows if globally safe. Old terminal recovery actual-conflict
+classification is not historical source eligibility. Phase/hashes are not installed
+proof, runtime/compiler validation, authentication, or write permits.
+
+Historical review cannot enable the existing transaction recovery commit. No
+historical restore writer, compilation, provisioning, foreign preservation, or
+migration is added. Under-lock source freshness and a new restore transaction are
+next, then separate foreign observation/preservation before M3.5. No live UI,
+user-state mutation, loader edit, reload, or compositor operation was performed;
+M0/manual rollout gates remain pending.
+
+### Example usage
+
+For isolated widget validation, browse history, select an eligible prior/proposed
+scope, inspect both complete reviews, and verify the recovery commit stays disabled.
+Cancel and re-browse, then separately prepare a transaction recovery action to
+exercise the existing commit path with mocked mutators only.
+
+### Related files
+
+- `hyprmod/core/scoped_restore.py`, `hyprmod/pages/scope_recovery.py`.
+- `tests/test_scoped_restore.py`, `tests/test_scope_recovery_gui.py`.
+- [architecture.md](architecture.md#m36b2-historical-source-browsing-and-read-only-review),
+  [ADR 0001](decisions/0001-shared-local-ownership.md#6-scope-aware-backup-and-preservation-compatibility).
+
+## M3.6b3: canonical backend restore commit
+
+### Overview and verification status
+
+Backend implemented and validated as of 2026-10-30. M3.6b remains incomplete.
+
+- Ruff lint with fixes and formatting: passed.
+- Repository-wide Pyright error-level check: zero errors. Unfiltered dynamic GI
+  source-resolution warnings remain as recorded at the M3.6a checkpoint.
+- Full suite, including restore and publication fault/process-death tests:
+  **3,107 passed, 104 skipped**, in about 575 seconds. Allow a longer command timeout
+  than the earlier 480-second budget for the expanded suite.
+- Isolated Broadway compatibility suites: **101 passed, 2 skipped**, with compositor
+  IPC disabled and service mutators mocked. The temporary daemon was stopped.
+- Independent backend safety review found no blocking defects. Follow-up tests
+  directly pin source-hook lock ownership for changed/no-op publication and reject
+  mutable historical snapshot/descriptor containers before copying or delegation.
+- Wheel build, installed launcher help, internal read-only worker help, and diff
+  whitespace checks: passed. The wheel is under `/tmp/opencode/attune-m36b3-dist`;
+  nothing was installed, registered, staged, or committed by this task.
+- No live GUI, user-state restore/publication, loader edit, reload, or compositor
+  mutation was performed. All write/crash tests use temporary outputs and state.
+  At the b3 checkpoint, the historical GUI remained read-only; compatibility smoke
+  tests are not live Hyprland acceptance.
+
+### API / Interfaces
+
+`scoped_restore.commit_restore(draft, cancel_event=...)` is an explicit direct
+non-daemon backend mutator. It passes a validated private draft copy to ordinary
+publication with an under-lock source hook and a new transaction ID, preserving
+delegated result flags unchanged. Only read-only `list`/`prepare` have supervised
+children (1 MiB/8 MiB transport); at this checkpoint there was no GUI historical
+action. There is still no commit CLI.
+Existing interruption recovery/`commit_recovery` behavior remains unchanged.
+
+### Data Flow and coverage to exercise
+
+The validated regression coverage includes:
+
+- `tests/test_scoped_restore_commit.py`: both scopes/sides and COMMITTED/ABORTED
+  sources; new transaction IDs, reverse restores, sibling/registry/source evidence
+  isolation, lexical Stow links, and no-op journal/stage absence.
+- Original exact types and nested immutable containers before JSON copying; forged
+  roots/digests/diffs/goals, private-copy isolation from later original mutation,
+  direct daemon refusal, pre-cancel, lock contention, and delegated flags/exceptions.
+- Same-byte source intent/snapshot/selected and unselected blob replacement, current
+  selected/sibling and registry drift; pending/corrupt evidence even for no-ops;
+  compiler-time changes; source drift after preparation/sync/final stage read,
+  rename, and terminal checkpoint. Generated-ID collisions, including allocation
+  races and existing PREPARED entries, cannot replay that evidence.
+- Compiler/rename/post-rename/fsync/checkpoint uncertainty followed by explicit
+  existing recovery of the new transaction. The real crash test uses `os._exit(73)`
+  after selected-output rename before progress checkpoint, then parent-side fresh
+  review/finalize. It uses temporary outputs/state, not live user configuration;
+  it is not a production timeout-killable mutator design.
+
+Run alongside `tests/test_scoped_restore.py`, transaction publication/store and
+scoped recovery tests, legacy persistence/restoration/preservation regressions,
+the full CONTRIBUTING gate, and isolated GUI compatibility suites. All mutating
+fixtures must remain exclusively temporary.
+
+### Edge Cases
+
+Complete source fingerprint/snapshot/phase/all blobs, exact review and source binding
+are rechecked under lock before evidence creation, through staging/checkpoints,
+immediately after the final stage read before rename, and before no-op/final success.
+No-ops compile/recheck without journals/stages, though a lock file can be created.
+Failure can leave a new pending transaction: fresh explicit existing recovery is
+required, never source replay or automatic cleanup. Sibling bytes/inode/mtime/mode,
+Stow links, and historical evidence remain protected; reads may affect atime.
+
+No total filesystem deadline, pair-atomicity, runtime loading, or hostile-race
+guarantee is established. No reload IPC is sent, but watchers may auto-reload.
+M3.6b remains incomplete: at the b3 checkpoint, next was b4's distinct GUI historical
+restore action/lifetime tests, then separate foreign observation/preservation before migration.
+M0/live UI, loader/watch acceptance, and rollout remain unverified.
+
+### Example usage
+
+Use the temporary-fixture preparation, review, explicit direct commit, and new-ID
+recovery sequence in the [backend contract](architecture.md#m36b3-canonical-backend-restore-commit).
+Do not invoke it against real state to satisfy automated validation.
+
+### Related files
+
+- `hyprmod/core/scoped_restore.py`, `hyprmod/core/transaction_publication.py`.
+- `hyprmod/core/transaction_store.py`, `tests/test_scoped_restore_commit.py`.
+- `hyprmod/pages/scope_recovery.py`: historical review was read-only at b3; existing
+  transaction recovery action is not a historical restore action.
+- [ROADMAP.md](../ROADMAP.md), [ADR 0001](decisions/0001-shared-local-ownership.md#6-scope-aware-backup-and-preservation-compatibility).
+
+## M3.6b4: explicit GUI historical restore
+
+### Overview and verification status
+
+**Implemented and validated.** Final validation results:
+
+- Required Ruff lint with fixes and formatting: passed; **193 files unchanged**.
+- Full-tree Pyright with `--level error`: **zero errors**. Unfiltered dynamic GI
+  source-resolution warnings still exist; this is not an all-warnings-clear claim.
+- Full pytest suite: **3,137 passed, 207 skipped, 5 dependency deprecation warnings**,
+  in **576.82 seconds**. For future full-suite runners use a **1,200,000 ms** timeout;
+  the earlier 480-second budget is too short.
+- Both isolated Broadway widget suites: **204 passed, 2 skipped**, with service
+  writers mocked and compositor IPC disabled. The temporary daemon was stopped.
+- Wheel build: passed, output under `/tmp/opencode/attune-m36b4-dist`. Installed
+  launcher's `--help` and internal read-only worker `--help` for `list`/`prepare`:
+  passed. Git diff whitespace check: passed.
+- Independent review caught a **P2 setup-widget exception after ownership** that
+  leaked writer authority. The fix defines completion before fallible setup,
+  routes setup failure through pre-delegation cleanup, and keeps essential
+  authority cleanup independent of individually guarded widget operations.
+  **50 setup/cleanup regressions** and reentrant-owner checks passed. Recheck found
+  no remaining blocking findings.
+
+Earlier b1/b2/b3 counts and qualifications above remain historical checkpoint
+evidence. No live GUI, user-state writes, compositor operations, loader edits, or
+migration were performed. Nothing was installed, staged, or committed. B4's GUI
+action is available in code, but live GUI behavior is not verified.
+
+### API / Interfaces
+
+`Commit Reviewed Historical Restore` consumes its own `ScopedRestoreDraft` after
+complete both-scope CURRENT -> GOAL review. `Commit Reviewed Scope Recovery`
+retains its separate `ScopedRecoveryDraft`/action. The shared direct non-daemon
+writer validates exact `PublicationResult` types, IDs, outcomes and boolean flags;
+read completions still validate exact DTO, roots and selection. Worker CLI modes
+remain read-only `list`/`prepare` with 1 MiB/8 MiB transport, never mutation.
+
+### Data Flow and validated coverage
+
+Validated coverage includes:
+
+- `tests/test_scope_recovery_gui.py`: separate historical/recovery draft routing,
+  full both-scope review without implicit commit, dirty/preview/writer permission
+  rechecks, consumed reviews/action rows, direct non-daemon lifetime and close veto.
+- Exact result types/fields/IDs and outcome combinations; unknown/invalid results
+  and post-delegation exceptions set both sticky flags. Constructor/start failure
+  before delegation stays clean; failure after worker entry retains ownership until
+  completion. Changed, no-op, journal-only, refused, pending and exception outcomes
+  distinguish source from new restore IDs and never mark old baselines Saved.
+- One-shot/reentrant completion, finish/feedback exceptions, independent sticky
+  flags across later clean outcomes, and fresh refresh/review requirements.
+- Setup-widget exceptions after ownership and cleanup-widget exceptions cannot
+  retain authority or strand closure. Essential cleanup does not depend on any
+  individual container/control update succeeding.
+- `tests/test_startup_layout.py`, `tests/test_restore_window.py`: matching-owner
+  release and sticky locking before fallible cache/widget notification, no stranded
+  close veto, and no stale/mismatched finish releasing a new scope owner.
+- The full suite also exercised temporary-only scoped restore/publication/store/
+  recovery and legacy persistence/restoration/preservation regressions. Required
+  checks and both opt-in isolated Broadway suites passed as recorded above.
+  Writers were not invoked against real state.
+
+### Edge Cases
+
+Pending outcomes require fresh explicit transaction recovery for the **new restore
+transaction**, never terminal-source replay or automatic recovery. Both current
+scopes must be canonical. M3.6b is **not complete**: next is a SEPARATE foreign-current
+route observation/private-preservation-first protocol before M3.5 migration.
+Unknown raw bytes must not become canonical priors. No reload IPC does not prevent
+watcher auto-reload; separate renames are not pair-atomic. Lock/compiler limits are
+not a hard total filesystem deadline. M0, live GUI and loader/watch rollout gates
+remain pending.
+
+### Example usage
+
+The validated isolated widget sequence uses mocked mutators: browse and review a historical
+scope/side, verify the recovery button stays disabled, then explicitly click the
+historical commit. Inspect old/new IDs and pending/independent uncertainty flags.
+Refresh assessment and prepare a fresh recovery review for a reported new pending
+ID before explicitly committing recovery. Verify no automatic recovery occurs.
+
+### Related files
+
+- `hyprmod/pages/scope_recovery.py`, `hyprmod/main.py`, `hyprmod/window.py`.
+- `hyprmod/core/scoped_restore.py`, `hyprmod/core/scoped_recovery.py`,
+  `hyprmod/core/transaction_publication.py`.
+- [architecture.md](architecture.md#m36b4-explicit-gui-historical-restore),
+  [ROADMAP.md](../ROADMAP.md), [ADR 0001](decisions/0001-shared-local-ownership.md#6-scope-aware-backup-and-preservation-compatibility).

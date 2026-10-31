@@ -19,8 +19,8 @@ Hand-authored behavior remains outside the GUI.
 
 The first milestone has **one output file for both monitors and appearance**.
 A shared/machine-specific split is not active editor routing. Split publication
-remains separate from GUI Save; M3.6a integrates only startup assessment and
-explicit transaction recovery from the backend.
+remains separate from GUI Save; M3.6a integrates startup assessment and
+explicit transaction recovery. M3.6b4 adds separately reviewed historical restore.
 The selected future design is
 [ADR 0001](decisions/0001-shared-local-ownership.md). It chooses two explicitly
 registered scope outputs and journaled recovery, with manual loader handoff and
@@ -155,8 +155,9 @@ provisioning rather than blindly ignoring changed evidence.
 
 The layer never writes files, creates state, executes/compiles Lua, runs compositor
 queries, or activates split routing. The adapters below consume its evidence;
-the journaled writer is implemented below. Only transaction recovery has GUI
-integration; v1 remains the sole editor Save format, subject to layout exclusion.
+the journaled writer is implemented below. Transaction recovery and separately
+reviewed historical restore have GUI integration; v1 remains the sole editor Save
+format, subject to layout exclusion.
 
 ## M3.3b scoped adapters
 
@@ -298,7 +299,7 @@ M3.6b scope-local backup restore/preservation precedes M3.5 and M0-gated rollout
 
 | Interface | Contract |
 | --- | --- |
-| `publish_reviewed(plan, *, state_root, config_root, transaction_id=None, cancel_event=None)` | Requires explicit context matching a fresh complete `GroupReviewPlan`; prepares evidence or selects the exact matching PREPARED transaction, then publishes changed scopes. |
+| `publish_reviewed(plan, *, state_root, config_root, transaction_id=None, cancel_event=None, expected_source=None)` | Requires explicit context matching a fresh complete `GroupReviewPlan`; prepares new evidence or explicitly selects the exact matching PREPARED transaction, then publishes changed scopes. Optional read-only source check runs under the writer lock. Generated ID collisions refuse, never select existing evidence. |
 | `review_recovery(state_root, txid, action, *, config_root)` | Read-only preparation of a frozen `RecoveryReview` with the full CURRENT -> GOAL group plan and private fingerprint; actions are `resume`, `rollback`, `finalize`, `abandon`. Invalid/conflicting/terminal states raise errors. |
 | `commit_recovery(review, *, cancel_event=None)` | Rederives the exact recovery review and private fingerprint under lock before the selected operation. Every attempt requires a fresh review. |
 | `PublicationResult` | Frozen `transaction_id`, `outcome`, `pending`, independent `scope_may_have_changed` and `journal_may_have_changed`, plus optional `error`. Outcomes are `no-op`, `committed`, `aborted`, or `failed`. |
@@ -388,7 +389,7 @@ This is an API sequence, not installation, live activation, or a new CLI command
 - `core/transaction_records.py`, `core/transaction_store.py`: immutable evidence,
   reverse-operation records, safe locked sessions, and atomic private checkpoints.
 - `core/transaction_inspection.py`, `core/route_approval.py`: actual-byte
-  classification and full route/context revalidation.
+   classification and full route/context revalidation.
 - `core/scoped_review.py`, `core/scopes.py`, `core/persistence.py`: complete plans,
   fixed scope order, stable reads, and compile-only checks.
 - `tests/test_transaction_publication.py`, `tests/test_transaction_store.py`:
@@ -489,9 +490,12 @@ to force legacy entry or treat Retry Startup Check as migration or activation.
 ### Overview
 
 This first bounded M3.6b slice is implemented and validated.
-`core/scoped_restore.py` prepares canonical scope-local restore observations only.
-M3.6b remains In progress: there is no restore source browser/discovery, frontend,
-commit API, or commit CLI. Ordinary ownership and active editor routing are unchanged.
+Its preparation APIs in `core/scoped_restore.py` are read-only.
+B2 adds historical browsing/read-only review below, implemented and validated.
+M3.6b remains In progress. B3 adds the separate backend commit API below;
+b4 adds its distinct GUI action, implemented and validated.
+There is no commit CLI.
+Ordinary ownership and active editor routing are unchanged.
 
 ### API / Interfaces
 
@@ -501,6 +505,10 @@ commit API, or commit CLI. Ordinary ownership and active editor routing are unch
 | `run_prepare(..., cancel_event=None, timeout=30)` | Isolated `-I -B` read-only child with process-group cleanup, cancellation, finite positive deadline, eight-MiB stdout cap, strict decoding, and exact context/selection echo checking. |
 | `ScopedRestoreDraft` | Frozen/slotted context and selection, source private digest, terminal phase, historical snapshot/ID, recomputed selected `BackupDescriptor`, and complete both-scope `GroupReviewPlan`. |
 | `transaction_store.refuse_pending_readonly(state_root)` | Requires an existing safe initialized store; verifies every bounded journal, refuses corrupt or unresolved evidence, and returns sorted IDs without acquiring/creating a lock or provisioning state. |
+
+The internal worker requires an explicit `prepare` or `list` subcommand.
+`prepare` requires both roots plus `--txid`, `--scope`, and `--side`; `list`
+requires both roots only. Neither mode can commit.
 
 Draft JSON uses exact schema-1 `scoped-restore-draft` fields and pure nested
 semantic validation. Unknown/duplicate fields, invalid types/constants, inconsistent
@@ -537,8 +545,8 @@ bounds remain; oversize reviews refuse rather than truncate.
   update atime; direct I/O has no hard wall-time bound.
 - Fingerprints and terminal phases are non-atomic local observations, not
   authentication, publication-history proof, or write permits. Pure draft decoding
-  does not establish filesystem freshness. Future restore writers must freshly
-  verify source evidence under their own lock; no such writer is added here.
+  does not establish filesystem freshness. B3's separate writer below freshly
+  verifies source evidence under its own lock; b1 adds no writer.
 - Foreign current text is not admitted or preserved. Canonical-only snapshots,
   reviews, and compiler paths cannot accept raw foreign rollback blobs. A distinct
   observation/preservation protocol is required, as recorded in ADR 0001.
@@ -553,9 +561,9 @@ draft = scoped_restore.run_prepare(config_root, state_root, txid, Scope.APPEARAN
 plan = draft.plan  # Complete CURRENT -> GOAL observation for both scopes; no commit.
 ```
 
-This API sequence performs no installation or activation. Next work is scoped
-source browsing/review and writer source freshness under lock, then the separate
-foreign observation/preservation protocol, before M3.5 migration.
+This API sequence performs no installation or activation. B3 adds a backend writer
+below, and b4 adds a separate GUI commit. The foreign-current observation/private
+preservation protocol remains required before M3.5 migration.
 
 ### Related files
 
@@ -568,6 +576,291 @@ foreign observation/preservation protocol, before M3.5 migration.
   canonical plans, descriptors, historical route bindings, and fresh installation checks.
 - [ADR 0001](decisions/0001-shared-local-ownership.md#6-scope-aware-backup-and-preservation-compatibility),
   [validation.md](validation.md#m36b1-read-only-scoped-restore-preparation).
+
+## M3.6b2 historical source browsing and read-only review
+
+### Overview
+
+Implemented and validated at the b2 checkpoint. Scope Recovery has separate
+**Transaction recovery actions** and **Historical source review** sections. B2
+added no historical writer; b4 below adds a distinct commit action without
+repurposing transaction recovery. No split editing, activation, or migration is added.
+
+### API / Interfaces
+
+| Interface | Contract |
+| --- | --- |
+| `scoped_restore.list_sources(config_root, state_root)` | Direct read-only observation of existing initialized storage and current canonical routes. Invoke off GTK. |
+| `scoped_restore.run_list(..., cancel_event=None, timeout=30)` | Isolated `-I -B` `list` worker, finite positive deadline, cancellation/process-group cleanup, strict 1 MiB transport, and exact context echo. |
+| `ScopedRestoreListing` | Frozen/slotted roots, global `observed`/`blocked` status, separate `scan_complete`/`truncated` flags, sorted unique transaction rows, and bounded notes. |
+| `RestoreTransactionRow` / `RestoreSourceRow` | Verified/invalid evidence, phase, reviewable/blocked eligibility and notes; verified rows contain exactly four descriptors in fixed scope/prior/proposed order. Invalid rows have no phase or sources. |
+| `ScopeRecoveryPage.browse_sources()` / `prepare_source(txid, scope, side)` | Explicit listing, then selection from a globally safe complete listing and reviewable row. Preparation rechecks permission and delegates to `run_prepare`, not a writer. |
+
+Listing DTOs enforce exact schema-1 fields, nested descriptor/type/order invariants,
+deep immutability, bounded notes, and the canonical ASCII-escaped 1 MiB limit.
+Preparation retains the b1 strict 8 MiB draft and complete per-scope review bounds.
+
+### Data Flow
+
+1. **Browse Historical Sources** explicitly requests listing. Startup assessment
+   does not list historical choices or initialize storage. Before and after listing,
+   `refuse_pending_readonly` verifies all journals within the 1,000-entry safety
+   limit, including evidence outside the display cap. IDs must remain unchanged.
+2. Inspect the current installation and describe the first 32 lexically sorted
+   transaction IDs, with appearance/displays prior/proposed sources for each verified
+   row (at most 128 sources). Recheck displayed private fingerprints and current
+   installation evidence before returning.
+3. Selecting an eligible source runs fresh b1 preparation. GTK renders the selected
+   descriptor, phase, snapshot/original-review/private identities, changed scopes,
+   and both complete CURRENT -> GOAL reviews: paths, hashes/content IDs, exact
+   precomputed diffs and counts, including the unchanged **current** sibling.
+4. Assessment, listing, recovery preparation, and historical preparation share one
+   asynchronous read-only slot. Cancellation clears choices/reviews, rejects late
+   callbacks, and retains the slot until completion. Historical review clears the
+   recovery draft and disables **Commit Reviewed Scope Recovery**. It cannot call
+   `commit_action` or acquire writer ownership by preparation alone; a fresh recovery-action review is
+    required to return to the existing commit path.
+5. Before rendering, completions must match their requested exact DTO type, roots,
+   and selection. Unknown/mismatched results and render failures revoke choices and
+   drafts. Positive scoped evidence from an observed listing, nonempty history rows,
+   or a restore draft notifies the owner to lock any running legacy editor and
+   retain pending edits. Blocked empty listings do not spuriously imply installation.
+
+### Edge Cases
+
+- Display truncation alone can coexist with `observed` and `scan_complete=True`;
+  it is not an incomplete safety scan. Pending/corrupt evidence anywhere, including
+  undisplayed history, globally blocks source review. Unsafe/uninitialized storage,
+  oversized/incomplete scans, unsafe current routes, or detected changes fail closed.
+- Historical registry/roots/both-route mismatch blocks only that row when global
+  inspection is safe. Old terminal transactions may classify as actual conflict
+  in transaction recovery after later publications and still be eligible historical
+  sources. Historical eligibility is not taken from recovery `actual_status`.
+- COMMITTED/ABORTED and hashes are local observations, not authentication, proof
+  that either side was installed, Lua/compiler validity, runtime loading, or write
+  authority. No-op reviews still recheck all evidence; oversized reviews refuse
+  rather than truncate. Pure decoding does not establish filesystem freshness.
+- Listing/preparation creates no lock, evidence, state, or output; performs no
+  compilation, Lua execution, IPC, or provisioning. Reads may update atime. No
+   historical GUI review committed at the b2 checkpoint. B3 adds a separate backend
+   writer below; b4 explicitly integrates it. Separate foreign observation/private
+   preservation remains required before migration. Canonical snapshots cannot hold raw originals.
+
+### Example usage
+
+In Scope Recovery, choose **Browse Historical Sources**, inspect global scan status
+and row eligibility, then **Review appearance prior** (or another scope/side).
+Inspect both complete scope reviews. Cancel writes nothing; the transaction recovery
+commit remains disabled. Programmatic temporary-fixture callers use `run_list`
+before the `run_prepare` sequence above; neither operation provisions an installation.
+
+### Related files
+
+- `hyprmod/core/scoped_restore.py`, `hyprmod/pages/scope_recovery.py`: listing DTOs,
+  supervised workers, explicit browsing, and shared read-slot review rendering.
+- `hyprmod/core/transaction_store.py`, `hyprmod/core/scoped_review.py`,
+  `hyprmod/core/scoped_backups.py`, `hyprmod/core/transaction_records.py`,
+  `hyprmod/core/route_approval.py`: complete scans, canonical plans/descriptors,
+  private evidence, and route binding/freshness.
+- `tests/test_scoped_restore.py`, `tests/test_scope_recovery_gui.py`:
+  validated service/worker and isolated widget coverage. See
+  [validation.md](validation.md#m36b2-historical-source-browsing-and-read-only-review).
+
+## M3.6b3 canonical backend restore commit
+
+### Overview
+
+Implemented and validated. Explicit `scoped_restore.commit_restore`
+can write the selected historical canonical scope through a **new ordinary
+transaction**, not replay or modify the terminal source. At the b3 checkpoint,
+the b2 historical GUI remained read-only; its transaction recovery commit and backend
+`commit_recovery` behavior are unchanged. No commit CLI/child, editor Save routing,
+provisioning, activation, foreign preservation, or migration is added.
+
+### API / Interfaces
+
+| Interface | Contract |
+| --- | --- |
+| `scoped_restore.commit_restore(draft, *, cancel_event=None)` | Exact `ScopedRestoreDraft`; invoke directly off GTK on a non-daemon worker, never in a timeout-killable child. Returns delegated `PublicationResult` unchanged. |
+| `transaction_publication.publish_reviewed(..., expected_source=None)` | Optional read-only callback rechecks historical source evidence under the shared writer lock. Restore omits `transaction_id`, requiring new allocation rather than explicit PREPARED reuse. |
+
+The original DTO and all nested field types/tuple containers are validated before
+semantic validation and strict JSON copying, so normalization cannot hide mutable
+original fields. The private copy, not the caller's original, supplies the consumed
+plan and source check. Pre-delegation refusal returns clean failed flags; delegated
+results and exceptions are not reinterpreted. Callers must honor independent sticky
+scope/journal uncertainty and invalidate editors, never mark old baselines Saved.
+Only read-only `list`/`prepare` use supervised children with 1 MiB/8 MiB transport
+limits and default 30-second deadlines. The mutator has no such wrapper/deadline.
+
+### Data Flow
+
+1. Reject daemon execution, pre-cancellation, malformed/mutable originals, and
+   inconsistent draft semantics; then make the validated private copy.
+2. Under the existing store lock, freshly rederive the exact CURRENT -> GOAL
+   review and refuse unresolved/corrupt evidence. Reload the complete source and
+   compare its private identity/byte fingerprint, terminal phase, snapshot ID and
+   exact snapshot, registry/roots and both route bindings. Recompute the selected
+   descriptor, exact goal text, and selected blob membership; loading/fingerprinting
+   also validates every unselected referenced blob.
+3. Before creating evidence, run that source check. For changed output allocate a
+   new ID, refuse collisions (including dangling entries), and exclusively create
+   its ordinary transaction directory. Never fall into explicit PREPARED reuse,
+   including a collision arriving after the allocation probe.
+4. The existing publisher compile-checks current/desired canonical texts, syncs
+   evidence, stages only changed output, and checkpoints publication. Its checks
+   repeat the source check through compilation, evidence synchronization, staging,
+   and checkpoints. An additional source check follows the final stage-byte read,
+   immediately before rename. Current route/intermediate-group checks protect the
+   registry, sibling, links, protected paths, and new transaction evidence.
+5. Verify and synchronize the final group, checkpoint COMMITTED, and recheck routes
+   and source before reporting success. A no-op still checks source/current/pending
+   evidence under lock, compile-checks both current scopes, and rechecks before
+   success; it creates no snapshot, blob, journal, or stage.
+
+### Edge Cases
+
+- Same-byte identity replacement of source intent/snapshot/selected or unselected
+  blobs, registry, or current outputs invalidates the captured evidence. Hashes and
+  terminal phase are not authentication or proof either side was installed.
+- Only selected-scope bytes change. Sibling bytes/inode/mtime/mode and lexical Stow
+  links survive; source transaction evidence is not rewritten. Reads/fsync may
+  affect atime. No-ops and clean failures can still create the store lock file.
+- Failures after new evidence creation may report a new pending transaction and
+  independent scope/journal uncertainty, including after rename or terminal
+  recording. Inspect actual state and freshly review an allowed existing recovery
+  action for the **new** transaction. Never replay the terminal source, automatically
+  roll back, or delete evidence. Restore does not change interruption recovery.
+- Five-second lock and ten-second compile limits are not a hard total filesystem
+  deadline. No reload/live-apply IPC is sent; watchers may auto-reload changed files.
+  Separate renames are not pair-atomic or a hostile-race guarantee.
+- Both current scopes must remain canonical. Foreign originals require a separate
+  observation/preservation protocol, not raw canonical rollback blobs. M3.6b is not
+   complete. B4 below adds the distinct GUI action, implemented and validated;
+   the separate foreign protocol is next before M3.5 migration.
+
+### Example usage
+
+For an already initialized, exclusively temporary fixture, prepare off GTK with
+`draft = scoped_restore.run_prepare(config, state, source_id, Scope.APPEARANCE, "prior")`.
+Inspect both complete `draft.plan` scope reviews. Only on explicit authorization,
+invoke `result = scoped_restore.commit_restore(draft)` directly on the non-daemon
+mutating worker and inspect all result fields. If interruption leaves a new pending
+ID, prepare a fresh `review_recovery` for that ID before `commit_recovery`.
+This is an API sequence, not a GUI action, CLI command, or permission to touch live state.
+
+### Related files
+
+- `hyprmod/core/scoped_restore.py`, `hyprmod/core/transaction_publication.py`:
+  original-draft validation, private copy, under-lock source hook, ordinary writer.
+- `hyprmod/core/transaction_store.py`, `hyprmod/core/transaction_records.py`,
+  `hyprmod/core/scoped_review.py`: evidence identities, exclusive allocation,
+  canonical snapshots and exact review semantics.
+- `hyprmod/pages/scope_recovery.py`: b4 integrates the separate historical GUI commit below.
+- `tests/test_scoped_restore_commit.py`: temporary-only commit/fault/collision and
+  real `os._exit` interruption tests. Results are pending in
+  [validation.md](validation.md#m36b3-canonical-backend-restore-commit).
+
+## M3.6b4 explicit GUI historical restore
+
+### Overview
+
+Implemented and validated. **Commit Reviewed Historical Restore**
+is distinct from **Commit Reviewed Scope Recovery**. Historical browsing and
+preparation stay read-only; only the explicit commit calls the b3 backend. M3.6b
+remains incomplete, with separate foreign-current route observation/private
+preservation-first work next before M3.5. Live GUI behavior is not verified.
+
+### API / Interfaces
+
+| Interface | Contract |
+| --- | --- |
+| `ScopeRecoveryPage.commit_reviewed_restore()` | Consumes only `_restore_draft: ScopedRestoreDraft`, after complete both-scope CURRENT -> GOAL rendering, and calls `scoped_restore.commit_restore`. |
+| `ScopeRecoveryPage.commit_reviewed()` | Consumes only `_draft: ScopedRecoveryDraft` and calls `scoped_recovery.commit_action`; neither handler can use the other's review. |
+| `_commit_write(callback, transaction_id, action, changed)` | Shared one-use writer lifetime, owner callbacks, direct non-daemon worker, and `PublicationResult` boundary validation. |
+| `restore_permission`, `begin_restore`, `finish_restore(invalidate)` | Owner callbacks enforce dirty/monitor-preview and writer exclusion, release ownership, and invalidate caches/editor without marking old baselines Saved. |
+
+Read completions still require the exact requested DTO, roots, and selection before
+rendering. The scoped-restore worker CLI has only read-only `list`/`prepare` modes, with
+1 MiB/8 MiB transport limits; no mutator CLI or killable commit child is added.
+
+### Data Flow
+
+1. Explicitly browse, select a reviewable historical scope/side, and inspect its
+   descriptor/source identities and complete both-scope CURRENT -> GOAL plan. The
+   current sibling is retained. Historical review clears the recovery draft and
+   disables recovery commit; recovery review clears the historical draft/button.
+2. Only the matching commit button captures its draft and enters the shared writer.
+   Every attempt consumes both reviews, historical choices, assessment, and action
+   rows before rechecking permission and acquiring owner exclusion. Dirty edits,
+   pending monitor preview, or another writer refuse without implicit commit.
+3. Call the mutator directly on a non-daemon thread. Disable reads, Cancel, and both
+   commits; veto closure until completion. The b3 backend rechecks source/current
+   evidence under lock and changes only the selected scope via a new transaction,
+   or compile-checks/rechecks a no-op without journals/stages. Five-second lock and
+   ten-second compiler limits do not bound total filesystem time.
+4. Retire the write token before owner callbacks, rejecting duplicate/reentrant
+   completion. Validate the result, accumulate independent sticky scope/journal
+   flags, and notify the owner. Either flag invalidates the old editor; a later
+   clean no-op cannot clear it. Old baselines are never marked Saved.
+5. Show the historical source ID separately from the **new restore transaction**
+   (or none allocated/unknown), outcome, pending state, and both sticky flags. A
+   pending new ID requires fresh assessment and explicit recovery review/commit for
+   that new transaction, never replay of the terminal source. There is no automatic
+   recovery. Refresh/re-browse and prepare a fresh review before another action.
+
+### Edge Cases
+
+- Accept only exact `PublicationResult`, exact boolean pending/uncertainty flags,
+  known string outcome, optional string error, and optional 32-lowercase-hex ID.
+  Historical committed results require changed output, a new non-source ID and no
+  pending state. Historical no-op requires unchanged output, no ID, no pending and
+  clean flags. Historical failure permits a new pending ID, or no ID with clean
+  flags and no pending state. Recovery results bind the reviewed ID; success is
+  `aborted` for rollback/abandon or `committed` otherwise, with no pending state.
+- Missing/invalid results or exceptions after delegation are unknown/untrusted:
+  conservatively set both flags and do not trust a returned transaction identity.
+  Thread construction/start failure before delegation adds no uncertainty; a start
+  implementation raising after entry retains ownership until worker completion.
+- `RecoveryWindow` releases only the matching owner before cache invalidation.
+  `HyprModWindow` rejects mismatched scope finishes and legacy finishes while scope
+  owns the writer. Begin-notification failure rolls back its gate; finish records
+  sticky editor invalidation and releases the gate before fallible cache/widget
+  notification. Completion cleanup releases the page writer slot even if feedback
+  fails. These orderings prevent stranded close vetoes and duplicate completion
+   releasing a newer writer.
+- Completion is defined before fallible writer-widget setup. A setup exception
+  after ownership routes through clean pre-delegation completion, not a stranded
+  writer/close veto. Cleanup clears drafts/assessment/listing independently of
+  individually guarded container/control operations and releases the page writer
+  slot even if a widget raises. Independent review caught this P2 leak; the fix,
+  setup/cleanup regressions, and reentrant-owner checks passed validation with no
+  remaining blocking findings.
+- Preparation is not write authority or installed/runtime/compiler proof. Both
+  current scopes must be canonical; no unknown raw bytes enter canonical priors.
+  The separate foreign observation/private-preservation-first protocol is still
+  required. No reload IPC is sent, but watchers may auto-reload. Separate renames
+  are not pair-atomic.
+
+### Example usage
+
+In Scope Recovery, choose **Browse Historical Sources**, then an eligible **Review
+appearance prior** (or another scope/side). Inspect both complete scope reviews.
+Only **Commit Reviewed Historical Restore** writes. If the outcome reports a new
+pending restore transaction, choose **Refresh Scope Assessment**, review an allowed
+recovery action for that **new** ID, inspect both scopes again, and explicitly choose
+**Commit Reviewed Scope Recovery**. Do not delete evidence or replay the old source.
+This describes the code path, not a live-verified workflow or permission to mutate user state.
+
+### Related files
+
+- `hyprmod/pages/scope_recovery.py`: separate drafts/buttons, shared writer/result validator.
+- `hyprmod/main.py`, `hyprmod/window.py`: matching-owner release, close veto and sticky locking.
+- `hyprmod/core/scoped_restore.py`, `hyprmod/core/scoped_recovery.py`,
+  `hyprmod/core/transaction_publication.py`: immutable drafts and direct mutator contracts.
+- `tests/test_scope_recovery_gui.py`, `tests/test_startup_layout.py`,
+  `tests/test_restore_window.py`: widget lifetime, result/notification boundaries and ownership.
+  See [validation.md](validation.md#m36b4-explicit-gui-historical-restore) for validated results.
 
 ## Data Flow
 

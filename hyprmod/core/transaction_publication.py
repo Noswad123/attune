@@ -12,6 +12,7 @@ import os
 import secrets
 import stat
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -139,6 +140,7 @@ def _execute(
     action: str,
     flags: list[bool],
     fingerprint: tuple,
+    expected_source: Callable[[], None] | None = None,
 ) -> PublicationResult:
     state = session.binding.state_root
     txid = bundle.intent.transaction_id
@@ -151,6 +153,8 @@ def _execute(
         route_approval.revalidate(expected)
         if store.verified_fingerprint(store.load_transaction(state, txid)) != fingerprint:
             raise ValueError("Private evidence changed since reviewed operation")
+        if expected_source is not None:
+            expected_source()
 
     def checkpoint(record) -> None:
         nonlocal bundle, fingerprint
@@ -167,6 +171,8 @@ def _execute(
             for text in (review.previous_text, review.proposed_text):
                 session.check()
                 persistence.validate_lua(text)
+                if expected_source is not None:
+                    check()
     check()
     flags[1] = True
     session.sync_evidence(bundle)
@@ -220,6 +226,8 @@ def _execute(
                 raise ValueError("Output stage changed during final preflight")
             route = next(r for r in expected.routes if r.scope is review.scope)
             target = Path(route.file.path.resolved_path)
+            if expected_source is not None:
+                expected_source()
             flags[0] = True
             os.replace(path, target)
             _sync_directory(target.parent)
@@ -293,6 +301,8 @@ def _execute(
             )
         )
         route_approval.revalidate(expected)
+        if expected_source is not None:
+            expected_source()
         return PublicationResult(txid, terminal.value, False, flags[0], flags[1])
     finally:
         for path, identity in stages.values():
@@ -310,8 +320,9 @@ def publish_reviewed(
     config_root: Path,
     transaction_id: str | None = None,
     cancel_event: threading.Event | None = None,
+    expected_source: Callable[[], None] | None = None,
 ) -> PublicationResult:
-    """Publish an explicit reviewed plan, optionally selecting matching PREPARED evidence."""
+    """Publish reviewed goals; expected_source is a read-only check under the writer lock."""
     flags = [False, False]
     txid = transaction_id
     try:
@@ -328,16 +339,25 @@ def publish_reviewed(
         with store.exclusive_store_session(state_root, cancel_event=cancel_event) as session:
             scoped_review.revalidate_review(plan)
             session.refuse_other_pending(txid)
+            if expected_source is not None:
+                expected_source()
             if not plan.changed_scopes:
                 for review in plan.scopes:
                     session.check()
                     persistence.validate_lua(review.previous_text)
                 scoped_review.revalidate_review(plan)
+                session.refuse_other_pending()
+                if expected_source is not None:
+                    expected_source()
                 session.check()
                 return PublicationResult(None, "no-op", False, flags[0], flags[1])
-            txid = txid or secrets.token_hex(16)
-            directory = state_root / "attune/transactions" / txid
-            if directory.exists():
+            allocated = txid is None
+            candidate = txid or secrets.token_hex(16)
+            directory = state_root / "attune/transactions" / candidate
+            if allocated and os.path.lexists(directory):
+                raise ValueError("Generated transaction ID already exists")
+            txid = candidate
+            if not allocated and os.path.lexists(directory):
                 bundle = store.load_transaction(state_root, txid)
                 if (
                     bundle.intent.phase is not Phase.PREPARED
@@ -349,7 +369,13 @@ def publish_reviewed(
                 flags[1] = True
                 bundle = session.prepare(plan, txid)
             return _execute(
-                session, bundle, plan, "resume", flags, store.verified_fingerprint(bundle)
+                session,
+                bundle,
+                plan,
+                "resume",
+                flags,
+                store.verified_fingerprint(bundle),
+                expected_source,
             )
     except (OSError, ValueError, RuntimeError) as exc:
         return PublicationResult(txid, "failed", txid is not None, flags[0], flags[1], str(exc))

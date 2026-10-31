@@ -15,7 +15,15 @@ from gi.repository import Adw, Gio, GLib, Gtk
 from hyprland_socket import HyprlandError
 
 from hyprmod import main as main_module
-from hyprmod.core import backups, config, health, persistence, restoration, scoped_recovery
+from hyprmod.core import (
+    backups,
+    config,
+    health,
+    persistence,
+    restoration,
+    scoped_recovery,
+    scoped_restore,
+)
 from hyprmod.core import recovery as recovery_module
 from hyprmod.core.diagnostics import build_diagnostics_report
 from hyprmod.core.focused_ui import PAGE_IDS
@@ -49,6 +57,12 @@ def startup_assessment(monkeypatch, isolated_user_paths):
             scoped_recovery,
             name,
             MagicMock(side_effect=AssertionError("Mock scoped recovery API explicitly")),
+        )
+    for name in ("run_list", "run_prepare", "commit_restore"):
+        monkeypatch.setattr(
+            scoped_restore,
+            name,
+            MagicMock(side_effect=AssertionError("Mock scoped restore API explicitly")),
         )
     return collector
 

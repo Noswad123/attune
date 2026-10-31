@@ -44,6 +44,12 @@ Implemented in the development checkout:
 - M3.6a transaction recovery frontend and legacy exclusion, completed in code:
   bounded asynchronous startup assessment, explicit both-scope recovery reviews,
   protected direct commits, and cache/editor invalidation on uncertainty.
+- M3.6b2 explicit historical source browsing and complete read-only both-scope
+  review, implemented and validated at the b2 checkpoint.
+- M3.6b3 canonical backend restore commit, implemented and validated:
+  explicit direct mutator with under-lock source checks and a new ordinary transaction.
+- M3.6b4 separate GUI historical restore and shared protected writer lifetime,
+  implemented and validated. Live GUI behavior is not verified.
 
 Live display/HDR and animation behavior still requires manual acceptance. Automated
 and isolated GTK checks are not evidence that the workstation integration is done.
@@ -56,7 +62,7 @@ Persistent loading, Stow provisioning, and desktop registration remain opt-in.
 | M0: Validate the foundation | Pending manual acceptance | Existing baseline | Confidence in live previews and recovery |
 | M1: Workstation diagnostics | Implemented: M1.1-M1.7 delivered | Existing baseline; may proceed alongside M0 | Read-only visibility into effective state and integration |
 | M2: Recovery interface | Disk workflows delivered; M2.5 waits for M0 | M1 | Inspect and restore known Attune output through review |
-| M3: Shared/local ownership split | In progress: M3.6b1 read-only restore preparation implemented and validated | Routing rollout requires M0 and recovery/migration prerequisites | Portable appearance with machine-local display settings |
+| M3: Shared/local ownership split | In progress: b1-b4 canonical restore preparation/backend/GUI validated | Routing rollout requires M0 and recovery/migration prerequisites | Portable appearance with machine-local display settings |
 | M4: Constrained presets | Planned | M0 and M3 | Safe, deliberate visual and display modes |
 | M5: Wisp integration | Planned | M1; preset entry points require M4 | Fast access without a second settings implementation |
 | M6: CARAMEL appearance overview | Later | Existing helper contracts; M3 for saving appearance | Activity-aware presentation using existing tools |
@@ -209,8 +215,28 @@ Goal: keep appearance portable without exporting a machine's display topology.
       Requires the initialized safe store, canonical current pair, and exact
       registry/roots plus historical both-route bindings; retains the current sibling.
       No source discovery/listing, frontend, commit, compilation, or provisioning.
-    - Next: scoped source browsing/review and writer source freshness under lock;
-      then a separate foreign observation/preservation protocol, before M3.5.
+    - [x] M3.6b2 Historical source browsing/read-only review, implemented and
+      validated. Explicit Scope Recovery listing shows up to 32 transactions with
+      four sources each, independently of the full 1,000-entry journal safety scan.
+      Truncation alone does not block review; pending/corrupt evidence globally
+      blocks, while historical route incompatibility is row-local if globally safe.
+      Complete both-scope CURRENT -> GOAL reviews preserve the current sibling and
+      cannot enable transaction recovery commit. No startup listing or provisioning.
+    - [x] M3.6b3 Canonical backend restore commit, implemented and validated.
+      Explicit `commit_restore` validates the original immutable draft before copying,
+      rechecks complete source evidence under lock through publication, and writes
+      only the selected scope via a new ordinary transaction. B3 added no GUI/CLI commit.
+      Preserve backend uncertainty flags, sibling/Stow/source evidence, and existing
+      explicit interruption recovery. Results are recorded in `docs/validation.md`.
+    - [x] M3.6b4 Implemented and validated: distinct **Commit Reviewed Historical
+      Restore**, its own draft, shared protected writer/result validation, and
+      writer-lifetime tests. Transaction recovery retains its own draft/action.
+      Fresh refresh/review is required after every commit attempt; pending outcomes
+      direct explicit recovery to the new restore transaction. Matching-owner release/
+      sticky locking precede fallible notifications. Setup/cleanup widget exceptions
+      cannot retain writer authority. Results are recorded in `docs/validation.md`.
+    - Next: a SEPARATE foreign-current route observation/private-preservation-first
+      protocol, before M3.5.
       Canonical-only snapshots/reviews/compilers cannot admit foreign originals as
       raw rollback blobs. Ordinary ownership guards remain unchanged.
 
@@ -250,9 +276,12 @@ scopes and does not claim pair atomicity or runtime loading. Full-suite, focused
 and isolated GTK validation are recorded in `docs/validation.md`.
 M3.6a now integrates startup assessment and explicit transaction recovery, not
 split editing or publication through Save. M3.6b is In progress, with b1 read-only
-preparation implemented and validated, not restore/preservation
-completion. The remaining scoped writer and separate foreign protocol precede
-M3.5 opt-in migration. V1 remains the only editor Save format and is excluded
+preparation and b2 source browsing/read-only review implemented and validated.
+B3's backend writer is implemented and validated, not M3.6b completion.
+B4's distinct GUI action/lifetime handling is implemented and validated, not M3.6b
+completion. The separate foreign-current route observation/
+private-preservation-first protocol is next, before M3.5 opt-in migration.
+V1 remains the only editor Save format and is excluded
 whenever scoped evidence is present. Rollout
 still requires M0 acceptance; do not run automatic loader edits, activation,
 recovery, or live reloads to satisfy a model checkbox.

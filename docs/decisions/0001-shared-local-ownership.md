@@ -302,10 +302,58 @@ observation/review and verified private preservation protocol must bind original
 status, bytes, scope, and route before any explicit replacement; raw evidence stays
 distinct from canonical backups. That protocol is not implemented by b1.
 
-Next comes scoped source browsing/review and writer source freshness under lock,
-then the separate foreign observation/preservation protocol, before M3.5 migration.
-Preparation-time observations and pure draft decoding cannot replace writer-side
-source and destination rechecks under lock.
+B2 adds explicit historical source browsing and full both-scope read-only reviews
+in ScopeRecoveryPage, implemented and validated. Listing is a user
+request, not startup provisioning. The full 1,000-entry journal safety scan is
+independent of the 32-transaction/four-source display cap. Display truncation is not
+incomplete scanning; pending/corrupt evidence globally blocks. Historical route
+incompatibility is row-local when global inspection is safe. An old terminal
+transaction's actual-conflict recovery classification is not source eligibility.
+Phase/hashes prove neither installed bytes, runtime/compiler validity, nor
+authentication. Historical review never populates a recovery draft or enables the
+existing transaction recovery commit. Listing/preparation share the page's single
+async read-only slot, with bounded 1 MiB/8 MiB worker transport respectively.
+
+B3's canonical backend `commit_restore` is implemented and validated.
+It validates the original exact immutable draft before JSON copying, then delegates
+to ordinary publication with an under-lock `expected_source` check and a **new
+ordinary transaction**. Complete private fingerprints, snapshot/phase/all blobs,
+exact review and source/route binding are checked before evidence creation and
+through compilation, synchronization, staging/checkpoints, immediately after the
+final stage read before rename, and before no-op/final success. Generated ID
+collisions refuse, never reuse PREPARED history. The sibling, Stow links, and
+historical source evidence remain protected. No-ops still compile/recheck without
+journals/stages; the store lock file may be created.
+
+This explicit backend mutator is direct/non-daemon, never a timeout-killable child
+or CLI. Delegated result flags are unchanged; callers must invalidate old editors
+on scope/journal uncertainty. Failure may leave a new pending transaction requiring
+fresh explicit existing recovery, never terminal-source replay. Existing interruption
+recovery is unchanged. Lock/compiler limits are not a total filesystem deadline;
+no reload IPC does not prevent watcher auto-reload. B2's historical GUI was read-only
+at that checkpoint. B4's distinct GUI historical restore action/shared writer lifetime
+is now implemented and validated. Next is the SEPARATE
+foreign-current route observation/private-preservation-first protocol before M3.5 migration.
+M3.6b is not complete. Preparation/decoding alone never replace writer rechecks.
+
+B4 requires a complete both-scope CURRENT -> GOAL review and a separate **Commit
+Reviewed Historical Restore** consuming only its own `ScopedRestoreDraft`. Existing
+transaction recovery retains its own draft/action; listing/preparation never commits
+implicitly. Shared direct non-daemon writing rechecks dirty/monitor-preview permission
+and exclusion, vetoes closure, consumes reviews/action rows, and validates exact typed
+results, transaction IDs, outcomes and boolean flags. Invalid post-delegation results
+or exceptions conservatively set both independent sticky uncertainty flags; worker
+start failure before delegation adds none. Outcomes distinguish source from new
+restore ID. Pending new transactions need fresh assessment and explicit recovery
+review/commit for that new ID, never automatic recovery or terminal-source replay.
+Matching-owner release and sticky editor locking precede fallible cache/widget
+notifications; completion is one-shot so stale callbacks cannot release a newer
+owner. Completion is defined before fallible setup; setup exceptions route through
+pre-delegation cleanup, with essential authority cleanup independent of individually
+guarded widget operations. Independent review's P2 setup-widget leak was fixed and
+rechecked with no remaining blocking findings. A fresh refresh/review is required
+after attempts. Validated results are recorded in `../validation.md`; live GUI
+behavior is not verified. Unknown raw bytes remain outside canonical priors.
 
 Successful restore/recovery and any uncertain write invalidate all cached editors
 until restart. Read-only utilities remain usable. No old editor baseline is marked
@@ -401,9 +449,11 @@ not an in-place concatenation of potentially divergent outputs.
   registry/transaction evidence or uninspectable metadata, including terminal history.
 - M3.6b (In progress): scope-local v2 backup restore and preservation-first
   recovery with complete scope/route review and unchanged-sibling isolation.
-  B1 read-only canonical preparation is implemented and validated,
-  not the full milestone. Source browsing/review and writer source freshness under
-  lock are next, followed by a separate foreign observation/preservation protocol.
+  B1 preparation, B2 historical source browsing/read-only both-scope review, and
+  B3 canonical backend commit are implemented and validated, not the full milestone.
+  B4's distinct GUI action/shared writer lifetime is implemented and validated.
+  Next is the separate foreign-current route observation/private-preservation-first
+  protocol, not raw unknown bytes in canonical priors.
   Complete before M3.5 migration or recommending split rollout.
 - M3.5: reviewed migration/handoff after prerequisites and manual M0 acceptance.
 
