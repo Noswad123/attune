@@ -374,6 +374,7 @@ def _read_file(path: Path, *, registry: bool, outside: bool) -> tuple[FileEviden
     limit = installation.MAX_REGISTRY_BYTES if registry else scoped_config.MAX_INPUT_BYTES
     if not 0 < identity[6] <= limit:
         raise ApprovalError(f"Expected nonempty file of at most {limit} bytes: {target}")
+    git_context = _git_context(proof, outside=outside)
     fd = os.open(target, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
     with os.fdopen(fd, "rb") as stream:
         opened = os.fstat(stream.fileno())
@@ -384,9 +385,7 @@ def _read_file(path: Path, *, registry: bool, outside: bool) -> tuple[FileEviden
             raise ApprovalError(f"File changed during read: {target}")
     if _fact(target) != before or _resolve(path) != proof:
         raise ApprovalError(f"Resolution or file changed during read: {path}")
-    return FileEvidence(
-        proof, hashlib.sha256(raw).hexdigest(), _git_context(proof, outside=outside)
-    ), raw
+    return FileEvidence(proof, hashlib.sha256(raw).hexdigest(), git_context), raw
 
 
 def _stat_identity(info: os.stat_result) -> tuple[int, ...]:
@@ -436,10 +435,31 @@ def _collisions(outputs: tuple[PathProof, ...], protected: tuple[PathProof, ...]
                 raise ApprovalError("Registry, scope, or protected inode alias")
 
 
-def inspect_installation(
+@dataclass(frozen=True, slots=True)
+class _FilesystemCollection:
+    config_root: str
+    state_root: str
+    registry: FileEvidence
+    routes: tuple[tuple[Scope, FileEvidence, bytes], ...]
+    protected: tuple[PathProof, ...]
+
+
+def _final_check(collection: _FilesystemCollection) -> None:
+    files = (collection.registry, *(file for _, file, _ in collection.routes))
+    _collisions(tuple(file.path for file in files), collection.protected)
+    for proof in (*(file.path for file in files), *collection.protected):
+        for fact in proof.facts:
+            if _fact(Path(fact.path)) != fact:
+                raise ApprovalError(f"Filesystem changed during inspection: {fact.path}")
+    for file in files:
+        for fact in file.git_context:
+            if _fact(Path(fact.path)) != fact:
+                raise ApprovalError(f"Git context changed during inspection: {fact.path}")
+
+
+def _collect_filesystem(
     registry_path: Path, *, config_root: Path, state_root: Path
-) -> InstallationEvidence:
-    """Observe an existing canonical pair; no activation, repair, or provisioning."""
+) -> _FilesystemCollection:
     try:
         config = _path(config_root)
         state = _path(state_root)
@@ -471,6 +491,30 @@ def inspect_installation(
                 raise ApprovalError(f"Actual {scope} resolution changed during inspection")
             if Path(file.path.resolved_path).name != SCOPE_BASENAMES[scope]:
                 raise ApprovalError(f"Wrong resolved basename for {scope}")
+            routes.append((scope, file, raw))
+        result = _FilesystemCollection(
+            str(config),
+            str(state),
+            registry,
+            tuple(routes),
+            protected,
+        )
+        _final_check(result)
+        return result
+    except (OSError, ValueError, RuntimeError) as exc:
+        raise ApprovalError(f"Installation inspection refused: {exc}") from exc
+
+
+def inspect_installation(
+    registry_path: Path, *, config_root: Path, state_root: Path
+) -> InstallationEvidence:
+    """Observe an existing canonical pair; no activation, repair, or provisioning."""
+    try:
+        collection = _collect_filesystem(
+            registry_path, config_root=config_root, state_root=state_root
+        )
+        routes = []
+        for scope, file, raw in collection.routes:
             parsed = scoped_config.read_document(raw.decode("utf-8"), expected_scope=scope)
             if not isinstance(parsed, scoped_config.ScopedConfig):
                 raise ApprovalError("Explicit conversion required for legacy full bundle")
@@ -486,23 +530,14 @@ def inspect_installation(
                 )
             )
         result = InstallationEvidence(
-            str(config),
-            str(state),
-            registry,
+            collection.config_root,
+            collection.state_root,
+            collection.registry,
             tuple(routes),
-            protected,
+            collection.protected,
             datetime.now(UTC).isoformat(),
         )
-        _collisions((registry.path, *(r.file.path for r in result.routes)), protected)
-        # Recheck every dependency after both reads and protected alias checks.
-        for proof in (registry.path, *(r.file.path for r in result.routes), *protected):
-            for fact in proof.facts:
-                if _fact(Path(fact.path)) != fact:
-                    raise ApprovalError(f"Filesystem changed during inspection: {fact.path}")
-        for file in (registry, *(r.file for r in result.routes)):
-            for fact in file.git_context:
-                if _fact(Path(fact.path)) != fact:
-                    raise ApprovalError(f"Git context changed during inspection: {fact.path}")
+        _final_check(collection)
         result.to_json()
         return result
     except (OSError, ValueError, RuntimeError) as exc:

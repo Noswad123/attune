@@ -71,7 +71,10 @@ Stop the Broadway daemon when finished. These tests cover page construction,
 review/save/reopen, and foreign-file recovery, not live monitor/HDR correctness.
 The suite isolates HOME and XDG paths; never remove those test safety fixtures.
 For M3.6a's separate opt-in recovery widgets, use the same Broadway environment
-with `tests/test_scope_recovery_gui.py`. Focused service/wiring coverage is in
+with `tests/test_scope_recovery_gui.py` and `tests/test_pair_editor_gui.py`.
+Mutators are mocked by default; explicit pair-Save end-to-end cases use the real
+publisher exclusively against temporary output/store fixtures with IPC disabled.
+All three suites' results are in `docs/validation.md`. Focused service/wiring coverage is in
 `tests/test_scoped_recovery.py`, `tests/test_layout_guard.py`, and
 `tests/test_startup_layout.py`; run these alongside legacy persistence, restoration,
 and recovery regressions. Coverage is not a claim that final validation passed.
@@ -128,28 +131,50 @@ Things to avoid:
 
 ## Scope
 
+- Product priority is the existing canonical-pair edit/review/Save/continue workflow,
+  implemented and validated, followed by practical manual
+  acceptance and canonical-only opt-in migration. Automatic scoped foreign
+  preservation is deferred and is not a prerequisite for either feature. Do not
+  expand recovery-foundation b6 work at the expense of these main features.
+- Normal pair Save is allowed **only** for an existing explicitly registered,
+  correctly scoped canonical v2 pair with a safe initialized store and a complete
+  terminal-only journal scan. Use the mature `publish_reviewed` writer, not a new
+  persistence path. Registry creation/rebinding, store initialization, absent/empty
+  target provisioning, and migration remain separate explicit workflows, unavailable
+  through normal startup/Save. Foreign/invalid data is never an overwrite exception.
+- `editor_layout.EditorEntry`, not recovery `LayoutAssessment` row actual-conflicts, selects
+  startup: `legacy-clear` retains v1; `pair-ready` opens the normal pair editor;
+  blocked/error results fail closed. Scan all bounded history, not just displayed
+  rows; old terminal goals may disagree with a healthy current pair.
+- Pair pages use local canonical models without v1 cache reads. Merge only dirty
+  values/sections, preserve untouched records/siblings, supervise complete both-scope
+  review off GTK, and invalidate review on edits. Publish directly on a non-daemon
+  worker with close veto and owner exclusion. Only a fresh safe post-read matching
+  exact reviewed goals/routes may become the new baseline before `mark_saved`,
+  enabling repeated Saves. Failures retain dirty edits; pending/uncertain outcomes
+  and failed post-save verification lock editing. Never mark an unverified baseline
+  saved. Recovery/historical restore still invalidate old editors rather than using
+  this normal-Save success path.
 - Follow the [current scope](README.md#current-scope). Keep hand-authored
   bindings, workspaces, rules, autostart, environment, and other behavior outside
   the focused GUI. Inherited modules/tests do not imply supported GUI features.
-- The active application emits one dedicated v1 `attune.lua` for monitors and
-  appearance through editor Save, only when legacy layout exclusion is clear.
-  Split publication remains an explicit core API, not an editor Save feature.
-  M3.6a integrates read-only startup assessment and explicit transaction recovery.
+- Legacy Save emits one v1 `attune.lua` only when legacy layout exclusion is clear.
+  Existing canonical-pair Save uses the journaled v2 writer described above.
 - Follow [ADR 0001](docs/decisions/0001-shared-local-ownership.md) for M3 development.
   Model/codec work must not activate the proposed split layout, registry, journal,
-  or migration as a side effect. Existing v1 persistence remains the default.
-- `scoped_config` and `installation` are inactive pure data APIs. Structural
+  or migration as a side effect. Existing v1 persistence remains unchanged.
+- `scoped_config` and `installation` are pure data APIs used by pair editing. Structural
   registry acceptance is not filesystem approval. Keep v1 fixtures frozen; do not
   regenerate their expected bytes to make compatibility tests pass.
 - `route_approval` separately inspects explicit filesystem context without mutation.
   Its transient evidence is not a write permit or activation token. Supervise
   filesystem work off GTK; writers must recheck under their own lock and
   account explicitly for any intended state-directory transitions.
-- Scoped review/backup/diagnostic adapters are inactive read-only foundations.
+- Scoped review/backup/diagnostic adapters remain read-only.
   Their hashes and canonical checks do not authorize commits or establish Lua
-  semantics/runtime loading. The journaled backend exists, but Save integration
-  still requires pending M3.6b scope-local v2 backup restore/preservation and M3.5
-  migration prerequisites. M3.6a does not complete either of those slices.
+  semantics/runtime loading. Existing-pair Save consumes scoped review and the
+  journaled backend without requiring migration or foreign preservation. Scoped
+  diagnostics do not imply the legacy Health/Backups pages diagnose the pair.
 - M3.6b `scoped_restore.list_sources` / `run_list` and `prepare_restore` /
   `run_prepare` only observe historical choices and canonical CURRENT -> GOAL pairs;
   use the supervised wrappers off GTK. Internal worker modes are explicitly `list`
@@ -201,30 +226,60 @@ Things to avoid:
   direct pending outcomes to explicit fresh recovery of the new transaction, never
   source replay or automatic recovery. Validated results are in `docs/validation.md`;
   live GUI behavior is not verified.
-  Next is a SEPARATE foreign-current route observation/private-preservation-first
-  protocol before M3.5, never unknown raw bytes as canonical priors.
+  B5's separate foreign-current diagnostic observer is implemented and validated,
+  as detailed below. Never use unknown raw bytes as canonical priors.
   Exercise `tests/test_scoped_restore_commit.py` (including temporary real `os._exit`
   interruption), `tests/test_scoped_restore.py`, and read-only pending-scan regressions in
   `tests/test_transaction_store.py` and isolated `tests/test_scope_recovery_gui.py`
   alongside existing recovery/persistence tests. No restore writer, compilation,
   provisioning, foreign preservation, or migration is added by b2.
+- B5 `scoped_foreign.observe_current` / `revalidate_current` / `run_observe` are
+  backend-only diagnostics. Keep the distinct frozen `ScopedForeignObservation`:
+  selected raw text/hash/proof/status has no canonical ID/counts; only the correctly
+  scoped canonical sibling has them. Never return foreign `InstallationEvidence`.
+  Preserve exact bytes/CRLF/final newline, strict UTF-8/control checks, 1 MiB per
+  scope/10,000 selected lines, 1 MiB metadata, 8 MiB ASCII transport and depth 24.
+  Validate original deep immutability, semantic hashes, UTC and exact roots/selection.
+  Dispatch selected codec without expected scope first so canonical same/wrong-scope
+  v2 and v1 refuse. After canonical parse failure, scan all recognized record-header
+  lines independently of whole-file prefix, permitting leading BOM U+FEFF/ASCII
+  space/tab for detection only. Unsupported header versions and known headers with
+  embedded JSON integer versions outside v1/v2 refuse; raw text and exact-marker
+  status remain unchanged. Malformed exact-marker content
+  is `invalid-scoped`, other admitted text `foreign`.
+  Share filesystem policy through the private collector, never a public
+  `allow_foreign` flag; retain canonical inspection's both-canonical requirement and
+  final dependency recheck after parsing. Transaction contents remain UNASSESSED:
+  no initialized store, journal read/scan or lock for diagnostics. Pending/corrupt
+  evidence is diagnostically allowed, not write authority or a protection bypass.
+  Exercise `tests/test_scoped_foreign.py` with route/legacy regressions in temporary
+  fixtures only. B5 adds no preservation storage, source/candidate/proposal/diff/
+  commit, GUI activation, provisioning, main Lua read, compiler or IPC. B4 remains
+  available. Separately design raw-preservation evidence, journal/review contracts
+  and writer authority under lock, including pending-conflict checks, before a
+  future foreign mutator. This work is deferred, not a canonical-only migration
+  prerequisite; v1 fixtures/ownership remain unchanged.
 - Private transaction evidence APIs must use explicit temporary
   state in tests. Initialization precedes route review; no startup path may create
   or repair the store. Recorded-review validation is historical/pure, not filesystem
   freshness, compilation, publication approval, or a reason to skip writer preflight.
 - M3.4b publication/recovery mutators write only on explicit invocation. Keep all
-  test outputs and state exclusively temporary. M3.6a's GUI integrates recovery
-  only; do not activate split editing/publication Save, CLI mutation, registry
-  activation, migration, or v2 editor routing as a side effect.
+  test outputs and state exclusively temporary. Existing-pair GUI Save is now an
+   implemented and validated code path; do not add CLI mutation, registry
+  activation, provisioning, or migration as a side effect.
   Callers must invoke mutators directly on non-daemon workers, never
   timeout-killable children. Five-second lock waits and ten-second compile checks
   do not bound total filesystem time. Honor independent sticky scope/journal
-  uncertainty flags: invalidate editors on scope change or uncertainty, never mark
-  old baselines Saved. M3.6a wires direct recovery workers, close veto, and
-  owner-aware exclusion so legacy restoration cannot release a scope writer.
+  uncertainty flags: invalidate recovery editors on scope change or uncertainty,
+  never mark old baselines Saved. Normal pair Save may adopt only its freshly
+  verified exact reviewed baseline as described above. M3.6a wires direct recovery
+  workers, close veto, and owner-aware exclusion so legacy restoration cannot
+  release a scope writer.
 - Startup assessment and review preparation must stay isolated, bounded, read-only,
-  and off GTK. Only `legacy-clear` permits v1 editor construction; scoped/blocked
-  observations and errors use the recovery shell. Any registry or transaction
+  and off GTK. Only `legacy-clear` permits v1 editor construction; `pair-ready`
+  permits the existing canonical-pair editor. Blocked observations/errors use the
+  recovery shell with manual remediation instructions, never automatic overwrite.
+  Any registry or transaction
   evidence, including terminal history, excludes v1 save/restoration/preservation.
   Uninspectable metadata fails closed. Keep writer-side exclusion rechecks even
   after startup succeeds. Never infer loader choice from absence of evidence.

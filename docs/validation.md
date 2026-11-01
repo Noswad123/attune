@@ -3,6 +3,104 @@
 This records evidence, not a blanket claim of workstation acceptance. State-changing
 M0 checks in [ROADMAP.md](../ROADMAP.md) remain pending explicit manual acceptance.
 
+## Current status
+
+Existing registered canonical-pair normal edit/review/Save/continue is **implemented
+and validated**. M0 and live pair/loader/watch acceptance remain pending separate
+user confirmation. Automated and isolated widget results do not establish live
+workstation integration.
+
+### Final automated results
+
+- Required `ruff check --fix` and formatting: passed; **199 files unchanged**.
+- Full-tree Pyright with `--level error`: **zero errors**. Unfiltered baseline GI
+  source-resolution warnings remain; this is not an all-warnings-clear claim.
+- Full pytest suite: **3,907 passed, 231 skipped, 5 dependency warnings**, in
+  **627.66 seconds**. Use a **1,200,000 ms** timeout for future full-suite runs.
+- All three isolated Broadway suites (`test_gui_smoke.py`,
+  `test_scope_recovery_gui.py`, `test_pair_editor_gui.py`): **228 passed, 2 skipped**,
+  in **42.52 seconds**. Service/compositor IPC is disabled. Mutators are mocked by
+  default; explicit pair-Save end-to-end cases use the **real publisher** exclusively
+  against temporary outputs and private stores. The Broadway daemon was stopped.
+- Wheel build: passed, output under `/tmp/opencode/attune-pair-editor-dist`.
+  Installed launcher help, internal read-only `editor_layout` help for `entry` and
+  `review`, and Git diff whitespace check: passed. Nothing was installed, staged,
+  or committed.
+
+No live app/UI, real user configuration/state writes, compositor operations, loader
+edits, migration, or live registry creation/provisioning were performed. Test
+installations, including their registry/store fixtures, were temporary only.
+
+### Independent review and corrections
+
+- Backend review found no material defects. UI review found no data-loss,
+  stale-write, or cross-owner bugs.
+- P2 stale-disk guidance was corrected: session-local edits do not survive restart;
+  retry review only for temporary failures. If files/routes changed, manually
+  correct or restore the registered canonical files/routes, then restart/reopen.
+  The original pair baseline cannot adopt external edits.
+- P3 contradictory Scope Recovery copy was corrected: explicit reviewed canonical
+  historical restore is available; foreign preservation and migration remain absent.
+
+Automatic scoped foreign preservation is deferred and nonblocking for canonical
+editing or canonical-only opt-in migration. Missing/foreign/invalid scopes, missing
+or unsafe storage, pending/corrupt evidence fail closed with explicit recovery or
+manual remediation, never overwrite. No migration, registry creation, store
+initialization, loader editing, or new public CLI is claimed.
+
+### Validated coverage
+
+- `tests/test_editor_layout.py`: existing-pair entry, zero journals, complete terminal
+  scans beyond recovery display caps, pending/corrupt refusal, manual-remediation
+  messages, immutable models, exact both-scope goals, isolated stdin transport,
+  cancellation/deadlines, and unchanged legacy metadata-only entry.
+- `tests/test_pair_editor_gui.py`: opt-in isolated normal pair startup without v1
+  cache reads, dirty-only merges, temporary real repeated Saves/reopen, Stow/sibling
+  preservation, both-scope edits, review invalidation, worker exclusion/close veto,
+  clean failures, uncertainty and post-save verification failure retaining dirty state
+  with **both independent sticky flags** set. Actual `MonitorState` edits through
+  public monitor-page APIs pass real temporary review/Save/reopen while retaining
+  disconnected records and unchanged appearance identity.
+- `tests/test_health_input.py`: bounded stdin round trips, interleaved output,
+  broken pipes, cancellation/deadlines, and pre-launch size refusal.
+- Full-suite validation includes legacy persistence, restoration, recovery,
+  transaction store/publication and startup regressions alongside this coverage.
+  Preserve temporary HOME/XDG isolation in future runs; never provision live state
+  merely to validate the feature.
+
+## Manual acceptance checklist
+
+**Instructions only. Do not execute without separate explicit user confirmation.**
+Use a user-approved existing pair/store, preserve recovery material, and record
+dated pass/fail/untested results, Hyprland version and hardware. Do not provision or
+edit loader lines merely to satisfy this checklist.
+
+- [ ] Launch the current app; confirm the expected legacy or existing-pair editor.
+  In pair Settings, check registered/resolved routes and legacy-only Health/Backups
+  labeling. File presence and matching drift do not prove runtime loading.
+- [ ] Preview a scalar, Undo/Discard, then edit again. Ctrl+S must show complete
+  both-scope review; an appearance-only edit must leave displays unchanged. Edit
+  after review and confirm the old review cannot Save.
+- [ ] Explicitly Save, verify the reviewed disk result and untouched sibling/Stow
+  link, then make and Save a second edit without restart. Reopen and check values,
+  untouched curves/animations and disconnected display records.
+- [ ] With separate permission for display changes, exercise Keep/Revert/timeout
+  and close veto during monitor preview; resolve it before Save. Record animation,
+  scaling/topology and HDR acceptance or untested cases under M0.
+- [ ] On approved disposable fixtures, check pending/corrupt history and damaged or
+  missing scopes/store open recovery with useful instructions, never overwrite or
+  initialize. Use a fresh explicit transaction review for pending work; preserve
+  evidence and manually remediate other damage. Do not corrupt real user state.
+- [ ] Record how the user's existing manual loader/reload setup makes saves effective,
+  including override removal and observed errors. Save sends no reload IPC, but
+  watchers may auto-reload. M0 is not passed until applicable live checks are recorded.
+
+## Historical checkpoints
+
+All results below retain their original counts and qualifications. Statements about
+inactive routing or foreign preservation preceding migration describe the policy
+at that checkpoint, not current prerequisites. They do not validate the new editor.
+
 ## M1.1-M1.4: read-only Health
 
 Verified during the 2026-10-26 implementation session. The live collector snapshot
@@ -506,8 +604,9 @@ with close veto and owner-aware exclusion. Either independent scope or journal
 uncertainty invalidates cache/editor without marking old baselines saved.
 
 No split editing, split publication through Save, registry activation, migration,
-or scope-local v2 backup restore/preservation is completed by this slice. M3.6b
-backup restore/preservation is next and a prerequisite before M3.5. M0 live
+or scope-local v2 backup restore/preservation was completed by this historical slice.
+Canonical restore and existing-pair Save were delivered later; automatic foreign
+preservation is deferred and does not block canonical-only migration. M0 live
 acceptance, M2.5 live application, loader/watch validation, and M3.5 migration and
 rollout gates remain pending. No reload IPC does not prevent watcher auto-reload;
 separate renames are not pair-atomic. Hashes/compilation prove neither runtime
@@ -577,8 +676,8 @@ sequence and bounds are in
 Terminal phase/fingerprints are local observations, not authentication, proof that
 either historical side was installed, or write permits. Preparation and pure draft
 decoding do not authorize a later write. At the b1 checkpoint, source browsing/review
-and writer source freshness under lock were next; a separate foreign observation/preservation protocol
-must follow before M3.5. B1 adds no source discovery/listing, frontend, commit API/CLI,
+and writer source freshness under lock were next. Separate foreign preservation is
+now deferred and nonblocking for canonical-only migration. B1 adds no source discovery/listing, frontend, commit API/CLI,
 compiler, provisioning, foreign preservation, migration, or ownership exception.
 M0 live acceptance and loader/watch rollout gates remain pending.
 
@@ -649,8 +748,8 @@ proof, runtime/compiler validation, authentication, or write permits.
 
 Historical review cannot enable the existing transaction recovery commit. No
 historical restore writer, compilation, provisioning, foreign preservation, or
-migration is added. Under-lock source freshness and a new restore transaction are
-next, then separate foreign observation/preservation before M3.5. No live UI,
+migration was added by b2. Under-lock source freshness and a new restore transaction
+followed in b3; foreign preservation is deferred, not a migration prerequisite. No live UI,
 user-state mutation, loader edit, reload, or compositor operation was performed;
 M0/manual rollout gates remain pending.
 
@@ -741,8 +840,8 @@ Stow links, and historical evidence remain protected; reads may affect atime.
 
 No total filesystem deadline, pair-atomicity, runtime loading, or hostile-race
 guarantee is established. No reload IPC is sent, but watchers may auto-reload.
-M3.6b remains incomplete: at the b3 checkpoint, next was b4's distinct GUI historical
-restore action/lifetime tests, then separate foreign observation/preservation before migration.
+At the b3 checkpoint, next was b4's distinct GUI historical restore action/lifetime
+tests. Foreign preservation is now deferred and nonblocking for canonical-only migration.
 M0/live UI, loader/watch acceptance, and rollout remain unverified.
 
 ### Example usage
@@ -826,8 +925,9 @@ Validated coverage includes:
 
 Pending outcomes require fresh explicit transaction recovery for the **new restore
 transaction**, never terminal-source replay or automatic recovery. Both current
-scopes must be canonical. M3.6b is **not complete**: next is a SEPARATE foreign-current
-route observation/private-preservation-first protocol before M3.5 migration.
+scopes must be canonical. B5 subsequently added separate foreign-current diagnostics,
+not preservation or writer authority. Automatic foreign preservation is deferred and
+nonblocking for canonical-only M3.5 migration.
 Unknown raw bytes must not become canonical priors. No reload IPC does not prevent
 watcher auto-reload; separate renames are not pair-atomic. Lock/compiler limits are
 not a hard total filesystem deadline. M0, live GUI and loader/watch rollout gates
@@ -848,3 +948,101 @@ ID before explicitly committing recovery. Verify no automatic recovery occurs.
   `hyprmod/core/transaction_publication.py`.
 - [architecture.md](architecture.md#m36b4-explicit-gui-historical-restore),
   [ROADMAP.md](../ROADMAP.md), [ADR 0001](decisions/0001-shared-local-ownership.md#6-scope-aware-backup-and-preservation-compatibility).
+
+## M3.6b5: foreign-current diagnostic observer
+
+### Overview and verification status
+
+**Implemented and validated.** Final validation results:
+
+- Ruff check with fixes and formatting: passed; **195 files unchanged**.
+- Full-tree Pyright with `--level error`: **zero errors**. Unfiltered baseline GI
+  source-resolution warnings remain; this is not an all-warnings-clear claim.
+- Full pytest suite: **3,822 passed, 207 skipped, 5 dependency deprecation warnings**,
+  in **580.72 seconds**. Default skips are mostly opt-in GTK cases.
+- Both isolated Broadway suites: **204 passed, 2 skipped**, with writers mocked
+  and compositor IPC disabled. The temporary daemon was stopped afterward.
+- Focused foreign-current and route tests: **804 passed**, including **154 added
+  public-observer cases** covering both scopes and leading-header variants.
+- Wheel build: passed, output under `/tmp/opencode/attune-m36b5-dist`. Installed
+  launcher's help and internal observer `--help` (observe-only): passed. Diff
+  whitespace check: passed.
+- Independent review's P2 hidden-unsupported-version finding was fixed. Final
+  source-only review confirmed the finding resolved and found no blockers.
+
+Previous checkpoint counts remain historical evidence, unchanged.
+No live UI, user configuration/state writes, main Lua reads, compiler/IPC
+operations, preservation/storage/provisioning or migration were performed for b5.
+Test outputs/state were exclusively temporary; existing writer tests and mocked
+widget compatibility checks do not imply a b5 writer or GUI. Nothing was installed,
+staged or committed.
+M3.6b remains incomplete; b4's canonical historical restore UI is still available.
+
+### API / Interfaces
+
+`scoped_foreign.observe_current`, `revalidate_current` and isolated `run_observe`
+return distinct frozen `ScopedForeignObservation`, not foreign
+`InstallationEvidence`. Selected raw text/hash/proof/status has no canonical
+ID/counts; the opposite canonical sibling does. See the
+[b5 contract](architecture.md#m36b5-foreign-current-diagnostic-observer) for bounds,
+classification, exact-byte semantics and worker context checks.
+
+### Data Flow and validated coverage
+
+Validated `tests/test_scoped_foreign.py` coverage includes:
+
+- Both selected scopes; foreign/damaged exact-marker text; exact CRLF, final-newline,
+  BOM and Unicode retention; canonical same/wrong-scope v2 and v1 refusal; unknown
+  prefix/embedded versions; strict UTF-8, controls and input/line boundaries.
+- Shared filesystem policy, unsafe objects/modes/ownership, protected aliases,
+  Git placement, Stow links, same-byte retargeting and dependency drift during
+  collection/parsing/post-read/revalidation. Canonical inspection has an explicit
+  after-parse dependency-change regression.
+- Strict nested immutable DTOs before serialization, rehashed inconsistent semantics,
+  UTC/context/hash checks, duplicate/unknown fields, depth/metadata and ASCII-escaped
+  transport limits, pure decoding versus freshness, actual isolated worker transport,
+  cancellation/deadlines/oversize responses and exact roots/selection echo.
+- Forbidden-effect guards, no initialized-store requirement and no journal-content
+  reads/scans even alongside pending/corrupt journal bytes.
+
+Independent review found a P2: leading comments, blank lines or BOM could hide an
+unsupported Attune record version behind whole-file prefix gating. After canonical
+parse failure, detection now scans **all recognized record-header lines** regardless
+of whole-file prefix. Leading BOM U+FEFF/ASCII space/tab is tolerated for detection
+only. Explicit unsupported header versions and known headers containing decoded
+JSON integer versions outside v1/v2 refuse. Exact raw text and exact-marker
+`foreign`/`invalid-scoped` classification remain unchanged. The 154 added
+public-observer cases exercise both scopes and leading-header variants; focused
+foreign/route validation passed as recorded above. Final source-only review resolved
+the P2 with no blockers.
+
+Exercise alongside `tests/test_route_approval.py`, existing canonical restore,
+transaction/recovery and legacy persistence/preservation regressions, then the
+CONTRIBUTING gate and applicable isolated compatibility suites. Use exclusively
+temporary HOME/XDG fixtures; never provision live state for validation.
+
+### Edge Cases
+
+Transaction contents are UNASSESSED. Diagnostic allowance alongside pending/corrupt
+journals is neither writer authority nor conflict clearance/protection bypass.
+No preservation storage, source/candidate/proposal/diff/commit, GUI activation,
+provisioning, main Lua read, compiler or IPC is added. V1 fixtures and ordinary
+ownership remain unchanged. Direct I/O is non-atomic and has no hard latency bound;
+reads may affect atime. Hashes/decoding prove neither authentication nor runtime state.
+Deferred work is separately designing raw-preservation evidence, journal/review contracts,
+and writer authority under lock, including pending-conflict checks, before any
+foreign mutator only, not canonical-only migration. Automatic foreign preservation
+is deferred and nonblocking. M0 and live rollout gates remain pending.
+
+### Example usage
+
+Use the temporary-fixture observation/revalidation sequence in the b5 architecture
+contract. Verify exact original bytes and absent newly created state. Do not treat
+an observation as a restoration draft or initialize a store implicitly.
+
+### Related files
+
+- `hyprmod/core/scoped_foreign.py`, `hyprmod/core/route_approval.py`.
+- `tests/test_scoped_foreign.py`, `tests/test_route_approval.py`.
+- [ROADMAP.md](../ROADMAP.md),
+  [ADR 0001](decisions/0001-shared-local-ownership.md#6-scope-aware-backup-and-preservation-compatibility).

@@ -1,6 +1,6 @@
 # Attune roadmap
 
-Updated: 2026-10-30
+Updated: 2026-10-31
 
 ## Direction
 
@@ -13,6 +13,13 @@ behavior; [docs/architecture.md](docs/architecture.md) describes its implementat
 Ideas here are not existing commands, compatibility guarantees, or release dates.
 
 ## Current baseline
+
+**Current delivery:** existing registered canonical-pair normal editing, review,
+Save, and continued editing are implemented and validated. Automated checks and
+all three isolated Broadway suites passed; live acceptance remains pending. Next user value is
+practical acceptance of this workflow and canonical-only opt-in migration, not
+another recovery-foundation b6 slice. Automatic scoped foreign preservation is
+parked, nonblocking work.
 
 Implemented in the development checkout:
 
@@ -32,15 +39,10 @@ Implemented in the development checkout:
   existing owned output, with rollback backups and cached-editor invalidation.
 - Explicit preservation-first recovery of bounded foreign/invalid text, isolated
   from ordinary saves and restoration, with private exact-byte evidence.
-- Inactive M3 scoped data models, canonical v2 codec, pure registry declarations,
-  and frozen v1 compatibility fixtures. Active persistence still writes v1 only.
-- Inactive read-only route inspection and stale-evidence revalidation, without
-  registry creation, split-write authority, or GUI integration.
-- Inactive scoped group reviews, v1/v2 backup descriptors, and redacted scoped
-  diagnostic projections, separate from active application routing.
-- Inactive private transaction evidence/prepared-journal APIs and actual-byte
-  interruption classification, plus M3.4b guarded scope publication and reviewed
-  recovery. Split publication remains an explicit core API, not GUI Save.
+- Scoped models/codec, explicit route inspection, complete group reviews, and
+  journaled publication now support existing-pair GUI Save. Frozen v1 compatibility
+  remains unchanged. Registry creation, store initialization, missing/empty target
+  provisioning, migration, and runtime loader handoff remain separate work.
 - M3.6a transaction recovery frontend and legacy exclusion, completed in code:
   bounded asynchronous startup assessment, explicit both-scope recovery reviews,
   protected direct commits, and cache/editor invalidation on uncertainty.
@@ -50,6 +52,8 @@ Implemented in the development checkout:
   explicit direct mutator with under-lock source checks and a new ordinary transaction.
 - M3.6b4 separate GUI historical restore and shared protected writer lifetime,
   implemented and validated. Live GUI behavior is not verified.
+- M3.6b5 backend-only foreign-current diagnostic observer, implemented and validated.
+  No preservation or foreign writer is implemented.
 
 Live display/HDR and animation behavior still requires manual acceptance. Automated
 and isolated GTK checks are not evidence that the workstation integration is done.
@@ -62,7 +66,7 @@ Persistent loading, Stow provisioning, and desktop registration remain opt-in.
 | M0: Validate the foundation | Pending manual acceptance | Existing baseline | Confidence in live previews and recovery |
 | M1: Workstation diagnostics | Implemented: M1.1-M1.7 delivered | Existing baseline; may proceed alongside M0 | Read-only visibility into effective state and integration |
 | M2: Recovery interface | Disk workflows delivered; M2.5 waits for M0 | M1 | Inspect and restore known Attune output through review |
-| M3: Shared/local ownership split | In progress: b1-b4 canonical restore preparation/backend/GUI validated | Routing rollout requires M0 and recovery/migration prerequisites | Portable appearance with machine-local display settings |
+| M3: Shared/local ownership split | Existing-pair editor implemented and validated; canonical-only migration next | Existing explicit registry/canonical pair/safe initialized store; live acceptance requires M0 permission | Edit, review, Save, and continue with portable appearance and local displays |
 | M4: Constrained presets | Planned | M0 and M3 | Safe, deliberate visual and display modes |
 | M5: Wisp integration | Planned | M1; preset entry points require M4 | Fast access without a second settings implementation |
 | M6: CARAMEL appearance overview | Later | Existing helper contracts; M3 for saving appearance | Activity-aware presentation using existing tools |
@@ -166,7 +170,8 @@ It verifies private exact-byte preservation before replacement and leaves normal
 save/restoration guards intact. Binary, missing, empty, unsafe, and oversized input
 remain unsupported; preserved raw bytes are manual evidence, not canonical backups.
 
-M3.1's ownership and transaction decision is recorded below; v2 routing is not active.
+Existing canonical-pair routing is implemented and validated; migration
+and initial provisioning are not implemented.
 M2.5 live application and routing rollout remain gated by M0 manual acceptance and
 explicit permission for state-changing checks.
 
@@ -174,11 +179,38 @@ explicit permission for state-changing checks.
 
 Goal: keep appearance portable without exporting a machine's display topology.
 
+### Product priorities
+
+- [x] **Existing-pair normal editor, implemented and validated:** admit an existing explicitly
+  registered canonical pair with safe initialized storage and a full terminal-only
+  journal scan; normal pages use local pair models, dirty-only proposals, complete
+  asynchronous both-scope review, direct journaled Save, and fresh exact post-save
+  baselines for repeated Saves. Keep `legacy-clear` v1 behavior unchanged.
+- [x] **Reviewed Save and continue:** exact both-scope review, direct mature writer,
+  fresh verified baselines, repeated Saves/reopen, and real temporary monitor-model
+  Save/reopen coverage preserving disconnected records and appearance identity.
+- [x] **Automated validation:** required checks, full suite, all three isolated
+  Broadway suites, build/help and diff checks passed. Results: `docs/validation.md`.
+- [ ] **Next manual acceptance:** only after separate user confirmation, exercise
+  the short [manual acceptance checklist](docs/validation.md#manual-acceptance-checklist).
+  M0 remains explicitly pending, especially monitor/HDR and loader/watch behavior.
+- [ ] **Next implementation:** M3.5 reviewed canonical-only opt-in migration with rollback
+  material and manual loader handoff. Define absent/empty provisioning states
+  separately; the ordinary present-owned writer does not support them today.
+- **Deferred, nonblocking:** automatic scoped foreign preservation/replacement.
+  Foreign/invalid targets require manual remediation, never overwrite or fallback.
+  This is not a prerequisite for existing-pair editing or canonical-only migration.
+
+### Historical implementation checkpoints
+
+The b1-b5 details below record delivered supporting work, not the current shipping
+critical path. Current editor validation is recorded separately from those results.
+
 - [x] M3.1 Record a design decision for owned filenames, scope routing, explicit
   destination configuration, and load order before changing the format.
 - [x] M3.2 Model and explicitly partition general visual settings, decoration,
   animations/Beziers, and monitor directives into pure appearance/display scopes,
-  with strict registry declarations and canonical v2 codecs. Keep active writes v1.
+  with strict registry declarations and canonical v2 codecs. V1 fixtures stay frozen.
 - [x] M3.3 Extend canonical ownership, reviewed destination binding, backups, and
   diagnostics to each designated file. Do not replace path guards with unrestricted
   output selection or infer destinations from a hardcoded username/repository path.
@@ -196,8 +228,8 @@ Goal: keep appearance portable without exporting a machine's display topology.
 - [ ] M3.5 Provide a reviewed, opt-in migration from the single file, with rollback
   material and manual loader instructions. Avoid double-loading old/new overrides;
   do not edit the authored entrypoint or silently delete the old file.
-- [ ] M3.6 Extend recovery to understand both the existing format and new output
-  groups. Complete migration tests before recommending the new default.
+- [x] M3.6 Canonical recovery understands legacy output and registered v2 groups.
+  Migration and its tests remain separate before recommending a new default.
   - [x] M3.6a Transaction recovery frontend and legacy exclusion, completed in code.
     Assess startup off GTK; construct the v1 editor only for `legacy-clear`.
     Expose explicit resume/rollback/finalize/abandon with complete CURRENT -> GOAL
@@ -206,39 +238,20 @@ Goal: keep appearance portable without exporting a machine's display topology.
     or transaction evidence, including terminal history, blocks v1 writes;
     uninspectable metadata fails closed. Full and isolated GTK validation is
     recorded in `docs/validation.md`; live rollout remains gated.
-  - [ ] M3.6b (In progress) Scope-local v2 backup restore and preservation-first recovery, with
-    explicit scope/route binding and unchanged-sibling isolation. Prerequisite
-    before M3.5 migration and rollout; legacy bundles require explicit conversion.
-    - [x] M3.6b1 Read-only preparation, implemented and validated,
-      from an explicit verified terminal transaction, selecting canonical prior or
-      proposed bytes for one scope in a complete CURRENT -> GOAL pair review.
-      Requires the initialized safe store, canonical current pair, and exact
-      registry/roots plus historical both-route bindings; retains the current sibling.
-      No source discovery/listing, frontend, commit, compilation, or provisioning.
-    - [x] M3.6b2 Historical source browsing/read-only review, implemented and
-      validated. Explicit Scope Recovery listing shows up to 32 transactions with
-      four sources each, independently of the full 1,000-entry journal safety scan.
-      Truncation alone does not block review; pending/corrupt evidence globally
-      blocks, while historical route incompatibility is row-local if globally safe.
-      Complete both-scope CURRENT -> GOAL reviews preserve the current sibling and
-      cannot enable transaction recovery commit. No startup listing or provisioning.
-    - [x] M3.6b3 Canonical backend restore commit, implemented and validated.
-      Explicit `commit_restore` validates the original immutable draft before copying,
-      rechecks complete source evidence under lock through publication, and writes
-      only the selected scope via a new ordinary transaction. B3 added no GUI/CLI commit.
-      Preserve backend uncertainty flags, sibling/Stow/source evidence, and existing
-      explicit interruption recovery. Results are recorded in `docs/validation.md`.
-    - [x] M3.6b4 Implemented and validated: distinct **Commit Reviewed Historical
-      Restore**, its own draft, shared protected writer/result validation, and
-      writer-lifetime tests. Transaction recovery retains its own draft/action.
-      Fresh refresh/review is required after every commit attempt; pending outcomes
-      direct explicit recovery to the new restore transaction. Matching-owner release/
-      sticky locking precede fallible notifications. Setup/cleanup widget exceptions
-      cannot retain writer authority. Results are recorded in `docs/validation.md`.
-    - Next: a SEPARATE foreign-current route observation/private-preservation-first
-      protocol, before M3.5.
-      Canonical-only snapshots/reviews/compilers cannot admit foreign originals as
-      raw rollback blobs. Ordinary ownership guards remain unchanged.
+  - [x] M3.6b Canonical scope-local v2 recovery: restore b1-b4 and diagnostics b5
+    are delivered. Automatic foreign preservation is deferred and nonblocking;
+    legacy bundles still require explicit conversion.
+    - [x] M3.6b1-b2 Canonical historical preparation, explicit browsing, and complete
+      both-scope review, with a full journal safety scan independent of display caps.
+    - [x] M3.6b3-b4 New-transaction canonical restore backend and distinct reviewed
+      GUI commit, preserving current siblings, Stow links and historical evidence.
+    - [x] M3.6b5 Backend-only bounded foreign-current diagnostics, not a foreign writer
+      or conflict-clearance check. Existing ownership guards remain unchanged.
+    - Parked: automatic foreign preservation/replacement requires its own protocol,
+      never raw originals in canonical rollback blobs. Not a canonical M3.5 blocker.
+
+Service contracts are in [architecture.md](docs/architecture.md); historical counts
+and qualifications remain in [validation.md](docs/validation.md).
 
 Acceptance: changing only appearance leaves display output unchanged and vice
 versa. Both files work through Stow links. Simulated second-write failures and
@@ -251,40 +264,17 @@ The first split policy keeps registry/display storage outside Git, supports loca
 Stow sources, and leaves appearance eligible for tracked dotfiles. Existing v1
 files/backups remain legacy full bundles until an explicit reviewed migration.
 
-M3.1 is the design record. M3.2 implements pure scoped models/partition, a v2 codec,
-and structural registry parsing, with frozen literal v1 compatibility coverage.
-M3.3a adds separate filesystem inspection; `approved_resolved_path` remains only a
-declaration until inspected, and even valid inspection evidence is not a write
-permit. No registry file, journal, split write, migration, or loader was installed.
-
-M3.3b adds complete immutable per-scope review plans with fresh route checks,
-pure hash/format/scope backup descriptors, and fresh diagnostic observations with
-an allowlisted report projection. Legacy backups remain whole v1 bundles. Omitted
-proposal scopes retain exact current bytes, hashes, and IDs. No adapter commits,
-compiles Lua, provisions state, or changes active GUI/backup routing.
-
-M3.4a adds strict ordinary-split-save records, explicit private store initialization,
-durable evidence/prepared-intent creation, historical loading, and read-only
-all-prior/all-proposed/mixed/conflict classification. It supports present-owned
-priors only; migration absence/empty states remain explicitly unsupported. Store
-initialization precedes route review. Prepared evidence is not publication approval,
-and journal progress is not proof of actual outputs or runtime state.
-
-M3.4b implements compile-only preflight, durable ordered publication, fresh complete
-recovery reviews, and crash-resumable journaled rollback. It preserves unchanged
-scopes and does not claim pair atomicity or runtime loading. Full-suite, focused,
-and isolated GTK validation are recorded in `docs/validation.md`.
-M3.6a now integrates startup assessment and explicit transaction recovery, not
-split editing or publication through Save. M3.6b is In progress, with b1 read-only
-preparation and b2 source browsing/read-only review implemented and validated.
-B3's backend writer is implemented and validated, not M3.6b completion.
-B4's distinct GUI action/lifetime handling is implemented and validated, not M3.6b
-completion. The separate foreign-current route observation/
-private-preservation-first protocol is next, before M3.5 opt-in migration.
-V1 remains the only editor Save format and is excluded
-whenever scoped evidence is present. Rollout
-still requires M0 acceptance; do not run automatic loader edits, activation,
-recovery, or live reloads to satisfy a model checkbox.
+The mature writer supports present-owned canonical priors only. Absent/empty target
+states remain separate migration/provisioning work; preparation is not publication
+approval, and journal progress is not runtime-loading proof.
+The implemented and validated existing-pair editor consumes the mature writer for
+ordinary reviewed Save. V1 remains available only for `legacy-clear` and is
+excluded whenever scoped evidence is present. No registry or store is created by
+startup/Save. Foreign/missing/invalid scopes, unsafe/missing stores, and pending or
+corrupt history fail closed with explicit recovery or manual-remediation guidance.
+Old terminal recovery actual-conflicts do not invalidate a healthy current pair.
+Runtime rollout still requires M0 acceptance; never run automatic loader edits,
+activation, recovery, or live reloads to satisfy a checkbox.
 
 ## M4: Constrained visual and display presets
 
@@ -351,8 +341,9 @@ keybinding rewrites. Missing helpers leave the rest of Attune usable.
 
 ## Delivery rules
 
-- Keep one active milestone, marked Next implementation or In progress. Check off
-  items only after their validation is complete.
+- Prioritize user-facing delivery over expanding recovery minutiae. Distinguish
+  implemented-pending-validation work from validated checkpoints; check off items
+  only after their validation is complete.
 - Ship small slices with pure-logic tests, isolated GTK checks, and applicable
   live acceptance. Follow [CONTRIBUTING.md](CONTRIBUTING.md) for required checks.
 - Add discovered work under its milestone rather than silently expanding scope.

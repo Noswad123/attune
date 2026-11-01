@@ -7,15 +7,17 @@ what's about to land in Attune's managed config.
 """
 
 import logging
+import threading
 from html import escape as html_escape
 from typing import TYPE_CHECKING
 
 from gi.repository import Adw, GLib, Gtk
 from hyprland_config import ParseError, value_to_conf
 
-from hyprmod.core import schema
+from hyprmod.core import editor_layout, schema
 from hyprmod.core.focused_ui import ReviewSnapshot
 from hyprmod.core.pending import ChangeKind, PendingChange
+from hyprmod.core.scoped_review import GroupReviewPlan
 from hyprmod.core.state import OptionState
 from hyprmod.ui import clear_children, make_page_layout
 from hyprmod.ui.diff import ConfigDiffWidget
@@ -23,6 +25,12 @@ from hyprmod.ui.empty_state import EmptyState
 from hyprmod.ui.icons import FALLBACK_ICON, MONITORS_ICON
 
 log = logging.getLogger(__name__)
+
+PAIR_REVIEW_FAILURE_GUIDANCE = (
+    "Session-local edits retained (not saved across restart). Retry review for temporary failures. "
+    "If files or routes changed, this session cannot adopt external edits: manually correct or "
+    "restore the registered canonical files/routes, then restart/reopen Attune."
+)
 
 if TYPE_CHECKING:
     from hyprmod.window import HyprModWindow
@@ -58,6 +66,12 @@ class PendingChangesPage:
         self._reviewed: ReviewSnapshot | None = None
         self._save_button: Gtk.Button | None = None
         self._review_error: Gtk.Label | None = None
+        self._pair_review: GroupReviewPlan | None = None
+        self._pair_proposals = {}
+        self._revision = 0
+        self._read_cancel: threading.Event | None = None
+        self._pair_box: Gtk.Box | None = None
+        self._closed = False
         # Coalesce many quick "dirty" pings (e.g. typing in a spinbutton) into
         # a single rebuild. Without this the page rebuilds at signal speed
         # which is wasteful and can fight scroll position recovery.
@@ -114,6 +128,8 @@ class PendingChangesPage:
 
         self._diff_group = diff_group
         content_box.append(diff_group)
+        self._pair_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
+        content_box.append(self._pair_box)
 
         self._review_error = Gtk.Label(xalign=0, wrap=True)
         self._review_error.add_css_class("error")
@@ -134,12 +150,25 @@ class PendingChangesPage:
     def schedule_refresh(self) -> None:
         """Coalesce repeated change pings into a single idle-time rebuild."""
         self._reviewed = None
+        self._pair_review = None
+        self._revision += 1
+        if self._read_cancel is not None:
+            self._read_cancel.set()
         if self._save_button is not None:
             self._save_button.set_sensitive(False)
         if self._refresh_pending:
             return
         self._refresh_pending = True
         GLib.idle_add(self._refresh_idle)
+
+    def cancel_review(self) -> None:
+        self._closed = True
+        self._pair_review = None
+        self._revision += 1
+        if self._read_cancel is not None:
+            self._read_cancel.set()
+        if self._save_button is not None:
+            self._save_button.set_sensitive(False)
 
     def _refresh_idle(self) -> bool:
         self._refresh_pending = False
@@ -270,6 +299,9 @@ class PendingChangesPage:
     def _render_diff(self) -> None:
         if self._diff is None or self._diff_group is None:
             return
+        if self._window.pair_layout is not None:
+            self._render_pair_review()
+            return
         self._reviewed = None
         if self._save_button is not None:
             self._save_button.set_sensitive(False)
@@ -307,8 +339,123 @@ class PendingChangesPage:
             self._save_button.set_sensitive(True)
 
     def _on_save_reviewed(self, _button: Gtk.Button) -> None:
+        if self._pair_review is not None:
+            plan = self._pair_review
+            proposals = self._pair_proposals
+            self._pair_review = None
+            if self._save_button is not None:
+                self._save_button.set_sensitive(False)
+            self._window.save_pair_reviewed(plan, proposals)
+            return
         if self._reviewed is not None:
             self._window.save_reviewed(self._reviewed)
+
+    def _render_pair_review(self) -> None:
+        self._pair_review = None
+        if self._save_button is not None:
+            self._save_button.set_sensitive(False)
+        if self._diff_group is not None:
+            self._diff_group.set_visible(False)
+        if self._pair_box is not None:
+            clear_children(self._pair_box)
+        if self._closed or self._read_cancel is not None or self._window.editor_locked:
+            return
+        pair = self._window.pair_layout
+        if pair is None:
+            return
+        try:
+            proposals = self._window.pair_proposals()
+        except (ValueError, ParseError) as exc:
+            if self._review_error is not None:
+                self._review_error.set_label(f"Cannot prepare review: {exc}")
+                self._review_error.set_visible(True)
+            return
+        revision = self._revision
+        cancel = threading.Event()
+        self._read_cancel = cancel
+        if self._review_error is not None:
+            self._review_error.set_label("Preparing complete appearance and displays review...")
+            self._review_error.set_visible(True)
+
+        def complete(plan, error):
+            if self._read_cancel is not cancel:
+                return GLib.SOURCE_REMOVE
+            self._read_cancel = None
+            if self._closed:
+                return GLib.SOURCE_REMOVE
+            if (
+                cancel.is_set()
+                or revision != self._revision
+                or self._window.pair_layout is not pair
+            ):
+                self.refresh()
+                return GLib.SOURCE_REMOVE
+            if self._window.editor_locked:
+                return GLib.SOURCE_REMOVE
+            if error is not None or type(plan) is not GroupReviewPlan:
+                if self._review_error is not None:
+                    self._review_error.set_label(
+                        f"Cannot review pair. Saving disabled: {error}. "
+                        + PAIR_REVIEW_FAILURE_GUIDANCE
+                    )
+                    self._review_error.set_visible(True)
+                return GLib.SOURCE_REMOVE
+            if proposals != self._window.pair_proposals():
+                self.schedule_refresh()
+                return GLib.SOURCE_REMOVE
+            if self._review_error is not None:
+                self._review_error.set_visible(False)
+            if self._pair_box is not None:
+                changed = ", ".join(scope.value for scope in plan.changed_scopes) or "none (no-op)"
+                self._pair_box.append(
+                    Gtk.Label(
+                        label=f"Changed scopes: {changed}. No IPC/reload is sent. "
+                        "Watchers may reload "
+                        "files automatically. Disk review is not runtime-loading proof.",
+                        xalign=0,
+                        wrap=True,
+                    )
+                )
+                for review in plan.scopes:
+                    group = Adw.PreferencesGroup(title=review.scope.value.title())
+                    metadata = Gtk.Label(
+                        label=f"Registered: {review.lexical_path}\nResolved: {review.resolved_path}"
+                        f"\nSHA256: {review.previous_sha256} -> {review.proposed_sha256}"
+                        f"\nContent ID: {review.previous_content_id} -> "
+                        f"{review.proposed_content_id}",
+                        xalign=0,
+                        wrap=True,
+                        selectable=True,
+                    )
+                    group.add(metadata)
+                    diff = ConfigDiffWidget()
+                    diff.set_precomputed_diff(
+                        review.diff,
+                        added_lines=review.added_lines,
+                        removed_lines=review.removed_lines,
+                        title=review.scope.value,
+                        empty_message="Unchanged sibling. Exact current bytes are preserved.",
+                    )
+                    group.add(diff)
+                    self._pair_box.append(group)
+            self._pair_review = plan
+            self._pair_proposals = proposals
+            if self._save_button is not None:
+                self._save_button.set_sensitive(True)
+            return GLib.SOURCE_REMOVE
+
+        def work():
+            try:
+                plan = editor_layout.run_prepare_review(pair, proposals, cancel_event=cancel)
+            except Exception as exc:
+                GLib.idle_add(complete, None, str(exc))
+            else:
+                GLib.idle_add(complete, plan, None)
+
+        try:
+            threading.Thread(target=work, daemon=False).start()
+        except Exception as exc:
+            complete(None, str(exc))
 
     # ── Change collection ──
 

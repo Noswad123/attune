@@ -1,13 +1,48 @@
 # ADR 0001: Shared appearance and machine-local displays
 
-- Status: accepted; M3.6a transaction recovery frontend/legacy exclusion completed in code; split editing/publication Save inactive
+- Status: accepted; existing registered canonical-pair editing/Save implemented and validated
 - Date: 2026-10-27
 - Roadmap: M3.1; follow-on implementation spans M3.2-M3.6
-- Runtime rollout: gated by M0 acceptance and an explicit, reviewed migration
+- Runtime rollout: M0 acceptance pending; migration/provisioning remain separate explicit work
+
+## Current product decision
+
+Deliver normal edit, review, Save, and continued editing for an **existing explicitly
+registered canonical pair**, using the mature journaled writer. Do not make automatic
+scoped foreign preservation or migration a prerequisite for that path. Next user
+value is practical manual acceptance and canonical-only opt-in migration. Automatic
+foreign preservation is **deferred, nonblocking** work, not a b6 recovery-foundation
+shipping gate. The detailed recovery checkpoints below document support capabilities,
+not an obligation to complete every edge case before shipping main features.
+
+Startup now uses `editor_layout.EditorEntry`: `legacy-clear` retains unchanged v1;
+`pair-ready` requires a valid registered canonical v2 pair, safe initialized store,
+and full bounded verification of terminal journals, including undisplayed history.
+Zero journals are allowed. Old terminal `LayoutAssessment` actual-conflicts are not
+editor readiness criteria. Local pair models feed normal scalar/section pages without
+v1 cache reads. Dirty-only proposals preserve untouched data; complete asynchronous
+both-scope review is invalidated by edits. Save publishes the exact review directly
+on a non-daemon worker with close veto and writer exclusion. Only a fresh safe
+post-read matching exact reviewed goals/routes becomes the baseline before marking
+saved, enabling repeated Saves. Failure retains dirty edits; uncertainty locks the
+editor. Recovery/restore still invalidate old editors, not mark them saved.
+
+Foreign/invalid/missing scopes, missing/unsafe storage, and pending/corrupt evidence
+fail closed. Preserve original files/evidence; use explicit fresh transaction
+recovery for pending work, or manually inspect and restore verified canonical scopes
+and a safe initialized store, then retry startup. No automatic overwrite or repair
+is authorized. Settings reports pair routes and labels Health/Backups as legacy-v1
+utilities, not pair diagnostics. Startup/Save create no registry/store/targets,
+edit no load lines, send no reload IPC, and add no migration or mutating CLI.
+Implementation and automated validation are complete; no live acceptance is claimed.
+External file/route changes require manual correction/restoration of registered
+canonical files/routes and restart/reopen, not adoption into the original baseline.
+Retained edits are session-local and do not survive restart; retry review only for
+temporary failures.
 
 ## Context
 
-Attune currently writes one canonical v1 `attune.lua`. Its supported scalar
+At the original decision checkpoint, Attune wrote one canonical v1 `attune.lua`. Its supported scalar
 settings, animation/Bezier definitions, and monitor directives are bundled
 together. Existing backups are hashes of that complete file, without scope or
 machine identity. Readers, caches, review snapshots, path guards, and recovery
@@ -58,7 +93,8 @@ Introduce a local installation registry at
 Its schema has a pure parser and a separate explicit read-only filesystem
 inspector. M3.6a startup assessment reads existing registry evidence without
 creating, repairing, or activating it. The backend revalidates explicit routes
-under lock; split editing/publication Save and activation remain future work.
+under lock. Current existing-pair Save uses those routes without registry creation
+or rebinding; installation/activation remain separate future workflows.
 
 The strict schema has exactly these fields:
 
@@ -197,9 +233,11 @@ collapsing absence and empty bytes into one hash:
 - `present-owned`: verified canonical bytes with scope and blob identity. An
   inverse operation restores those reviewed bytes.
 
-Foreign initial targets are not admitted as ordinary migration priors. Resolve
-them through a separate scope-aware preservation-first review before migration
-can proceed. Raw evidence never becomes a canonical rollback blob implicitly.
+Foreign initial targets are not admitted as ordinary migration priors. The next
+canonical-only migration must refuse them and require manual remediation. A future
+automated foreign replacement would need a separate preservation-first protocol;
+implementing it is not a canonical-only migration prerequisite. Raw evidence never
+becomes a canonical rollback blob implicitly.
 Journal and directory-sync inverse operations as well as forward replacements.
 
 ### Durable evidence and publication
@@ -277,12 +315,13 @@ all members. A scope-local restore changes only its reviewed scope. A whole-grou
 restore reviews both outputs and uses the journaled group writer. Unknown formats,
 cross-installation routes, and damaged bundles fail closed rather than guessing.
 
-Extend M2.6 preservation-first recovery explicitly to registered v2 scopes. Keep
+If deferred M2.6 preservation-first recovery is extended to registered v2 scopes, keep
 foreign originals private and separate from canonical blobs, bind scope and route
 identity into preservation evidence, and verify/synchronize it before replacement.
 Do not relax ordinary ownership guards or admit unknown files as scope payloads.
-M3.6b remains In progress and a prerequisite before M3.5 migration. Its first
-bounded b1 slice is implemented and validated: read-only
+Automatic foreign preservation is deferred, not a prerequisite for existing-pair
+editing or canonical-only M3.5 migration. The historical first bounded b1 slice
+is implemented and validated: read-only
 preparation from an explicitly selected verified terminal transaction's canonical
 prior/proposed scope, with a complete CURRENT -> GOAL review preserving the current
 sibling. It requires safe initialized storage, canonical current outputs, exact
@@ -332,9 +371,10 @@ fresh explicit existing recovery, never terminal-source replay. Existing interru
 recovery is unchanged. Lock/compiler limits are not a total filesystem deadline;
 no reload IPC does not prevent watcher auto-reload. B2's historical GUI was read-only
 at that checkpoint. B4's distinct GUI historical restore action/shared writer lifetime
-is now implemented and validated. Next is the SEPARATE
-foreign-current route observation/private-preservation-first protocol before M3.5 migration.
-M3.6b is not complete. Preparation/decoding alone never replace writer rechecks.
+is now implemented and validated. B5's separate foreign-current diagnostic observer
+is implemented and validated. Foreign preservation/writer work remains deferred,
+not required before canonical-only M3.5 migration. Preparation/decoding alone never
+replace writer rechecks.
 
 B4 requires a complete both-scope CURRENT -> GOAL review and a separate **Commit
 Reviewed Historical Restore** consuming only its own `ScopedRestoreDraft`. Existing
@@ -354,6 +394,34 @@ guarded widget operations. Independent review's P2 setup-widget leak was fixed a
 rechecked with no remaining blocking findings. A fresh refresh/review is required
 after attempts. Validated results are recorded in `../validation.md`; live GUI
 behavior is not verified. Unknown raw bytes remain outside canonical priors.
+
+B5 adds only `scoped_foreign.observe_current`, `revalidate_current`, and supervised
+`run_observe`, returning a distinct frozen `ScopedForeignObservation`, never foreign
+`InstallationEvidence`. Selected raw text/hash/path proof/status has no canonical
+ID/counts; the opposite canonical sibling retains scope/ID/counts. Strict UTF-8 and
+control checks preserve admitted exact bytes, CRLF and final-newline presence.
+Bounds are 1 MiB per scope, 10,000 selected lines, 1 MiB metadata, 8 MiB total
+ASCII-escaped transport and JSON depth 24, with deep immutable semantic/hash/UTC
+and exact context/selection validation. Codec dispatch without expected scope first
+refuses canonical same/wrong-scope v2 and v1. After canonical parse failure, scan all
+recognized record-header lines independently of whole-file prefix, permitting
+leading BOM U+FEFF/ASCII space/tab for detection only. Unsupported header versions
+and known headers with embedded JSON integer versions outside v1/v2 refuse, even
+after leading comments/blank lines/BOM. Raw bytes and exact-marker status are unchanged.
+Malformed exact-marker text is `invalid-scoped`, other admitted text `foreign`.
+
+Private filesystem collection shares existing ownership/permission/link/alias/
+protected/Git policy without a public `allow_foreign` flag. Canonical inspection
+still requires both canonical scopes and final-rechecks after parsing. Transaction
+contents are UNASSESSED, not scanned/read; diagnostics need no initialized store
+and may observe alongside pending/corrupt journals. This is not authority, conflict
+clearance or a protection bypass. B5 adds no preservation storage, source/candidate,
+proposal/diff/commit, GUI activation, provisioning, main Lua read, compiler or IPC.
+B4's canonical restore UI, v1 fixtures and ordinary ownership remain unchanged.
+For any future foreign mutator, separately design raw-preservation evidence, journal/review contracts and
+writer authority under lock, including pending-conflict checks, before a foreign
+mutator, not canonical-only migration. This work is parked and nonblocking. See the
+[b5 contract](../architecture.md#m36b5-foreign-current-diagnostic-observer).
 
 Successful restore/recovery and any uncertain write invalidate all cached editors
 until restart. Read-only utilities remain usable. No old editor baseline is marked
@@ -382,8 +450,8 @@ the absent-registry legacy rule.
    and unresolved transactions.
 2. Explicitly review the local registry and both destinations. New targets may be
    absent or separately provisioned empty files; existing owned targets require
-   exact review, while foreign targets require a separate preservation-first
-   operation before migration can proceed.
+    exact review. Foreign targets are refused with manual-remediation instructions;
+    automatic foreign preservation is not required for this canonical-only migration.
 3. Split only owned v1 data, preserve disconnected records and required curves,
    validate v2 scopes, and show the exact proposed files and registry transition.
 4. Journal and prepare the new files side-by-side, preserving exact legacy evidence.
@@ -425,7 +493,7 @@ not an in-place concatenation of potentially divergent outputs.
 
 - M3.2 (implemented foundation): pure scoped models, strict structural registry
   validation, v1/v2 readers/renderers, explicit partition, and frozen v1 fixtures.
-  V1 remains the only editor Save format, subject to M3.6a exclusion.
+  V1 compatibility remains unchanged, subject to legacy layout exclusion.
 - M3.3a (implemented foundation): explicit read-only destination inspection and
   transient evidence revalidation, without provisioning or write authority.
 - M3.3b (implemented foundation): complete scope-aware group reviews, pure legacy/v2
@@ -433,7 +501,7 @@ not an in-place concatenation of potentially divergent outputs.
 - M3.4a (implemented foundation): explicit private evidence storage, ordinary
   present-owned transaction records, historical validation, and actual-byte
   interruption classification. Prepared evidence alone is not publication approval.
-- M3.4b (implemented backend; only recovery integrated by M3.6a): guarded publication and explicitly reviewed recovery
+- M3.4b (implemented backend; also used by current existing-pair Save): guarded publication and explicitly reviewed recovery
   with compile preflight and failure/crash tests. Prepared intent alone remains
   insufficient. Rollback has an immutable operation and separate checkpoints in
   the original transaction directory; direction is locked once recorded. All-prior
@@ -447,15 +515,19 @@ not an in-place concatenation of potentially divergent outputs.
   Independent sticky scope/journal uncertainty invalidates cache/editor without
   marking old baselines saved. Writer-side metadata exclusion fails closed on any
   registry/transaction evidence or uninspectable metadata, including terminal history.
-- M3.6b (In progress): scope-local v2 backup restore and preservation-first
-  recovery with complete scope/route review and unchanged-sibling isolation.
+- M3.6b (supporting checkpoints): scope-local canonical restore and diagnostics
+  with complete scope/route review and unchanged-sibling isolation.
   B1 preparation, B2 historical source browsing/read-only both-scope review, and
   B3 canonical backend commit are implemented and validated, not the full milestone.
   B4's distinct GUI action/shared writer lifetime is implemented and validated.
-  Next is the separate foreign-current route observation/private-preservation-first
-  protocol, not raw unknown bytes in canonical priors.
-  Complete before M3.5 migration or recommending split rollout.
-- M3.5: reviewed migration/handoff after prerequisites and manual M0 acceptance.
+  B5's separate backend-only foreign-current diagnostic observer is implemented and
+  validated. Automatic raw preservation/writer work is deferred and nonblocking;
+  unknown bytes never enter canonical priors.
+- Existing canonical-pair normal editing/review/Save/continue: implemented and
+  validated. Reuse the mature writer and verify exact fresh baselines.
+- M3.5: next canonical-only reviewed migration/handoff, separate from initial
+  provisioning support and subject to explicit manual acceptance. Foreign preservation
+  is not a prerequisite.
 
 Required tests include scope rejection; frozen v1 compatibility; malformed v2;
 route/registry aliases and retargeting; empty-scope provisioning; appearance/display
@@ -486,8 +558,9 @@ display packages until an explicit policy extension is designed.
 The M3.1 decision itself created no configuration/state files or codec. Subsequent
 M3.2-M3.4b work implements models, route checks, private evidence, and an
 explicit split writer/recovery backend. M3.6a adds startup assessment and explicit
-transaction recovery UI. Recovery can write when committed, but no split editor,
-split publication Save, registry activation, migration, or loader is installed.
+transaction recovery UI. Existing registered canonical-pair editing and Save are
+now implemented and validated. Registry creation/activation, provisioning,
+migration, and loader installation are not added by that feature.
 Test outputs/state are exclusively temporary. No live configuration has changed, and
 no permission for state-changing validation is implied. See
 [architecture.md](../architecture.md) for implemented APIs and

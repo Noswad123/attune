@@ -1,17 +1,31 @@
 """Main application window with sidebar navigation."""
 
 import os
+import threading
 from collections import Counter
 from pathlib import Path
 
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk
-from hyprland_config import ParseError, Rule, coerce_config_value
+from hyprland_config import ParseError, Rule, coerce_config_value, value_to_conf
 from hyprland_socket import HyprlandError
 from hyprland_state import ANIM_LOOKUP, HyprlandState
 
-from hyprmod.core import config, persistence, schema, scoped_recovery
+from hyprmod.core import (
+    config,
+    editor_layout,
+    persistence,
+    schema,
+    scoped_config,
+    scoped_recovery,
+    transaction_publication,
+)
+from hyprmod.core.editor_layout import CanonicalPairLayout
 from hyprmod.core.focused_ui import PAGE_IDS, ReviewSnapshot, filter_schema
+from hyprmod.core.scoped_config import ScopedConfig
+from hyprmod.core.scoped_review import GroupReviewPlan
+from hyprmod.core.scopes import Scope
 from hyprmod.core.state import AppState
+from hyprmod.core.transaction_records import route_binding, validate_transaction_id
 from hyprmod.core.undo import OptionChange, PairedOptionChange, UndoManager
 from hyprmod.pages.animations import AnimationsPage
 from hyprmod.pages.backups import BackupsPage
@@ -19,7 +33,7 @@ from hyprmod.pages.binds import BindsPage
 from hyprmod.pages.cursor import CursorPage
 from hyprmod.pages.health import HealthPage
 from hyprmod.pages.monitors import MonitorsPage
-from hyprmod.pages.pending import PendingChangesPage
+from hyprmod.pages.pending import PAIR_REVIEW_FAILURE_GUIDANCE, PendingChangesPage
 from hyprmod.pages.scope_recovery import ScopeRecoveryPage
 from hyprmod.pages.section import SectionPage
 from hyprmod.pages.settings import SettingsPage
@@ -47,15 +61,17 @@ CSS_PATH = Path(__file__).parent / "style.css"
 
 
 class HyprModWindow(Adw.ApplicationWindow):
-    def __init__(self, **kwargs):
+    def __init__(self, *, pair_layout: CanonicalPairLayout | None = None, **kwargs):
         super().__init__(**kwargs)
+        self.pair_layout = pair_layout
 
         self.set_title("Attune")
         self.set_default_size(900, 650)
 
         # Warm the managed-config cache so the first ``saved_sections`` access
         # below doesn't pay for a parse synchronously during widget construction.
-        config.read_cached()
+        if pair_layout is None:
+            config.read_cached()
         # IPC-only state: never execute Lua or load the user's configuration tree.
         # Managed records are decoded separately by config.read_cached().
         self.hypr = HyprlandState(path=Path("/dev/null"))
@@ -77,6 +93,8 @@ class HyprModWindow(Adw.ApplicationWindow):
         self._restore_in_progress = False
         self._restore_owner: str | None = None
         self._editor_invalidated = False
+        self.scope_may_have_changed = False
+        self.journal_may_have_changed = False
 
         # Optional page/widget references (populated during _build_ui)
         self._anim_details_box: Gtk.Box | None = None
@@ -106,19 +124,29 @@ class HyprModWindow(Adw.ApplicationWindow):
 
     def _on_close_request(self, *_args) -> bool:
         if self._restore_in_progress:
-            self.show_toast("Wait for the restoration outcome before closing Attune.", 5)
+            self.show_toast("Wait for the disk writer outcome before closing Attune.", 5)
             return True
         if self._monitors_page and self._monitors_page.is_confirm_pending():
             self.show_toast("Keep or revert the monitor preview before closing Attune.", 5)
             self.show_page("monitors")
             return True
+        if self._pending_page is not None:
+            self._pending_page.cancel_review()
         return False
+
+    @property
+    def editor_mode(self) -> str:
+        return "pair-ready" if self.pair_layout is not None else "legacy-clear"
 
     def editor_edit_allowed(self) -> bool:
         if self._restore_in_progress or self._editor_invalidated:
             self.show_toast("Editor locked. Restart Attune to load restored disk state.", 5)
             return False
         return True
+
+    @property
+    def editor_locked(self) -> bool:
+        return self._restore_in_progress or self._editor_invalidated
 
     def restore_permission(self) -> None:
         if not self.editor_edit_allowed():
@@ -168,10 +196,17 @@ class HyprModWindow(Adw.ApplicationWindow):
         self.finish_restore(invalidate)
 
     def scope_assessed(self, assessment: scoped_recovery.LayoutAssessment) -> None:
-        if assessment.mode != "legacy-clear":
+        if self.pair_layout is None and assessment.mode != "legacy-clear":
             self._lock_legacy_editor(
                 "Scoped evidence discovered. Legacy editor locked; pending changes retained. "
                 "Use Scope Recovery explicitly. No runtime loading or activation is established."
+            )
+
+    def scoped_evidence_discovered(self) -> None:
+        if self.pair_layout is None:
+            self._lock_legacy_editor(
+                "Historical scoped evidence discovered. Legacy editor locked; edits retained. "
+                "Canonical history is not proof of runtime loading."
             )
 
     def _lock_legacy_editor(self, message: str) -> None:
@@ -182,8 +217,8 @@ class HyprModWindow(Adw.ApplicationWindow):
         self._hyprland_banner.set_revealed(True)
 
     def finish_restore(self, invalidate: bool) -> None:
-        # Backups calls finish even after a refused begin; it cannot release a scoped writer.
-        if self._restore_owner == "scope":
+        # Backups calls finish even after a refused begin; it cannot release another writer.
+        if self._restore_owner in {"scope", "save"}:
             return
         self._editor_invalidated |= invalidate
         self._restore_owner = None
@@ -220,17 +255,25 @@ class HyprModWindow(Adw.ApplicationWindow):
         invalidated whenever hyprmod writes the managed file, so reads
         always reflect on-disk state without explicit refresh.
         """
+        if self.pair_layout is not None:
+            return {
+                config.KEYWORD_BEZIER: list(self.pair_layout.appearance.beziers),
+                config.KEYWORD_ANIMATION: list(self.pair_layout.appearance.animations),
+                config.KEYWORD_MONITOR: list(self.pair_layout.displays.monitors),
+            }
         return config.read_cached()[1]
 
     @property
     def saved_values(self) -> dict[str, str]:
         """The option ``key = value`` assignments parsed from the managed config."""
+        if self.pair_layout is not None:
+            return dict(self.pair_layout.appearance.values)
         return config.read_cached()[0]
 
     @property
     def saved_rules(self) -> list[Rule]:
         """Structured window/layer rules parsed from the managed config."""
-        return config.read_cached()[2]
+        return [] if self.pair_layout is not None else config.read_cached()[2]
 
     @property
     def option_rows(self) -> dict[str, OptionRow]:
@@ -390,7 +433,7 @@ class HyprModWindow(Adw.ApplicationWindow):
         # Standalone pages have no separate dirty/undo state.
         self._health_page = HealthPage(config.managed_path())
         self._page_stack.add_named(
-            self._health_page.build(header=self._make_page_header("Health")), "health"
+            self._health_page.build(header=self._make_page_header("Legacy v1 Health")), "health"
         )
         self._page_titles["health"] = "Health"
         self._health_page.bind_lifecycle(self)
@@ -401,23 +444,23 @@ class HyprModWindow(Adw.ApplicationWindow):
             finish_restore=self.finish_restore,
         )
         self._page_stack.add_named(
-            self._backups_page.build(header=self._make_page_header("Backups")), "backups"
+            self._backups_page.build(header=self._make_page_header("Legacy v1 Backups")), "backups"
         )
         self._page_titles["backups"] = "Backups"
         self._backups_page.bind_lifecycle(self)
         self._scope_recovery_page = ScopeRecoveryPage(
-            Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")),
-            Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")),
+            Path(self.pair_layout.evidence.config_root)
+            if self.pair_layout is not None
+            else Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")),
+            Path(self.pair_layout.evidence.state_root)
+            if self.pair_layout is not None
+            else Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")),
             restore_permission=self.scope_restore_permission,
             begin_restore=self.begin_scope_restore,
             finish_restore=self.finish_scope_restore,
         )
         self._scope_recovery_page.on_assessment = self.scope_assessed
-        self._scope_recovery_page.on_scoped_evidence = lambda: self._lock_legacy_editor(
-            "Historical scoped evidence discovered. "
-            "Legacy editor locked; pending changes retained. "
-            "Canonical history is not proof of publication or runtime loading."
-        )
+        self._scope_recovery_page.on_scoped_evidence = self.scoped_evidence_discovered
         self._scope_recovery_page.on_assessment_error = lambda error: self._lock_legacy_editor(
             f"Layout assessment failed: {error}. Legacy editor locked; pending changes retained. "
             "Inspect Scope Recovery and restart Attune after resolving the layout."
@@ -1046,6 +1089,226 @@ class HyprModWindow(Adw.ApplicationWindow):
             (self._undo.confirm_undo if undo else self._undo.confirm_redo)(entry)
 
     # -- Save with animation --
+
+    def pair_proposals(self) -> dict[Scope, ScopedConfig]:
+        pair = self.pair_layout
+        if pair is None:
+            raise ValueError("No canonical pair editor")
+        values = dict(pair.appearance.values)
+        for key, state in self.app_state.options.items():
+            if state.is_dirty:
+                if state.managed:
+                    values[key] = value_to_conf(state.live_value)
+                else:
+                    values.pop(key, None)
+        animations = list(pair.appearance.animations)
+        beziers = list(pair.appearance.beziers)
+        if self._animations_page is not None and self._animations_page.is_dirty():
+            animations, used = self._animations_page.get_animation_lines()
+            beziers = self._animations_page.get_curve_definitions(used)
+        appearance = ScopedConfig(
+            Scope.APPEARANCE, {"values": values, "animations": animations, "beziers": beziers}
+        )
+        proposals = {}
+        if appearance != pair.appearance:
+            proposals[Scope.APPEARANCE] = appearance
+        if self._monitors_page is not None and self._monitors_page.is_dirty():
+            displays = ScopedConfig(
+                Scope.DISPLAYS, {"monitors": self._monitors_page.get_monitor_lines()}
+            )
+            if displays != pair.displays:
+                proposals[Scope.DISPLAYS] = displays
+        return proposals
+
+    def save_pair_reviewed(
+        self, plan: GroupReviewPlan, proposals: dict[Scope, ScopedConfig]
+    ) -> None:
+        if not self.editor_edit_allowed():
+            return
+        if self._page_stack.get_visible_child_name() != "pending":
+            self._show_pending()
+            return
+        if self._monitors_page and self._monitors_page.is_confirm_pending():
+            self.show_toast("Keep or revert the monitor preview before saving.", 5)
+            return
+        pair = self.pair_layout
+        if (
+            pair is None
+            or plan.evidence.evidence_hash != pair.evidence.evidence_hash
+            or proposals != self.pair_proposals()
+        ):
+            self._schedule_pending_refresh()
+            return
+        self._restore_in_progress = True
+        self._restore_owner = "save"
+        completed = False
+
+        def finish(result, fresh, error, delegated):
+            nonlocal completed
+            if completed:
+                return GLib.SOURCE_REMOVE
+            completed = True
+            if self._restore_owner != "save":
+                return GLib.SOURCE_REMOVE
+            invalid = delegated and (result is None or error is not None)
+            if result is not None:
+                invalid |= (
+                    result.pending
+                    or result.scope_may_have_changed
+                    or result.journal_may_have_changed
+                )
+                if result.outcome in {"committed", "no-op"} and fresh is not None and error is None:
+                    invalid = False
+            if invalid:
+                uncertain = result is None or error is not None
+                self.scope_may_have_changed |= uncertain or (
+                    result is not None and result.scope_may_have_changed
+                )
+                self.journal_may_have_changed |= uncertain or (
+                    result is not None and result.journal_may_have_changed
+                )
+            self._editor_invalidated |= invalid
+            self._restore_owner = None
+            self._restore_in_progress = False
+            try:
+                if invalid:
+                    config.invalidate_cache()
+                if not self._editor_invalidated and fresh is not None and result is not None:
+                    self.pair_layout = fresh
+                    self._perform_save()
+                    self._banner.show_saved()
+                    self.show_toast(
+                        "Saved reviewed canonical pair. "
+                        f"Transaction: {result.transaction_id or 'none (no-op)'}. "
+                        "No reload IPC sent.",
+                        5,
+                    )
+                else:
+                    outcome = (
+                        f"Publication {result.outcome}; transaction: "
+                        f"{result.transaction_id or 'none'}. "
+                        if result is not None
+                        else "Publication outcome unavailable. "
+                    )
+                    reason = error or (result.error if result else "setup failed")
+                    self.show_toast(
+                        outcome
+                        + f"Baseline not adopted: {reason}. "
+                        + (
+                            "Disk/journal may have changed. Restart required; edits retained."
+                            if self._editor_invalidated
+                            else PAIR_REVIEW_FAILURE_GUIDANCE
+                        )
+                        + (
+                            " Use explicit fresh Scope Recovery for the pending transaction."
+                            if result is not None and result.pending
+                            else ""
+                        ),
+                        0,
+                    )
+            finally:
+                self._set_editor_sensitive(not self._editor_invalidated)
+                self._schedule_pending_refresh()
+            return GLib.SOURCE_REMOVE
+
+        def work():
+            result = None
+            fresh = None
+            error = None
+            try:
+                candidate = transaction_publication.publish_reviewed(
+                    plan,
+                    state_root=Path(pair.evidence.state_root),
+                    config_root=Path(pair.evidence.config_root),
+                )
+                if type(candidate) is not transaction_publication.PublicationResult:
+                    raise ValueError("Unexpected publication result")
+                if (
+                    any(
+                        type(flag) is not bool
+                        for flag in (
+                            candidate.pending,
+                            candidate.scope_may_have_changed,
+                            candidate.journal_may_have_changed,
+                        )
+                    )
+                    or type(candidate.outcome) is not str
+                ):
+                    raise ValueError("Invalid publication flags")
+                if candidate.transaction_id is not None:
+                    validate_transaction_id(candidate.transaction_id)
+                if candidate.outcome == "committed":
+                    if (
+                        not plan.changed_scopes
+                        or candidate.transaction_id is None
+                        or candidate.pending
+                        or not candidate.scope_may_have_changed
+                        or not candidate.journal_may_have_changed
+                        or candidate.error is not None
+                    ):
+                        raise ValueError("Invalid committed result")
+                elif candidate.outcome == "no-op":
+                    if (
+                        plan.changed_scopes
+                        or candidate.transaction_id is not None
+                        or candidate.pending
+                        or candidate.scope_may_have_changed
+                        or candidate.journal_may_have_changed
+                        or candidate.error is not None
+                    ):
+                        raise ValueError("Invalid no-op result")
+                elif candidate.outcome != "failed":
+                    raise ValueError("Unexpected publication outcome")
+                elif (
+                    type(candidate.error) is not str
+                    or not candidate.error
+                    or candidate.pending != (candidate.transaction_id is not None)
+                    or (
+                        candidate.transaction_id is None
+                        and (candidate.scope_may_have_changed or candidate.journal_may_have_changed)
+                    )
+                ):
+                    raise ValueError("Invalid failed publication result")
+                result = candidate
+                if result.outcome in {"committed", "no-op"}:
+                    entry = editor_layout.run_entry(
+                        Path(pair.evidence.config_root), Path(pair.evidence.state_root)
+                    )
+                    fresh = entry.pair
+                    if (
+                        type(entry) is not editor_layout.EditorEntry
+                        or type(fresh) is not CanonicalPairLayout
+                        or entry.mode != "pair-ready"
+                    ):
+                        raise ValueError("Saved output could not be reopened safely")
+                    entry.__post_init__()
+                    if (
+                        fresh.evidence.registry != pair.evidence.registry
+                        or fresh.evidence.config_root != pair.evidence.config_root
+                        or fresh.evidence.state_root != pair.evidence.state_root
+                    ):
+                        raise ValueError("Registry/context changed after save")
+                    for old, new, review in zip(
+                        pair.evidence.routes, fresh.evidence.routes, plan.scopes, strict=True
+                    ):
+                        if (
+                            route_binding(old.file) != route_binding(new.file)
+                            or scoped_config.build_text(getattr(fresh, review.scope.value))
+                            != review.proposed_text
+                        ):
+                            raise ValueError("Saved pair differs from reviewed goals/bindings")
+            except Exception as exc:
+                error = str(exc)
+                fresh = None
+            GLib.idle_add(finish, result, fresh, error, True)
+
+        try:
+            if self._pending_page is not None:
+                self._pending_page.schedule_refresh()
+            self._set_editor_sensitive(False)
+            threading.Thread(target=work, daemon=False).start()
+        except Exception as exc:
+            finish(None, None, str(exc), False)
 
     def collect_save_sections(self) -> config.ConfigSections:
         """Collect only supported sections already managed or edited this session."""

@@ -53,14 +53,20 @@ def run_bounded(
     cwd: Path | None = None,
     process_group: bool = False,
     cancel_event: threading.Event | None = None,
+    input_text: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Capture bounded UTF-8 output with deadline, cancellation and optional group cleanup."""
     if cancel_event is not None and cancel_event.is_set():
         raise InterruptedError("Health observation cancelled")
+    if input_text is not None and type(input_text) is not str:
+        raise ValueError("Expected UTF-8 command input")
+    request = input_text.encode("utf-8") if input_text is not None else b""
+    if len(request) > max_bytes:
+        raise ValueError("Health command input exceeds capture limit")
     deadline = time.monotonic() + timeout
     with subprocess.Popen(
         command,
-        stdin=subprocess.DEVNULL,
+        stdin=subprocess.PIPE if input_text is not None else subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         cwd=cwd,
@@ -70,6 +76,13 @@ def run_bounded(
         stderr = bytearray()
         try:
             with selectors.DefaultSelector() as selector:
+                sent = 0
+                if process.stdin is not None:
+                    if request:
+                        os.set_blocking(process.stdin.fileno(), False)
+                        selector.register(process.stdin, selectors.EVENT_WRITE)
+                    else:
+                        process.stdin.close()
                 for stream, buffer, limit in (
                     (process.stdout, stdout, max_bytes),
                     (process.stderr, stderr, _MAX_QUERY_BYTES),
@@ -86,6 +99,17 @@ def run_bounded(
                     if not selector.get_map() and process.poll() is not None:
                         break
                     for key, _ in selector.select(min(0.1, remaining)):
+                        if process.stdin is not None and key.fileobj is process.stdin:
+                            try:
+                                sent += os.write(key.fd, request[sent : sent + 65536])
+                            except BlockingIOError:
+                                continue
+                            except BrokenPipeError:
+                                sent = len(request)
+                            if sent == len(request):
+                                selector.unregister(key.fileobj)
+                                process.stdin.close()
+                            continue
                         buffer, limit = key.data
                         try:
                             chunk = os.read(key.fd, min(65536, limit - len(buffer) + 1))

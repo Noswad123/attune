@@ -40,45 +40,66 @@ automatic saves, startup reloads, main Lua parsing, configuration migrations, or
 automatic include insertion in the focused application. Launching does not silently
 register a desktop entry.
 
-**First milestone: one `attune.lua` containing both monitor and appearance overrides.**
-A shared-appearance/machine-specific-monitor split is not an active application mode.
-Its accepted design is recorded in
-[ADR 0001](docs/decisions/0001-shared-local-ownership.md); the proposed two-file
-layout and registry activation are not available through the application.
-Pure scoped models, registry parsing, and a v2 codec exist as development
-foundations, not a split editing or installation mode.
-An inactive read-only inspector can now verify explicitly supplied routes and
-revalidate captured evidence. It does not discover, create, approve for writing,
-or activate an installation, and is not a new GUI/launcher command.
-Inactive adapters also prepare exact scoped review plans, describe v1/v2 backup
-metadata, and project scoped diagnostics. The separate M3.4 backend
-provides guarded split publication and explicitly reviewed resume, rollback,
-finalize, and abandon operations. These core APIs write scopes/private journals
-when explicitly invoked; they are not read-only. M3.6a exposes explicit transaction
-recovery and read-only startup assessment; M3.6b4 adds historical restore commits. Split
-editing, split publication through Save, CLI mutation, registry activation,
-migration, and v2 editor routing remain unavailable.
+**Existing registered canonical-pair editing is implemented and validated.**
+The normal editor can read, edit, review, Save, and continue editing
+an already registered v2 appearance/display pair through the mature journaled
+writer. The `legacy-clear` v1 `attune.lua` workflow remains unchanged.
+This is not installation or migration: the app creates no registry, initializes no
+store, provisions no missing/empty scope target, and edits no loader lines.
+See [ADR 0001](docs/decisions/0001-shared-local-ownership.md).
 
 ### Roadmap
 
-See [ROADMAP.md](ROADMAP.md) for the phased backlog and acceptance criteria:
-validate the foundation, add diagnostics and recovery, separate shared/local
-settings, then introduce constrained presets, Wisp entry points, and a CARAMEL
-appearance overview. M1 diagnostics and M2 disk inspection/restoration/recovery
-are implemented. Shared/local ownership design and pure scoped model/codec work
-are complete, along with read-only route inspection and scoped review/backup/
-diagnostic adapters and the M3.4 journaled publication/recovery backend. M3.6a
-transaction recovery and legacy exclusion are completed in code. M3.6b is In progress:
-b1 read-only canonical scope restore preparation is implemented and validated.
-B2 historical source browsing/read-only review is implemented and validated.
-B3 canonical backend restore commits are implemented and validated.
-B4's distinct GUI historical restore action and writer-lifetime handling are
-implemented and validated. Next is a separate foreign-current route
-observation/private-preservation-first protocol before M3.5 opt-in migration.
-Explicit live application and routing rollout remain gated by manual acceptance.
-Unchecked roadmap items are not yet available features.
+Next priorities are practical manual acceptance of the current app/pair workflow
+and a reviewed, canonical-only opt-in migration. Automatic scoped foreign-file
+preservation is **deferred and nonblocking**, not a prerequisite for either feature.
+Diagnostics, explicit transaction recovery, and canonical historical restore are
+already implemented; they are support features, not an open-ended recovery-foundation
+milestone. M0 live acceptance remains pending, requiring separate user confirmation.
+See [ROADMAP.md](ROADMAP.md) and the short [manual checklist](docs/validation.md#manual-acceptance-checklist).
 
 ## API / Interfaces
+
+### Existing canonical-pair editor
+
+Startup admits `pair-ready` only for two existing, correctly scoped canonical v2
+outputs at explicit registry routes, a safe initialized private store, and a full
+bounded scan verifying all journals are terminal and intact. Zero journals are
+allowed. Old terminal transactions need not match today's output bytes: recovery
+`LayoutAssessment` row `actual_status` conflicts are not editor readiness criteria.
+Pending/corrupt evidence anywhere, including beyond displayed recovery rows, blocks
+entry. `legacy-clear` still selects v1; other outcomes fail closed into recovery.
+
+The normal scalar, animation/Bezier, and monitor pages use session-local pair
+models, not the v1 cache. Only dirty values/sections become proposals; untouched
+saved records and omitted sibling bytes remain intact. Ctrl+S prepares a bounded
+asynchronous **CURRENT -> GOAL** review for both scopes, including paths, hashes,
+content IDs, and precomputed diffs. Further edits invalidate that review.
+
+**Save Reviewed Changes** publishes exactly that review on a direct non-daemon
+worker with writer exclusion and close veto. Changed saves use a new transaction.
+Success re-reads a fresh safe pair and checks exact reviewed goals and route bindings
+before marking UI state saved, so a second Save works without restarting. Failures
+retain dirty edits; uncertain output/journal outcomes or failed post-save verification
+lock the editor rather than adopting an unverified baseline. Retry review for temporary
+failures only. If disk files/routes changed, manually correct or restore the registered
+canonical files/routes, then restart/reopen Attune: the original pair baseline cannot
+adopt external edits. Retained edits are session-local, not saved across restart.
+Save sends no reload IPC; watched files may nevertheless auto-reload.
+
+Settings shows registered/resolved pair routes. **Health** and **Backups** remain
+legacy-v1 utilities, not pair health or v2 backup browsers; Settings labels this
+limitation. Scope Recovery provides explicit transaction recovery and canonical
+historical restore separately.
+
+If entry is blocked, keep original files and private evidence. For pending work,
+use Scope Recovery to refresh, review an allowed action, then explicitly commit.
+For foreign/invalid/wrong-scope/missing output or a missing/unsafe store, inspect
+the reported registry/routes/store outside Attune and manually restore a verified
+canonical pair and safe initialized store, then **Retry Startup Check**. Corrupt
+evidence requires manual investigation, not deletion to bypass the gate. No automatic
+overwrite, permission repair, store initialization, or foreign preservation is offered
+for scoped files.
 
 ### Local source setup and launch
 
@@ -287,9 +308,9 @@ watcher may nevertheless auto-reload the replacement.
 
 ### Scope Recovery and legacy exclusion
 
-Startup first shows **Checking Attune Layout**. Its bounded, read-only assessment
-creates or repairs no state. Only `legacy-clear` permits construction of the v1
-editor. Scoped evidence, blocked observations, and assessment errors open the
+Startup first shows **Checking Attune Layout**. Its bounded, read-only editor-entry
+inspection creates or repairs no state. `legacy-clear` constructs the v1 editor;
+`pair-ready` constructs the canonical-pair editor described above. Blocked observations and errors open the
 recovery shell with **Scope Recovery**, **Legacy Backups (v1)**, **Open Health**,
 and **Retry Startup Check** instead. This does not select a runtime loader.
 
@@ -301,9 +322,10 @@ for both appearance and displays, including unchanged scopes, paths, hashes,
 content IDs, and review/private-evidence identities. Only the separate **Commit
 Reviewed Scope Recovery** action writes. Canceling assessment/review writes nothing.
 
-Assessment and review preparation use isolated, cancellable read-only children
-with default deadlines of 15 and 30 seconds. Assessment shows at most 32 transaction
-rows; truncation blocks legacy entry. Commits run directly on non-daemon workers,
+Editor entry uses a 30-second isolated read-only worker. The separate recovery
+assessment/review workers default to 15/30 seconds; assessment displays at most 32
+transaction rows. That display cap is not the full editor-entry safety scan.
+Commits run directly on non-daemon workers,
 not timeout-killed children. Close requests are vetoed while writing. Owner-aware
 exclusion prevents legacy restoration and scope recovery from overlapping or
 releasing each other's writer gate. Pending editor changes and monitor previews
@@ -315,8 +337,8 @@ Any installation registry or transaction evidence, including terminal history,
 blocks v1 save, restoration, and preservation-first replacement. Unsafe or
 uninspectable metadata fails closed, not back to v1. The writer rechecks this
 exclusion independently of startup. Legacy backups remain inspectable full bundles;
-they are not implicitly converted or restored into a v2 scope. M3.6b scope-local v2
-backup restore/preservation remains incomplete before migration. B1 provides canonical
+they are not implicitly converted or restored into a v2 scope. Automatic scoped
+foreign preservation is deferred, not a migration prerequisite. B1 provides canonical
 preparation; b2 adds **Browse Historical Sources** only on explicit user request,
 never during startup or as provisioning. The listing safety-checks all journals
 within the 1,000-entry limit, displaying at most 32 transactions with four sources
@@ -364,9 +386,39 @@ is implemented and validated; live GUI behavior is not verified.
 Separate renames are not pair-atomic; no reload IPC is sent, but watchers may
 auto-reload changed files.
 
-### Output contract
+### Foreign-current scoped diagnostics (backend only)
 
-The GUI's fixed default output is `$XDG_CONFIG_HOME/hypr/attune.lua`, falling back
+`scoped_foreign.observe_current(config_root, state_root, selected_scope)` and
+`revalidate_current(observation)` observe existing registered routes off GTK;
+`run_observe(..., cancel_event=None, timeout=30)` supervises an isolated read-only
+worker. The distinct frozen `ScopedForeignObservation` binds exact roots, registry,
+protected context, selected raw UTF-8 text/hash/path proof/status, and the opposite
+canonical v2 sibling's text, scope, content ID and counts. The selected raw text has
+no canonical content ID or counts and never becomes `InstallationEvidence`.
+
+Each scope is limited to 1 MiB, selected text to 10,000 lines, metadata to 1 MiB,
+and total ASCII-escaped transport to 8 MiB with JSON depth 24. Strict UTF-8/control
+checks preserve exact admitted bytes, including CRLF and final-newline presence.
+Canonical selected v2 (either scope), canonical v1, and detected unknown record
+versions refuse. After canonical parse failure, all recognized record-header lines
+are checked independently of whole-file prefix, tolerating leading BOM U+FEFF and
+ASCII space/tab for detection only. Unknown header versions and known headers with
+embedded JSON integer versions outside v1/v2 refuse without changing raw text or
+ownership classification. Damaged exact-marker text is `invalid-scoped`, other admitted text
+is `foreign`. Existing ownership, permissions, Stow, alias/protected-path and Git
+policies still apply. Canonical inspection still requires both canonical scopes.
+
+Transaction contents are **UNASSESSED**, never scanned/read. An initialized store
+is not required; pending/corrupt journals do not by themselves prevent diagnostics.
+This is not write authority, a pending-conflict check, or a protection bypass.
+B5 adds no preservation storage, source/candidate selection, proposal, diff, commit,
+GUI activation, provisioning, main Lua read, compiler invocation, or IPC. Existing
+b4 canonical historical restore remains available. See
+[the b5 contract](docs/architecture.md#m36b5-foreign-current-diagnostic-observer).
+
+### Legacy output contract
+
+In legacy mode, the GUI's fixed default output is `$XDG_CONFIG_HOME/hypr/attune.lua`, falling back
 to `~/.config/hypr/attune.lua`. Settings does not offer path editing.
 
 - Only a dedicated `attune.lua` is writable; the resolved destination must also
@@ -386,17 +438,19 @@ to `~/.config/hypr/attune.lua`. Settings does not offer path editing.
 
 ## Data Flow
 
-1. Startup assesses layout off GTK before constructing an editor. Only a clear
-   legacy layout proceeds to reading v1 managed data and sampling live options.
-   Other results open recovery. No main Lua parsing or compositor reload occurs.
+1. Startup inspects editor entry off GTK: `legacy-clear` reads v1 managed data;
+   `pair-ready` supplies canonical pair models; blocked/error results open recovery.
+   No main Lua parsing, provisioning, or compositor reload occurs.
 2. Interactive edits can immediately change compositor state via IPC, without
    writing any config file. Undo/discard operate on captured session baselines.
 3. **Ctrl+S opens Pending Changes**, not a disk write. Review the exact diff,
    including previously managed values that will be emitted.
-4. Choose **Save Reviewed Changes**. The save rechecks the draft, saved bytes,
+4. Choose **Save Reviewed Changes**. Legacy save rechecks the draft, saved bytes,
    and resolved destination, validates ownership and Lua syntax, backs up previous
    nonempty content, and atomically replaces the resolved file.
-5. Only a successful write updates UI save baselines. Persistent loading remains
+5. Pair Save uses journaled group publication and fresh exact post-save verification
+   before updating baselines. Only verified success enables continued editing.
+   Persistent loading remains
    an explicit configuration decision described below.
 
 ## Edge Cases
@@ -416,8 +470,12 @@ to `~/.config/hypr/attune.lua`. Settings does not offer path editing.
   immediately. Applying those points to compositor configuration is a separate
   pending change requiring review. Undo/discard restores the compositor draft,
   not the separately saved preset library.
-- A changed draft, disk file, or resolved symlink destination invalidates the
-  review. Review again rather than expecting a stale snapshot to save.
+- A changed draft invalidates review; prepare a fresh review before Save. Legacy v1
+  also requires a fresh review after disk/destination changes, subject to ownership
+  checks. An existing-pair session cannot adopt externally changed files/routes:
+  manually correct or restore the registered canonical files/routes, then restart/
+  reopen Attune. Retry review only for temporary failures. Retained edits are
+  session-local and do not survive restart.
 - Lua validation is **compile-only** (`luac -p`, or `lua -E` with `load`). It does
   not execute the generated chunk and is not full Hyprland semantic validation.
   A missing validator, syntax failure, or backup failure prevents replacement.
@@ -428,7 +486,16 @@ to `~/.config/hypr/attune.lua`. Settings does not offer path editing.
 
 ## Example usage
 
-### First reviewed save, then manual integration
+### Edit an existing registered pair
+
+Launch with the existing registry, canonical scopes, and safe initialized store.
+Change an appearance value, press Ctrl+S, inspect **both** scope reviews (displays
+should be unchanged), then choose **Save Reviewed Changes**. After verified success,
+make another edit and repeat Save, then reopen to inspect persisted values. This is
+the implemented and validated workflow, not authorization to run it on live state.
+No provisioning or loader change is part of this example.
+
+### Legacy first reviewed save, then manual integration
 
 1. Launch from the checkout, adjust a supported visual option, press Ctrl+S,
    inspect the diff, and select **Save Reviewed Changes**.
@@ -466,8 +533,10 @@ line are separate user opt-ins, never automatic Attune setup steps.
 
 ## Related files
 
-- [ADR 0001](docs/decisions/0001-shared-local-ownership.md): accepted ownership,
-  transaction, loader, and migration design, with inactive implementation status.
+- [ADR 0001](docs/decisions/0001-shared-local-ownership.md): ownership and transaction
+  decisions, existing-pair editing, and separate future migration design.
+- `hyprmod/core/editor_layout.py`, `tests/test_editor_layout.py`,
+  `tests/test_pair_editor_gui.py`: editor entry, pair review, and repeated-Save coverage.
 - `hyprmod/core/transaction_publication.py`: explicit split writer and
   reviewed recovery backend, also used by explicit GUI historical restore.
 - `hyprmod/core/scoped_recovery.py`, `hyprmod/core/layout_guard.py`,
@@ -475,6 +544,8 @@ line are separate user opt-ins, never automatic Attune setup steps.
   transaction recovery and separate reviewed canonical historical restore.
 - `hyprmod/core/scoped_restore.py`: read-only historical listings/drafts and explicit
   canonical restore commits used by the GUI, not foreign-current recovery.
+- `hyprmod/core/scoped_foreign.py`: backend-only foreign-current diagnostics,
+  distinct from canonical installation evidence and preservation/write authority.
 - [ROADMAP.md](ROADMAP.md): priorities, milestones, and acceptance criteria.
 - [CONTRIBUTING.md](CONTRIBUTING.md): development commands and verification policy.
 - [docs/architecture.md](docs/architecture.md): current interfaces and persistence boundary.

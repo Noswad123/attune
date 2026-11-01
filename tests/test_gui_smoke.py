@@ -18,11 +18,13 @@ from hyprmod import main as main_module
 from hyprmod.core import (
     backups,
     config,
+    editor_layout,
     health,
     persistence,
     restoration,
     scoped_recovery,
     scoped_restore,
+    transaction_publication,
 )
 from hyprmod.core import recovery as recovery_module
 from hyprmod.core.diagnostics import build_diagnostics_report
@@ -39,6 +41,29 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture(autouse=True)
 def startup_assessment(monkeypatch, isolated_user_paths):
+    monkeypatch.setattr(
+        editor_layout,
+        "run_prepare_review",
+        MagicMock(side_effect=AssertionError("Mock pair review explicitly")),
+    )
+    monkeypatch.setattr(
+        transaction_publication,
+        "publish_reviewed",
+        MagicMock(side_effect=AssertionError("Explicit temporary paired E2E context required")),
+    )
+    monkeypatch.setattr(
+        editor_layout,
+        "run_entry",
+        MagicMock(
+            return_value=editor_layout.EditorEntry(
+                os.environ["XDG_CONFIG_HOME"],
+                os.environ["XDG_STATE_HOME"],
+                "legacy-clear",
+                None,
+                None,
+            )
+        ),
+    )
     assessment = scoped_recovery.LayoutAssessment(
         config_root=os.environ["XDG_CONFIG_HOME"],
         state_root=os.environ["XDG_STATE_HOME"],
@@ -157,27 +182,19 @@ def _widgets(widget):
 
 
 class TestWidgetSmoke:
-    @pytest.mark.parametrize(
-        "route", ["legacy-clear", "scope-recovery-required", "blocked", "error"]
-    )
+    @pytest.mark.parametrize("route", ["legacy-clear", "blocked", "error"])
     def test_async_startup_routes_after_responsive_checking_window(
         self, app, startup_assessment, monkeypatch, route
     ):
         entered = threading.Event()
         release = threading.Event()
         message = "R&D <literal>"
-        assessment = replace(
-            startup_assessment.return_value,
-            mode="legacy-clear" if route == "error" else route,
-            transactions=(
-                (
-                    scoped_recovery.TransactionRow(
-                        "a" * 32, "verified", "prepared", False, "all-prior", ()
-                    ),
-                )
-                if route == "scope-recovery-required"
-                else ()
-            ),
+        assessment = editor_layout.EditorEntry(
+            os.environ["XDG_CONFIG_HOME"],
+            os.environ["XDG_STATE_HOME"],
+            "legacy-clear" if route == "error" else route,
+            None,
+            message if route == "blocked" else None,
         )
 
         def assess(config_root, state_root, **kwargs):
@@ -192,7 +209,8 @@ class TestWidgetSmoke:
                 raise ValueError(message)
             return assessment
 
-        startup_assessment.side_effect = assess
+        entry_collector = MagicMock(side_effect=assess)
+        monkeypatch.setattr(editor_layout, "run_entry", entry_collector)
         app._integration_shown = True
         monkeypatch.setattr(main_module, "has_cairo_support", lambda: True)
         if route != "legacy-clear":
@@ -216,11 +234,11 @@ class TestWidgetSmoke:
             GLib.idle_add(lambda: ticked.append(True))
             _wait_for(lambda: bool(ticked))
             assert not any(isinstance(w, HyprModWindow) for w in app.get_windows())
-            startup_assessment.assert_called_once_with(
+            entry_collector.assert_called_once_with(
                 Path(assessment.config_root),
                 Path(assessment.state_root),
                 cancel_event=app._startup_cancel,
-                timeout=15,
+                timeout=30,
             )
         finally:
             release.set()
@@ -239,7 +257,9 @@ class TestWidgetSmoke:
                 description = next(w for w in labels if "Read-only shell." in w.get_label())
                 expected = (
                     f"{message}\n\nRead-only shell. Recovery requires a separate review "
-                    "and explicit commit. Nothing is activated or migrated automatically."
+                    "and explicit commit. Foreign or invalid files are never overwritten. "
+                    "Correct the file manually or restore a verified backup, then Retry Startup "
+                    "Check. Nothing is activated, provisioned, repaired, or migrated automatically."
                 )
                 assert description.get_text() == expected
                 assert description.get_label() == GLib.markup_escape_text(expected)

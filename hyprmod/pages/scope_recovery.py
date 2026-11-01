@@ -61,7 +61,7 @@ class ScopeRecoveryPage:
             Gtk.Label(
                 label="Scope Recovery inspects the registry and private transaction evidence. "
                 "Scoped canonical historical restore is available after explicit review. "
-                "Foreign preservation, migration, and split editor Save remain unavailable. "
+                "Foreign preservation and migration remain unavailable. "
                 "Canonical hashes do not establish runtime loading or Lua semantics. "
                 "Nothing is converted or repaired implicitly. Attune sends no reload IPC; "
                 "Hyprland may auto-reload watched files. "

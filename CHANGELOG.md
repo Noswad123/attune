@@ -10,6 +10,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Existing explicitly registered canonical-pair normal edit/review/Save/continue,
+  **implemented and validated**. Startup requires both canonical
+  v2 scopes, safe initialized storage, and a full terminal-only journal scan, not
+  old recovery actual-conflict classification. Local pair models avoid v1 cache
+  reads; dirty-only proposals preserve untouched data. Bounded asynchronous both-scope
+  precomputed review is invalidated by edits. Explicit Save uses the mature direct
+  non-daemon journaled writer with a new transaction, close veto and owner exclusion.
+  Fresh post-save verification of exact reviewed goals/routes precedes baseline
+  adoption and marking saved, enabling repeated Saves. Failures retain dirty edits;
+  pending/uncertain outcomes or failed post-read verification lock editing. Settings
+  reports paired routes and labels Health/Backups as legacy-v1-only. Blocked entry
+  gives explicit recovery/manual-remediation guidance without overwrite or repair.
+  Legacy-clear v1 remains unchanged. No registry/store creation, absent/empty target
+  provisioning, loader edits, reload IPC, migration or new mutating CLI is added.
+  Validation: required Ruff checks/format passed (199 files unchanged); full-tree
+  Pyright error-level check found zero errors (baseline unfiltered GI warnings
+  remain); full pytest **3,907 passed, 231 skipped**, with 5 dependency warnings.
+  All three isolated Broadway suites: **228 passed, 2 skipped**. IPC is disabled and
+  mutators are mocked by default; explicit pair-Save end-to-end tests use the real
+  publisher with temporary outputs/store only. Build/help/diff checks passed.
+  No live UI, user-state mutation, loader change, migration or provisioning occurred.
+  See `docs/validation.md` for timings, review results and remaining manual acceptance.
+
+The following implementation entries retain historical checkpoint results and scope
+limitations. Earlier references to inactive split Save or preservation preceding
+migration are superseded by the current delivery and priority decisions above/below.
+
+- M3.6b5 backend-only foreign-current diagnostic observer, implemented and validated.
+  `observe_current`, `revalidate_current`, and supervised
+  `run_observe` return distinct frozen raw-selected/canonical-sibling observations,
+  never foreign `InstallationEvidence` or canonical IDs/counts for raw originals.
+  Exact UTF-8 bytes, CRLF and final-newline presence are retained within 1 MiB per
+  scope/10,000 selected lines, 1 MiB metadata, and 8 MiB ASCII transport/depth-24 bounds.
+  Private collection shares existing filesystem policy without a public
+  `allow_foreign` flag; canonical inspection still requires both canonical scopes
+  and rechecks dependencies after parsing. Transaction contents remain UNASSESSED:
+  no initialized store or journal scan is required for diagnostics, not authority.
+  No preservation storage, source/candidate/proposal/diff/commit, GUI activation,
+  provisioning, main Lua read, compiler invocation or IPC is added. B4 remains
+  available; v1 fixtures and ordinary ownership are unchanged. M3.6b is incomplete:
+  raw-preservation evidence, journal/review contracts and writer authority under lock,
+  including pending-conflict checks, need separate design before a foreign mutator
+  only, not canonical-only migration. Independent review's P2 leading-comment/blank/BOM version-detection
+  gap is fixed: after canonical parse failure, scan all recognized record-header
+  lines regardless of whole-file prefix. Leading BOM/ASCII space/tab tolerance is
+  detection-only; unsupported header or embedded JSON integer versions refuse
+  without changing raw bytes or exact-marker status. Added 154 public-observer
+  regressions cover both scopes; focused foreign/route tests: 804 passed. Final
+  source review found no blockers. Full suite: 3,822 passed, 207 skipped; both
+  isolated Broadway suites: 204 passed, 2 skipped. Required checks/build/help passed;
+  full results and warning qualifications are in `docs/validation.md`. No b5 GUI,
+  live operations, installation, staging or commits were added/performed.
 - M3.6b4 explicit **Commit Reviewed Historical Restore**, implemented and validated.
   Complete both-scope review populates its own
   `ScopedRestoreDraft`, never the transaction recovery draft; neither browsing nor
@@ -25,9 +77,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before setup, setup failures use pre-delegation cleanup, and essential authority
   cleanup is independent of individually guarded widget operations. Recheck found
   no remaining blocking findings; validation results are in `docs/validation.md`.
-  Live GUI behavior is not verified. M3.6b remains incomplete;
-  next is a separate foreign-current route observation/private-preservation-first
-  protocol before M3.5, not unknown raw bytes as canonical priors. No mutator CLI or
+  Live GUI behavior is not verified. At the b4 checkpoint, separate foreign-current
+  diagnostics followed; automatic foreign preservation is now deferred and nonblocking
+  for canonical-only migration, never unknown raw bytes as canonical priors. No mutator CLI or
   reload IPC is added; watchers may auto-reload changed files.
 - M3.6b3 canonical backend restore commit, implemented and validated.
   Explicit `scoped_restore.commit_restore` writes only the selected canonical scope
@@ -42,8 +94,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   file is possible. Failures can require explicit existing recovery of the new
   transaction, never terminal-source replay. Temporary-only fault and real
   `os._exit` tests are present; no passing b3 results are claimed here. M3.6b remains
-  incomplete: at the b3 checkpoint, b4's distinct GUI action/lifetime tests and
-  separate foreign observation/preservation preceded migration. No total filesystem deadline or
+  incomplete at that checkpoint: b4's distinct GUI action/lifetime tests followed.
+  Foreign preservation is now deferred, not a migration prerequisite. No total filesystem deadline or
   reload IPC is promised; watchers may auto-reload replacements.
 - M3.6b2 historical source browsing/review in Scope Recovery. Explicit browsing
   displays at most 32 transactions with
@@ -145,6 +197,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Corrected stale-disk guidance: pair sessions cannot adopt external file/route
+  edits. Manually correct or restore registered canonical files/routes, then
+  restart/reopen; retained edits are session-local, and review retry is for temporary
+  failures only. Scope Recovery copy now consistently states that reviewed canonical
+  historical restore is available while foreign preservation/migration are not.
+- Prioritize main user-facing features: practical acceptance of the current app and
+  existing canonical-pair editing, followed by canonical-only opt-in migration.
+  Automatic scoped foreign preservation is deferred, nonblocking work, not a
+  prerequisite for canonical editing or migration. Foreign/invalid targets still
+  fail closed and require manual remediation. M0 remains pending explicit manual
+  acceptance; the short checklist in `docs/validation.md` authorizes no live effects.
 - Any registry or transaction evidence, including terminal history, now excludes
   v1 save, restoration, and preservation-first replacement. Unsafe or uninspectable
   metadata fails closed. Discovery of scoped evidence locks the legacy editor

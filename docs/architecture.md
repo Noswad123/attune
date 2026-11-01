@@ -17,20 +17,104 @@ Inherited profile, binding, rule, workspace, autostart, environment, plugin, and
 generic configuration helpers are not the focused application's feature contract.
 Hand-authored behavior remains outside the GUI.
 
-The first milestone has **one output file for both monitors and appearance**.
-A shared/machine-specific split is not active editor routing. Split publication
-remains separate from GUI Save; M3.6a integrates startup assessment and
-explicit transaction recovery. M3.6b4 adds separately reviewed historical restore.
-The selected future design is
-[ADR 0001](decisions/0001-shared-local-ownership.md). It chooses two explicitly
-registered scope outputs and journaled recovery, with manual loader handoff and
-no claim of pair-atomic or runtime snapshot loading. The interfaces below remain
-the active single-output implementation unless explicitly labeled inactive.
-M3.2's pure models and codec are implemented separately below. Startup now inspects
-the configured registry and private journals without selecting a split editor,
-activating a registry, or creating state. Explicit recovery may write v2 scopes.
+The editor supports unchanged `legacy-clear` v1 behavior and an existing registered
+canonical v2 pair. **Pair editing/review/Save/continue is implemented and validated.**
+Startup/Save create no registry, initialize no store,
+provision no absent/empty targets, migrate no data, and select no runtime loader.
+[ADR 0001](decisions/0001-shared-local-ownership.md) records ownership and separate
+future migration design. Automatic scoped foreign preservation is deferred and
+nonblocking for canonical editing or canonical-only migration.
+
+The current pair path below supersedes earlier checkpoint descriptions of inactive
+editor routing. Legacy APIs apply only to `legacy-clear`; the M3 sections retain
+supporting contracts, not a requirement to finish every foreign-recovery edge case.
 
 ## API / Interfaces
+
+### Existing canonical-pair editor
+
+| Interface | Role |
+| --- | --- |
+| `editor_layout.EditorEntry` | Frozen explicit roots and `legacy-clear`, `pair-ready`, or `blocked`; only ready entries carry a pair, blocked entries carry a bounded reason. |
+| `CanonicalPairLayout` | Exact `InstallationEvidence` plus immutable appearance/displays `ScopedConfig` models matching route bytes, IDs, and counts. |
+| `inspect_entry` / `run_entry` | Read-only inspection; wrapper defaults to 30 seconds, exact root echo, strict 8 MiB transport. |
+| `prepare_review` / `run_prepare_review` | Revalidate original pair, store and full pending scan before/after complete `GroupReviewPlan` construction; verify exact baseline and proposal goals. |
+| `HyprModWindow.pair_proposals()` | Merge dirty scalar/section edits into saved local pair data; omit unchanged scopes. |
+| `HyprModWindow.save_pair_reviewed(plan, proposals)` | Recheck review/editor/monitor gates, publish on a direct non-daemon worker, verify fresh post-save pair before adopting baseline. |
+
+#### Data Flow
+
+1. `main.py` supervises `run_entry` before window construction. Metadata-only
+   `layout_guard.block_reason` admits unchanged v1 entry only for `legacy-clear`.
+   Otherwise inspect the safe initialized store, scan all journals read-only, inspect
+   explicit registered canonical routes, decode both models, then rescan/revalidate.
+   A ready pair may have zero journals. Full scans verify terminal records and blobs
+   within the 1,000-entry limit, not only the 32 recovery display rows. Old terminal
+   actual-byte conflicts in `LayoutAssessment` are not readiness criteria.
+2. A ready entry builds normal scalar, animation/Bezier, and monitor pages using
+   local pair values/sections, without v1 `config.read_cached()` reads. Proposals
+   merge only dirty values/sections, retaining untouched records, curves, animation
+   definitions, and disconnected monitors rather than reconstructing them from IPC.
+3. Pending Changes supervises read-only preparation off GTK, retaining one read slot
+   through cancellation, and renders both precomputed CURRENT -> GOAL diffs with
+   paths/hashes/content IDs. Inputs retain 256 KiB/10,000-line per-side limits;
+   complete per-scope diffs retain 256 KiB/4,000-line limits. Oversize refuses.
+   Edits/undo/reset invalidate review immediately; revision, pair identity and
+   proposal checks reject stale completions.
+4. Explicit Save consumes review, acquires the window's `save` owner, disables
+   editing, and vetoes closure. It calls mature `publish_reviewed` directly on a
+   non-daemon thread with explicit roots and no reused transaction ID. The writer
+   rechecks under lock, compile-checks without executing Lua, journals, and stages
+   changed scopes only. Owner exclusion prevents backup/recovery overlap.
+5. Exact typed result validation precedes fresh supervised `run_entry` after
+   committed/no-op success. Registry/context and route bindings must match, and both
+   fresh texts must equal reviewed goals. Only then replace the local pair baseline
+   and call `_perform_save` / `mark_saved`, clearing dirty/undo state and permitting
+   repeated Saves without restart. This verified success path is distinct from
+   recovery's old-editor invalidation.
+
+#### Edge Cases
+
+- Foreign/invalid/wrong-scope/missing outputs, absent/unsafe stores, pending/corrupt
+  journals anywhere, scan limits, drift, and inspection errors fail closed. Reasons
+  identify registry/routes/store and manual remediation, never overwrite or
+  initialization. For pending work, explicitly refresh Scope Recovery, review an
+  allowed action, then commit separately. For other damage, preserve originals and
+  evidence, inspect externally, manually restore verified canonical scopes/safe
+  store, then Retry Startup Check. Never delete evidence just to regain editing.
+- Failures retain session-local dirty edits, which do not survive restart. Retry
+  review for temporary failures only. External disk/route changes cannot be adopted
+  into the original pair baseline: manually correct or restore the registered
+  canonical files/routes, then restart/reopen Attune. Pending/uncertain
+  outcomes, invalid delegated results, and post-save verification failure lock the
+  editor without marking saved. Independent scope/journal flags remain sticky.
+  Worker-start failure before delegation adds no uncertainty.
+- Settings shows registered/resolved pair routes and labels Health/Backups as
+  legacy-v1-only. Those utilities do not diagnose/restore this pair; canonical
+  historical restore remains separate in Scope Recovery.
+- No Save reload IPC, runtime-loading proof, pair-atomicity, or total filesystem
+  deadline is promised. Watchers can auto-reload between renames. Lock/compiler
+  operations retain their existing five-/ten-second bounds.
+- `health.run_bounded(input_text=...)` supplies bounded UTF-8 stdin for large review
+  requests rather than argv. Nonblocking input and stdout/stderr share the existing
+  deadline, cancellation and process cleanup; oversized input refuses before launch.
+  This is a small supervisor extension, not a new worker framework.
+
+#### Example usage
+
+For an already registered canonical pair and initialized store: launch, edit an
+appearance value, Ctrl+S, inspect both scope diffs, Save Reviewed Changes, then edit
+and Save again. Reopen to inspect persisted data. No provisioning/loader handoff
+is part of this sequence; live execution requires separate explicit confirmation.
+
+#### Related files
+
+`core/editor_layout.py`, `main.py`, `window.py`, `pages/pending.py`,
+`pages/settings.py`, `core/health.py`; `tests/test_editor_layout.py`,
+`tests/test_pair_editor_gui.py`, `tests/test_health_input.py`. Automated validation
+passed; see [validation.md](validation.md#current-status). Live acceptance remains pending.
+
+### Legacy and utility interfaces
 
 | Interface | Role |
 | --- | --- |
@@ -69,8 +153,8 @@ reviewed persistence API. Settings exposes neither path editing nor auto-save.
 ## M3.2 data foundations
 
 These pure interfaces perform no filesystem operations, subprocess calls, Lua
-evaluation, registry creation, discovery, or activation. M3.6a consumes them for
-assessment/recovery validation, not editor Save or split installation activation.
+evaluation, registry creation, discovery, or activation. Pair editing and explicit
+recovery consume them; pure model construction grants no write authority.
 
 | Interface | Role |
 | --- | --- |
@@ -110,7 +194,7 @@ migration, or writer. Canonical validation is not live compositor acceptance.
 
 ## M3.3a route inspection foundation
 
-`core/route_approval.py` is used by M3.6a assessment/recovery, not editor routing. Its
+`core/route_approval.py` is used by editor entry/review and explicit recovery. Its
 public APIs require explicit normalized absolute `registry_path`, `config_root`,
 and `state_root`; the registry must be at `config_root/attune/installation.json`.
 Callers supply context; startup derives those roots from XDG defaults. There is no
@@ -156,13 +240,13 @@ provisioning rather than blindly ignoring changed evidence.
 The layer never writes files, creates state, executes/compiles Lua, runs compositor
 queries, or activates split routing. The adapters below consume its evidence;
 the journaled writer is implemented below. Transaction recovery and separately
-reviewed historical restore have GUI integration; v1 remains the sole editor Save
-format, subject to layout exclusion.
+reviewed historical restore have GUI integration. Existing-pair Save uses the same
+route checks; legacy Save remains subject to layout exclusion.
 
 ## M3.3b scoped adapters
 
-These core APIs do not activate split editing or new Save routing. M3.6a consumes
-group reviews for explicit transaction recovery; backup/diagnostic adapters remain
+These read-only APIs grant no write authority. Pair Save and explicit recovery
+consume group reviews; backup/diagnostic adapters remain
 separate from active legacy utilities:
 
 | Interface | Role |
@@ -201,8 +285,7 @@ errors, registry contents, link targets, and scalar values are omitted.
 No adapters write files, enumerate backup directories, compile/execute Lua, run
 IPC, or grant write authority. Direct review/collection I/O and diff computation
 must be supervised off GTK. M3.6a supervises recovery review preparation. The
-separate private-evidence layer below implements storage; ordinary split
-publication still has no editor Save integration.
+separate private-evidence layer below implements storage for explicit publication.
 
 ## M3.4a transaction evidence foundation
 
@@ -289,11 +372,11 @@ explicitly invoked; no live store, registry activation, migration, or loader was
 ### Overview
 
 `core/transaction_publication.py` implements the ordinary present-owned split-save
-backend, not a new application mode. Explicit mutator calls can replace scope
-files and private journals. M3.6a integrates explicit recovery and read-only
-startup assessment, not ordinary split publication. Split editor Save, CLI
-mutation, registry activation, migration, and v2 editor routing remain unavailable.
-M3.6b scope-local backup restore/preservation precedes M3.5 and M0-gated rollout.
+backend. Explicit mutator calls can replace scope files and private journals.
+Existing-pair Save integrates ordinary publication and is implemented and validated.
+No CLI mutation, registry creation/activation, initial provisioning, or migration
+is added. Foreign preservation is deferred and does not block canonical-only
+migration; M0 live rollout remains unverified.
 
 ### API / Interfaces
 
@@ -307,8 +390,9 @@ M3.6b scope-local backup restore/preservation precedes M3.5 and M0-gated rollout
 The two flags are conservative and sticky within an attempt, not inferred from
 each other, outcome, or advisory progress. A journal-only change does not establish
 a scope replacement; a failed rename/sync/checkpoint can still mean scopes changed.
-Callers **must invalidate editors on scope change or uncertainty**, never
-mark old baselines Saved. M3.6a also invalidates on independent journal uncertainty.
+Recovery callers **must invalidate editors on scope change or uncertainty**, never
+mark old baselines Saved. Normal pair Save may adopt only its freshly verified
+exact post-save baseline, not its old cached one. M3.6a also invalidates on independent journal uncertainty.
 Mutators must run
 directly on non-daemon workers, never in timeout-killable children. Lock acquisition
 is cancellable with a five-second bound; each compile check has a ten-second bound.
@@ -400,9 +484,10 @@ This is an API sequence, not installation, live activation, or a new CLI command
 
 ### Overview
 
-Completed in code, this slice provides startup assessment and explicit journal
-recovery, not a split editor, migration, activation, or scope-local backup restore.
-M3.6b v2 backup restore/preservation remains a prerequisite before M3.5 migration.
+This delivered slice provides explicit journal recovery and its own assessment.
+Current startup uses `EditorEntry` above, not recovery actual-conflict rows to exclude
+healthy pairs. Deferred foreign preservation is not a canonical-only migration
+prerequisite; migration/provisioning remain separate work.
 
 ### API / Interfaces
 
@@ -418,8 +503,8 @@ M3.6b v2 backup restore/preservation remains a prerequisite before M3.5 migratio
 ### Data Flow
 
 1. `main.py` presents Checking Attune Layout before editor construction. A
-   non-daemon thread supervises read-only assessment off GTK. Only `legacy-clear`
-   proceeds to the v1 editor. Scoped/blocked results and errors open a recovery
+   non-daemon thread supervises read-only `editor_layout.run_entry` off GTK.
+   `legacy-clear` proceeds to v1, `pair-ready` to the pair editor; blocked results/errors open a recovery
    shell with Scope Recovery, Legacy Backups (v1), Health, and Retry Startup Check.
    Nothing initializes or repairs the store or automatically invokes a mutator.
 2. The assessment reports registry/canonical identities and verified or invalid
@@ -492,8 +577,8 @@ to force legacy entry or treat Retry Startup Check as migration or activation.
 This first bounded M3.6b slice is implemented and validated.
 Its preparation APIs in `core/scoped_restore.py` are read-only.
 B2 adds historical browsing/read-only review below, implemented and validated.
-M3.6b remains In progress. B3 adds the separate backend commit API below;
-b4 adds its distinct GUI action, implemented and validated.
+Canonical restore b1-b4 is delivered; automatic foreign preservation is deferred.
+B3 supplies the separate backend commit API below; b4 supplies its distinct GUI action.
 There is no commit CLI.
 Ordinary ownership and active editor routing are unchanged.
 
@@ -562,8 +647,8 @@ plan = draft.plan  # Complete CURRENT -> GOAL observation for both scopes; no co
 ```
 
 This API sequence performs no installation or activation. B3 adds a backend writer
-below, and b4 adds a separate GUI commit. The foreign-current observation/private
-preservation protocol remains required before M3.5 migration.
+below, and b4 adds a separate GUI commit. Foreign-current preservation is deferred,
+not required for canonical-only M3.5 migration.
 
 ### Related files
 
@@ -644,7 +729,7 @@ Preparation retains the b1 strict 8 MiB draft and complete per-scope review boun
   compilation, Lua execution, IPC, or provisioning. Reads may update atime. No
    historical GUI review committed at the b2 checkpoint. B3 adds a separate backend
    writer below; b4 explicitly integrates it. Separate foreign observation/private
-   preservation remains required before migration. Canonical snapshots cannot hold raw originals.
+    preservation is deferred and nonblocking for canonical-only migration. Canonical snapshots cannot hold raw originals.
 
 ### Example usage
 
@@ -737,7 +822,7 @@ limits and default 30-second deadlines. The mutator has no such wrapper/deadline
 - Both current scopes must remain canonical. Foreign originals require a separate
   observation/preservation protocol, not raw canonical rollback blobs. M3.6b is not
    complete. B4 below adds the distinct GUI action, implemented and validated;
-   the separate foreign protocol is next before M3.5 migration.
+     b5 below adds diagnostics only; deferred foreign writer work does not block canonical-only migration.
 
 ### Example usage
 
@@ -758,7 +843,7 @@ This is an API sequence, not a GUI action, CLI command, or permission to touch l
   canonical snapshots and exact review semantics.
 - `hyprmod/pages/scope_recovery.py`: b4 integrates the separate historical GUI commit below.
 - `tests/test_scoped_restore_commit.py`: temporary-only commit/fault/collision and
-  real `os._exit` interruption tests. Results are pending in
+   real `os._exit` interruption tests. Results are recorded in
   [validation.md](validation.md#m36b3-canonical-backend-restore-commit).
 
 ## M3.6b4 explicit GUI historical restore
@@ -768,8 +853,8 @@ This is an API sequence, not a GUI action, CLI command, or permission to touch l
 Implemented and validated. **Commit Reviewed Historical Restore**
 is distinct from **Commit Reviewed Scope Recovery**. Historical browsing and
 preparation stay read-only; only the explicit commit calls the b3 backend. M3.6b
-remains incomplete, with separate foreign-current route observation/private
-preservation-first work next before M3.5. Live GUI behavior is not verified.
+remains incomplete. B5 below adds backend-only foreign-current diagnostics; private
+preservation and writer authority remain deferred, nonblocking work. Live GUI behavior is not verified.
 
 ### API / Interfaces
 
@@ -862,9 +947,126 @@ This describes the code path, not a live-verified workflow or permission to muta
   `tests/test_restore_window.py`: widget lifetime, result/notification boundaries and ownership.
   See [validation.md](validation.md#m36b4-explicit-gui-historical-restore) for validated results.
 
+## M3.6b5 foreign-current diagnostic observer
+
+### Overview
+
+`core/scoped_foreign.py` is implemented and validated. This is
+an inactive backend diagnostic observer, not a foreign recovery draft or writer.
+M3.6b remains incomplete; b4's canonical historical restore UI remains available.
+Independent review's P2 hidden-unsupported-version finding is resolved by the
+all-header detection below; final source-only review found no blockers. Parent
+validation results are recorded in [validation.md](validation.md#m36b5-foreign-current-diagnostic-observer).
+
+### API / Interfaces
+
+| Interface | Contract |
+| --- | --- |
+| `observe_current(config_root, state_root, selected_scope)` | Direct read-only I/O off GTK; explicit normalized absolute roots and exact `Scope`. Requires existing registry/routes, not initialized transaction storage. |
+| `revalidate_current(observation)` | Validates the original immutable DTO, then recaptures filesystem/bytes and rejects changed `observation_hash`; returns a fresh observation. It does not make a JSON copy. |
+| `run_observe(..., cancel_event=None, timeout=30)` | Isolated `-I -B` observe-only child, finite positive deadline, cancellation/process-group cleanup, 8 MiB stdout cap, strict decoding and exact roots/selected-scope echo. No parent filesystem reread after transport. |
+| `ScopedForeignObservation` | Frozen/slotted roots, selected scope, registry `FileEvidence`, raw selected evidence, canonical sibling evidence, four protected `PathProof`s and UTC `observed_at`. |
+| `ForeignCurrentEvidence` | Selected scope, `FileEvidence` (raw SHA-256/path/Git proofs), `foreign` or `invalid-scoped` status, and exact text. No canonical content ID or counts. |
+| `CanonicalSiblingEvidence` | Exact text plus opposite-scope canonical v2 `RouteEvidence`, full byte hash, content ID and counts ordered values/Beziers/animations/monitors. |
+
+`to_json` / `from_json` enforce exact schema-1 `scoped-foreign-observation`
+fields, duplicate/unknown-field and invalid-constant rejection, exact nested types
+and tuple immutability, text/hash/leaf-size/classification consistency, canonical
+sibling ID/counts, context and UTC semantics. Original nested types are checked
+before `asdict`/JSON can hide mutable inputs. `observation_hash` binds substantive
+fields but excludes `observed_at`. Pure decoding and a recomputed hash are not
+filesystem authentication, freshness, write authority or runtime proof.
+
+Limits: nonempty text at most 1 MiB per scope; selected text at most 10,000
+`splitlines()` lines; metadata excluding both texts at most 1 MiB; total transport
+at most 8 MiB, including canonical ASCII escaping; JSON nesting at most 24.
+Strict UTF-8 rejects invalid encodings/surrogates and C0/C1 controls except tab,
+CR and LF. No newline, BOM or Unicode normalization occurs. Admitted text encodes
+back to the exact input bytes, preserving CRLF and presence/absence of a final newline.
+
+### Data Flow
+
+1. Private `route_approval._collect_filesystem` captures registry, both route bytes
+   and proofs, protected-path metadata and Git context using the existing policy.
+   No public `allow_foreign` flag is added. Registry `0600`, owned single-link safe
+   regular outputs/parents, declared resolution/basenames, Stow links, collision/
+   alias guards, and registry/display outside-Git rules remain enforced. Main Lua
+   is metadata-only, never read. State absence is allowed, unsafe dependent metadata
+   is not exempted.
+2. Classify selected text via `scoped_config.read_document(text)` **without**
+   `expected_scope` first. Correct-scope canonical v2 requires canonical restore;
+   wrong-scope canonical v2 refuses as cross-scope; canonical v1 requires explicit
+   conversion. None becomes foreign. On canonical parse failure, scan **all**
+   recognized Attune record-header lines, independent of whole-file prefix.
+   A leading run of BOM U+FEFF/ASCII space/tab is permitted for header detection
+   only. Explicit unsupported header versions, or known v1/v2 headers containing
+   decoded JSON integer versions outside v1/v2, refuse. Leading comments, blank
+   lines or BOM cannot hide those records. Raw text is never normalized, and
+   exact-marker ownership classification remains unchanged. Otherwise text beginning
+   with the exact LF ownership marker is `invalid-scoped`; other admitted text is
+   `foreign` (including a CRLF marker variant). Malformed records never supply IDs.
+3. Require the opposite sibling to be correctly scoped canonical v2 and construct
+   the semantically validated observation. Recheck all collected dependencies
+   after parsing, then recollect and require identical filesystem/byte collection.
+   The canonical `inspect_installation` consumer still requires **both** canonical
+   scopes and independently final-rechecks dependencies after parsing.
+4. `revalidate_current` repeats observation and compares substantive hashes. The
+   supervised wrapper decodes the child response and verifies exact requested
+   roots/selection without adding unbounded parent filesystem work.
+
+### Edge Cases
+
+- Transaction contents are **UNASSESSED**: no transaction directory scan, journal
+  read, pending/corrupt classification or lock acquisition occurs. Missing store
+  initialization and pending/corrupt journals do not themselves block diagnostics.
+  This never authorizes writes, clears conflicts, or bypasses protected-path or
+  legacy-exclusion policy. Protected state-path metadata is still checked.
+- Missing/empty/binary/oversized/unsafe selected files and noncanonical or wrong-scope
+  siblings refuse. Dependency drift, same-byte link retargeting, registry changes,
+  permissions, new Git markers and protected-context changes require a new observation.
+- No preservation storage, source/candidate selection, proposal, diff, commit,
+  GUI activation, provisioning, main Lua parsing, compiler invocation or IPC is
+  added. V1 fixtures and ordinary ownership remain unchanged. Reads may affect atime;
+  direct I/O has no hard latency bound and observations are not atomic snapshots
+  or hostile-race guarantees.
+- Deferred work is separately designing raw-preservation evidence, journal/review contracts,
+  and writer authority under lock, including pending-conflict checks, before a
+  foreign mutator, not canonical-only migration. Raw originals must never enter canonical-only
+  snapshots, rollback blobs, reviews or compiler paths.
+
+### Example usage
+
+For an exclusively temporary fixture with an existing safe registry, bounded
+foreign selected file and canonical sibling, call off GTK:
+
+```python
+observation = scoped_foreign.run_observe(config_root, state_root, Scope.APPEARANCE)
+status = observation.selected.status
+raw_hash = observation.selected.file.source_sha256
+fresh = scoped_foreign.revalidate_current(observation)  # Direct I/O off GTK too.
+```
+
+This observes only, initializes nothing and grants no permission to replace text.
+The internal worker has only explicit `observe` mode with both roots and scope
+required, not a public launcher command or mutator CLI.
+
+### Related files
+
+- `hyprmod/core/scoped_foreign.py`, `tests/test_scoped_foreign.py`: DTOs, worker,
+  classification, exact-byte, transport, drift and forbidden-effect coverage.
+- `hyprmod/core/route_approval.py`, `tests/test_route_approval.py`: private collector,
+  common filesystem policy and strict canonical consumer.
+- `hyprmod/core/scoped_config.py`, `hyprmod/core/installation.py`,
+  `hyprmod/core/scopes.py`, `hyprmod/core/health.py`: codec, registry/types and supervisor.
+- [validation.md](validation.md#m36b5-foreign-current-diagnostic-observer),
+  [ADR 0001](decisions/0001-shared-local-ownership.md#6-scope-aware-backup-and-preservation-compatibility).
+
 ## Data Flow
 
-1. **Startup:** only after the bounded assessment admits legacy entry, the window
+The following flow and v1 ownership/path details describe **legacy mode**. The
+existing-pair flow above does not use the v1 cache or writer.
+
+1. **Startup:** only after bounded editor inspection admits legacy entry, the window
    warms the managed cache using the restricted reader,
    constructs IPC-only `HyprlandState` with an empty `/dev/null` document rather
    than executing any Lua, and loads a version-aware, filtered schema. Supported live options

@@ -11,7 +11,9 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 from hyprland_config import ParseError
 
 from hyprmod.constants import APPLICATION_ID
-from hyprmod.core import config, scoped_recovery
+from hyprmod.core import config, editor_layout, scoped_recovery
+from hyprmod.core.editor_layout import CanonicalPairLayout, EditorEntry
+from hyprmod.core.route_approval import InstallationEvidence
 from hyprmod.install import install_user_files, uninstall_user_files
 from hyprmod.pages.backups import BackupsPage
 from hyprmod.pages.health import HealthPage
@@ -128,31 +130,55 @@ class HyprModApp(Adw.Application):
         config_root = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
         state_root = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state"))
 
-        def complete(
-            assessment: scoped_recovery.LayoutAssessment | None, error: str | None
-        ) -> bool:
+        def complete(entry: EditorEntry | None, error: str | None) -> bool:
             if self._startup_cancel is not cancel or cancel.is_set():
                 return GLib.SOURCE_REMOVE
             self._startup_cancel = None
-            if assessment is not None and assessment.mode == "legacy-clear" and error is None:
+            valid = (
+                type(entry) is EditorEntry
+                and type(entry.mode) is str
+                and type(entry.config_root) is str
+                and type(entry.state_root) is str
+                and (entry.config_root, entry.state_root) == (str(config_root), str(state_root))
+                and (
+                    (entry.mode == "legacy-clear" and entry.pair is None and entry.message is None)
+                    or (
+                        entry.mode == "pair-ready"
+                        and type(entry.pair) is CanonicalPairLayout
+                        and type(entry.pair.evidence) is InstallationEvidence
+                        and (entry.pair.evidence.config_root, entry.pair.evidence.state_root)
+                        == (entry.config_root, entry.state_root)
+                        and entry.message is None
+                    )
+                    or (
+                        entry.mode == "blocked"
+                        and entry.pair is None
+                        and type(entry.message) is str
+                        and bool(entry.message)
+                    )
+                )
+            )
+            if not valid or error is not None:
+                self._show_config_error(error or "Startup returned an invalid editor entry.")
+            elif entry is not None and entry.mode == "legacy-clear":
                 self._open_editor()
+            elif entry is not None and entry.mode == "pair-ready":
+                self._open_editor(entry.pair)
             else:
                 self._show_config_error(
-                    error
-                    or "Scoped evidence requires explicit recovery. The legacy editor is locked.",
-                    assessment=assessment,
+                    entry.message if entry and entry.message else "Entry blocked."
                 )
             return GLib.SOURCE_REMOVE
 
         def assess() -> None:
             try:
-                assessment = scoped_recovery.run_assess(
-                    config_root, state_root, cancel_event=cancel, timeout=15
+                entry = editor_layout.run_entry(
+                    config_root, state_root, cancel_event=cancel, timeout=30
                 )
             except Exception as exc:
                 GLib.idle_add(complete, None, str(exc))
             else:
-                GLib.idle_add(complete, assessment, None)
+                GLib.idle_add(complete, entry, None)
 
         checking.present()
         try:
@@ -160,12 +186,15 @@ class HyprModApp(Adw.Application):
         except Exception as exc:
             complete(None, str(exc))
 
-    def _open_editor(self) -> None:
+    def _open_editor(self, pair_layout: CanonicalPairLayout | None = None) -> None:
         win = self.props.active_window
         if not isinstance(win, HyprModWindow):
             existing = set(self.get_windows())
             try:
-                win = HyprModWindow(application=self)
+                if pair_layout is None:
+                    win = HyprModWindow(application=self)
+                else:
+                    win = HyprModWindow(application=self, pair_layout=pair_layout)
             except (OSError, ValueError, ParseError) as exc:
                 # ``application=self`` registers the window with the app
                 # before ``__init__`` reaches the config read, so a failed
@@ -183,7 +212,7 @@ class HyprModApp(Adw.Application):
             dialog = Adw.AlertDialog(heading="Missing Cairo Bindings", body=CAIRO_MISSING_BODY)
             dialog.add_response("close", "Close")
             dialog.present(win)
-        elif not self._integration_shown:
+        elif pair_layout is None and not self._integration_shown:
             self._integration_shown = True
             OnboardingDialog().present(win)
 
@@ -276,7 +305,9 @@ class HyprModApp(Adw.Application):
                 title="Attune Recovery",
                 description=f"{GLib.markup_escape_text(message)}\n\nRead-only shell. "
                 "Recovery requires a separate review "
-                "and explicit commit. Nothing is activated or migrated automatically.",
+                "and explicit commit. Foreign or invalid files are never overwritten. "
+                "Correct the file manually or restore a verified backup, then Retry Startup Check. "
+                "Nothing is activated, provisioned, repaired, or migrated automatically.",
                 icon_name="dialog-warning-symbolic",
                 primary_action=("Retry Startup Check", self._check_startup),
                 secondary_action=("Open Health", open_health),
