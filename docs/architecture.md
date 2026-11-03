@@ -41,10 +41,26 @@ supporting contracts, not a requirement to finish every foreign-recovery edge ca
 
 #### Overview
 
+**Current UI correction, implemented and validated:** all 80 rows
+stay in one stable **Keybindings** list. Every pencil opens **Edit Source Shortcut**;
+no Delete button, Assign New action or Unassigned expander. Clear **Shortcut**, choose
+**Update Pending**, **Review Source Shortcuts...**, then **Save Reviewed Source Shortcuts**.
+The same row stays blank after Save/restart and its dialog opens empty. Pending says
+**Clear shortcut** (Removed). Backend/state/schema and installed bridge capabilities
+are unchanged; no deployment is needed. Entering a key from blank defaults Enabled on.
+Final full pytest **4,361 passed, 383 skipped**; six isolated Broadway suites **380
+passed, 2 skipped**. See [current validation](validation.md#ui-only-correction-final-validation).
+Earlier counts below predate this correction; live behavior remains unverified.
+
 The original key/description workflow has an automated/isolated GTK checkpoint.
-The reversible disable fix is implemented and validated in code through automated
-and isolated GTK checks. Live activation still needs a separately approved companion
-bridge update. Keybindings has
+True Delete/unassignment is **implemented and validated in code and isolated tests**.
+The user-approved Delete-capable bridge-only deployment completed on 2026-11-03 UTC.
+Installed `1d1023aa...` supports both capabilities, preserving main Lua and mappings.
+Installed-default pencil/clear/Update Pending/Review Source/Save Source needs no
+deployment; runtime unassignment behavior remains unverified.
+The earlier reversible disable fix is implemented and validated in code through automated
+and isolated GTK checks. The user-approved compatible bridge-only update is installed,
+preserving main Lua and TSV; runtime disable behavior remains unverified. Keybindings has
 **Existing shortcuts** (`SourceBindingsPage`) and **Additional bindings**
 (`ManagedBindingsPage`) tabs. The pre-deployment live inventory contained 80 `__lua`
 entries and zero descriptions. A numeric runtime `arg` is a Lua registry reference,
@@ -65,13 +81,23 @@ shortcuts. Existing managed Lua formats and visual journals are unchanged.
 
 | Interface | Role |
 | --- | --- |
-| `SourceBinding` / `SourceConfig` | Frozen rows: `id`, descriptive `context`, native `submap`, sorted `flags`, `key`, `description`; derived `enabled` is absence of `disabled`. Catalog `jdawson.hyprland`, 1-1,000 rows, unique IDs and normalized enabled combos per native submap. |
+| `SourceBinding` / `SourceConfig` | Frozen rows: `id`, descriptive `context`, native `submap`, sorted `flags`, `key`, `description`; `assigned` means nonempty key, `enabled` means assigned and not `disabled`. Exactly empty key without `disabled` is unassigned; empty plus `disabled` is invalid. Catalog `jdawson.hyprland`, 1-1,000 rows, unique IDs and normalized enabled combos per native submap. |
 | `read_text` / `build_text` | Six-column TSV with exact version/catalog/schema header and final LF, at most 256 KiB; no Lua evaluation. Keys at most 256 characters, descriptions at most 512, no controls. |
 | `SourceBaseline` / `observe` / `run_observe` | Existing explicit lexical/resolved `keybindings.tsv`, exact text/config/hash, selected `PathProof`, actual `config_root`, immutable protected proofs and metadata-only `installed_route: PathProof` for that root's `hypr/keybindings.tsv`; strict JSON transport validates these fields. Observation APIs accept optional keyword `config_root` (XDG/home default), supervised read defaults to 15 seconds. |
 | `SourceReview` / `prepare_review` / `run_prepare_review` | Fresh complete CURRENT -> GOAL diff, exact baseline/proposal and derived review hash; immutable metadata/order comparison, supervised read defaults to 30 seconds. |
 | `SourceSaveResult` / `persist_reviewed` | Direct non-daemon writer: `saved`, `no-op`, `failed`; verified baseline on success, backup path and sticky `may_have_written` flag. No compiler or IPC. |
-| `SourceBindingsPage` | Explicit file selection/prepared shortcut, key/description/enabled drafts, row Disable/Enable and dialog Enabled switch, search, SavedList baselines/undo, review, one-use Save and exact baseline adoption. |
+| `SourceBindingsPage` | Explicit file selection/prepared shortcut, key/description/assignment/enabled drafts, blank-field clearing, separate Disable/Enable and dialog Enabled switch, unified stable Keybindings list with a pencil for every row, search, SavedList baselines/undo, review, one-use Save and exact baseline adoption. |
 | `window` / `PendingChangesPage` | Existing/additional tabs, pending source review and explicit Additional bindings row navigation, `source-bindings` writer owner, close veto, monitor-preview gate and independent undo cleanup. |
+
+| State / action | Stored key | `disabled` | Persistence and Pending |
+| --- | --- | --- | --- |
+| Enabled | Nonempty | Absent | Assigned and enabled |
+| Disable | Nonempty key retained, off | Present | Assigned and disabled after normal restart; Modified |
+| Clear Shortcut field | Exactly empty; old key value removed entirely | Absent | Same row blank after restart; Clear shortcut (Removed) |
+
+Persistence assumes valid saved data and a compatible bridge. The retained action
+definition is not an assigned binding: its row stays in place with a blank shortcut;
+the same pencil opens an empty field, never an automatically restored old/default key.
 
 #### Data Flow
 
@@ -84,17 +110,26 @@ shortcuts. Existing managed Lua formats and visual journals are unchanged.
 2. Edit only key/description/enabled state. Preserve catalog, IDs, context, submap,
    base flags and order against the loaded baseline. Search and Pending Changes use
    metadata, not callback parsing. Dirty source edits must be discarded before choosing another source.
-   State changes appear as meaningful Disable/removal or Enable/addition pending
-   entries. Undo/Redo, Discard and per-entry Revert include state. No row is deleted.
+     A blank dialog field clears the key and removes `disabled`, preserving
+     base flags and the catalog record. Pending Clear shortcut is Removed, assignment Added,
+    Disable/Enable Modified. Undo/Redo, Discard and per-entry Revert preserve enabled,
+    disabled and unassigned states. No catalog row or authored action is deleted.
+     The summary counts total keybindings, shortcut fields set and disabled assignments.
+     All rows remain in catalog order in one list; search filters visibility only.
 3. Review reobserves exact bytes/routes and renders the full diff with lexical/resolved
    paths and hashes. Further edits invalidate review. Transport is bounded to 16 MiB;
    diff to twice the 256 KiB input bound plus 65,536 bytes. Oversize refuses.
-   If any proposed row is disabled, review and writer rechecks require the selected
+    If any proposed row is disabled or unassigned, review and writer rechecks require the selected
    TSV's companion `keybindings-bridge.lua` to match a captured protected path proof
    and start with `-- Attune source bindings capabilities: disabled-v1` plus LF.
-   Only that capability header is read, never authored main Lua. Old/missing helpers
-   refuse with "Update the source keybindings bridge before saving disabled shortcuts;
-   older bridges would restore defaults." No silently dropped disable is permitted.
+    Any unassigned row additionally requires the exact second line
+    `-- Attune source bindings capabilities: unassigned-v1` plus LF, even if no rows
+    are disabled. Only capability headers are read, never authored main Lua.
+    Old/missing or disable-only helpers refuse unassignment with
+    "Update the source keybindings bridge before saving disabled or unassigned shortcuts
+    (requires disabled-v1 and unassigned-v1); older bridges would restore defaults."
+    Disabled-only proposals require only `disabled-v1`. Direct commits cannot bypass
+    this gate; metadata/route binding remains unchanged.
    If the selected and installed TSV share a resolved target or device/inode, both
    selected and actual installed companions must pass the capability/proof checks.
    A direct Stow/source path beside a new helper cannot bypass an old installed helper.
@@ -121,11 +156,14 @@ shortcuts. Existing managed Lua formats and visual journals are unchanged.
    original flags. Missing/unloadable bridge falls back to original source keys,
    callbacks and flags with descriptions. Trusted-source assertion failures are not
    a promise of fallback from arbitrary bridge implementation errors.
-   In the updated project bridge, `register` consumes and checks every ID/context
-   but skips `hl.bind` for disabled rows. `finish` still requires all 80 IDs seen.
-   `disabled` is metadata, never a Hyprland option. The installed bridge is still
-   old and does not implement this behavior; a compatible bridge-only update needs
-   explicit approval while preserving user TSV and main Lua.
+    In the candidate bridge, `register` consumes and checks every ID/context
+    but skips `hl.bind` for disabled or unassigned rows. `finish` still requires all
+    80 declarations seen, not 80 assigned/runtime bindings. The installed helper
+    (`1d1023aa...`) supports both disabled and unassigned rows.
+   `disabled` is metadata, never a Hyprland option. Installed-path observation and an
+   separate in-memory-only Delete and Disable reviews pass without persistence. Current metadata does not
+   prove the running process loaded the new helper; it may retain the old helper
+   until the next configuration parse. All 80 TSV rows remain enabled.
 
 #### Edge Cases
 
@@ -136,12 +174,20 @@ shortcuts. Existing managed Lua formats and visual journals are unchanged.
   worker transport uses standard-library JSON, not an installed Lua JSON dependency.
 - Duplicate normalized keys among enabled rows in the same native submap refuse.
   Disabled rows free their combination for another enabled source row. Conflicting
-  re-enable (including pending Revert) refuses before mutation. All 80 records retain
-  keys/descriptions and unchanged authored callbacks for restoration. Empty enabled
-  keys are refused with guidance to Disable; an empty disabled key retains the prior key.
+   re-enable (including pending Revert) refuses before mutation. All 80 declarations
+   retain IDs, context, native submap, base flags, order, descriptions and authored
+   callbacks. Disable retains the assigned key; Delete removes its old key value
+   from the saved mapping, not an off tombstone. The page normalizes blank/whitespace-only
+   dialog keys to exactly empty regardless of the Enabled switch. The codec accepts
+   exactly empty keys without `disabled`, not whitespace-only keys or empty+disabled.
   The v1 header/schema and all-enabled bytes are unchanged. Old data works with old
   and new bridges, but an old bridge encountering `disabled` rejects the entire
-  catalog and selects all 80 defaults. Capability checking therefore gates Save.
+   catalog and selects all 80 defaults. The prior disable-only helper likewise
+   restores defaults for empty-key data. Capability checking therefore gates Save.
+   Valid saved data with a compatible bridge preserves both disabled and unassigned
+   states through Save/reopen and repeated configuration loads without resurrection.
+   Missing/broken helpers or missing/invalid catalogs still use whole-default fallback;
+   no unconditional no-resurrection guarantee applies under corruption.
    This is local metadata checking, not runtime conflict detection or full
    keysym/hardware alias validation.
   `manager` is descriptive Lua-state context with empty native submap; Wisp uses
@@ -166,7 +212,11 @@ shortcuts. Existing managed Lua formats and visual journals are unchanged.
   without IPC; the GUI warning does not assume integration happens only later. Installation and
   rollback need explicit approval and outside-watched-path backups.
 - Isolated 80-registration equivalence checks symbolic declarations and unchanged
-  callback source/upvalues, not callback execution or live compositor behavior.
+   callback source/upvalues, not callback execution or live compositor behavior.
+- The prior disable-only bridge cannot accept empty keys. Do not blindly downgrade
+  after Delete and resurrect defaults. Require fresh compatibility review and user
+  reassignment or a safe updated-helper plan. Older pre-disable bridges also reject
+  disabled data. Never restore TSV snapshots over later edits.
 
 #### Example usage
 
@@ -177,12 +227,15 @@ intended: saving watched data may immediately reload it. Additional bindings and
 visuals save separately. Open Prepared Source Mappings instead selects the separate
 reference TSV for preview; it is not needed to open the installed file. See
 [deployment evidence and rollback safeguards](validation.md#source-integration-activation-and-rollback).
-For Super+T removal, first obtain approval for the compatible bridge-only update
-preserving user TSV and main Lua. After the update, restart Attune, confirm the
-installed default TSV (not Prepared), Disable `terminal.t`, Review
-Source Shortcuts, then Save Reviewed Source Shortcuts. Nothing automatically disables
-that row from a bug report. Removal becomes effective on the next configuration
-load; watcher auto-reload is not guaranteed and no IPC is sent.
+For true Super+T deletion, the user can now close/reopen Attune to load the new UI and
+fresh bridge proof, confirm installed default TSV (not Prepared), find Open terminal (T) /
+`terminal.t`, click its pencil, clear Shortcut, Update Pending, Review Source Shortcuts
+and Save Reviewed Source Shortcuts. No deployment is needed. All 80 rows stay in order;
+the same row remains blank after Save/restart and its pencil opens an empty field.
+Ctrl+S/visual Save alone is not source Save. Do not perform deletion for the user.
+Effects occur on configuration load, not automatic IPC; watcher reload is unproven
+and may occur immediately. Reload configuration if needed; the user chooses any manual
+command, which can reset unsaved live previews. No reload IPC was sent.
 
 #### Related files
 
@@ -191,15 +244,27 @@ load; watcher auto-reload is not guaranteed and no IPC is sent.
 `core/health.py`, and the [bundle README](../integrations/hyprland/jdawson/README.md).
 Coverage source: `tests/test_source_bindings.py`, `tests/test_source_bindings_gui.py`,
 `tests/test_source_bindings_equivalence.py`, `tests/fixtures/source-bindings-original.lua`.
-Current disable validation: full pytest **4,332 passed, 367 skipped**; all six
+Historical disable-only validation: full pytest **4,332 passed, 367 skipped**; all six
 IPC-disabled Broadway suites **364 passed, 2 skipped**; backend/equivalence **304
 passed**, source GUI **68 passed**. Full-tree Ruff/format, error-level Pyright,
 wheel/candidate syntax/launcher help/diff checks passed; unfiltered GI warnings remain.
 P1 direct-Stow/installed-helper regressions passed and independent source-only review
 found no blockers. No live files/keys changed. See the
 [current validation record](validation.md#source-shortcut-disable-fix-implemented-and-validated)
-for timings, warnings, isolation and unchanged hashes. Code validation is not live
-disable acceptance; helper-only activation still needs explicit approval.
+for timings, warnings, isolation and the later bridge-only deployment evidence.
+Those checks were not rerun for that code-unchanged deployment and do not validate
+the later unassignment fix. That historical pre-UI-correction checkpoint passed: full pytest **4,361 passed,
+383 skipped**; six isolated Broadway suites **380 passed, 2 skipped**. Required
+Ruff/format and error-level Pyright passed, not GI-warning clearance. Independent
+review found no material findings. Mixed-state actual-disk Save/reopen and actual
+Pending Delete/key reuse/conflicting Revert coverage is included. See
+[final Delete validation](validation.md#source-shortcut-delete-versus-disable-implemented-and-validated)
+for final HOME/XDG isolation, earlier non-prefixed run qualification, focused review
+counts, warnings, timings, wheel/syntax/help/diff results and unchanged live hashes.
+The Delete-capable helper is installed on disk; stable runtime metadata is not live
+acceptance or proof of current-process helper loading. App code is unchanged and no
+full suite was rerun for deployment. See the
+[deployment record](validation.md#approved-delete-capable-bridge-only-deployment).
 
 Historical results, predating disable support: full pytest 4,291 passed, 343 skipped; all six IPC-disabled
 Broadway suites 340 passed, 2 skipped; focused equivalence 114 passed and source

@@ -1,6 +1,6 @@
 # Attune roadmap
 
-Updated: 2026-11-02
+Updated: 2026-11-03 UTC
 
 ## Direction
 
@@ -14,15 +14,33 @@ Ideas here are not existing commands, compatibility guarantees, or release dates
 
 ## Current baseline
 
+**UI correction:** implemented and validated. One stable
+Keybindings list retains all 80 rows; every pencil opens Edit Source Shortcut.
+There is no Delete button, Assign New or Unassigned expander. On the installed
+default TSV (not Prepared): pencil -> clear Shortcut -> Update Pending -> Review
+Source -> Save Source. The row remains blank in place after Save/restart and its
+dialog opens empty. Pending says Clear shortcut; Disable retains the assigned key
+off. Backend/state/schema and installed bridge capabilities are unchanged; no
+deployment is needed. Counts and former UI descriptions below are historical,
+not final validation of this correction. Its final full pytest **4,361 passed, 383
+skipped** and six Broadway suites **380 passed, 2 skipped** are recorded in
+[current validation](docs/validation.md#ui-only-correction-final-validation).
+No new milestone or scope change is added; live behavior remains unverified.
+
 **Current delivery:** additional managed bindings have an automated/isolated GTK
 validated checkpoint, not live keyboard/loading acceptance. Source-aware existing
 shortcuts have an earlier automated/isolated GTK checkpoint. The approved 80-row
 integration was deployed on 2026-11-02 with all runtime descriptions observed.
 The reversible disable fix is implemented and validated in code through automated
-and isolated GTK checks. Live activation still needs explicit approval for a
-compatible companion-bridge-only update preserving user TSV and main Lua.
-The installed bridge is still old; live TSV remains all 80 enabled, with no Super+T
+and isolated GTK checks. The user-approved compatible companion-bridge-only update
+is installed, preserving user TSV and main Lua. The on-disk capability guard passes;
+live TSV remains all 80 enabled, with no Super+T
 disable performed. Live shortcut behavior acceptance remains pending.
+True Delete/unassignment is implemented and validated in code and isolated tests.
+The approved Delete-capable bridge-only deployment completed on 2026-11-03 UTC:
+installed `1d1023aa...` supports both capabilities, with main Lua and mappings unchanged.
+Installed-default pencil/clear/Update Pending/Review Source/Save Source needs no
+deployment. No user data was deleted or disabled by this documentation pass.
 Current priority is useful **existing bindings**, through approved activation and
 validation, before **Device/Input**, with cursor, rules, startup and environment
 later. Profiles and layout pages remain off scope. Canonical-pair editing has an
@@ -37,7 +55,7 @@ Implemented in the development checkout:
   order and authored actions remain unchanged. Candidate main/bridge/80 stable IDs
   are in `integrations/hyprland/jdawson`, outside watched dotfiles. No app main-Lua
   evaluation, installer or runtime unbinding is added. Disable code validation passed;
-  compatible bridge activation and live behavior acceptance remain pending. The original
+   compatible bridge is installed; runtime disable behavior and live acceptance remain pending. The original
   three-file installation is complete, not to be repeated for this fix.
 - Dedicated Attune-owned global keyboard bindings, implemented and validated:
   searchable local drafts and read-only runtime/opaque inventory, separate reviewed
@@ -83,9 +101,10 @@ Persistent loading, Stow provisioning, and desktop registration remain opt-in.
 
 Product order now takes precedence over the historical M-number sequence:
 
-1. Useful existing bindings: code validation passed; obtain explicit approval
-   for the compatible companion-bridge-only update preserving user TSV, then activate and
-   validate. Earlier additional-binding checks do not establish this acceptance.
+1. Useful existing bindings: the compatible bridge-only deployment is complete.
+   The UI correction is implemented and validated. Next: user pencil/clear/
+   Update Pending/Review Source/Save Source against installed defaults and live acceptance.
+   Earlier additional-binding checks do not establish this acceptance.
 2. Device/Input feature slice after that checkpoint, designed from actual supported APIs.
 3. Cursor, rules, startup and environment, each a separately scoped future slice.
 
@@ -113,7 +132,10 @@ before these features. Existing mutating live checks still require explicit perm
 - [ ] Live keyboard/capture semantics, manual loading and watcher behavior remain
   unverified and require separate explicit permission.
 
-### Existing shortcuts: disable code validated, helper activation pending
+### Existing shortcuts: Delete code validated, compatible bridge deployed
+
+The completed validation items below retain the historical pre-correction UI;
+they do not validate the current unified list. Current instructions are at the top.
 
 - [x] Prepare the user-approved offline declarations/labels refactor, separate from
   unchanged Lua callbacks. Reported runtime inventory was 80 `__lua` rows with zero
@@ -148,25 +170,63 @@ before these features. Existing mutating live checks still require explicit perm
   refuse direct writer calls before state/data writes. Both-new success, unrelated
   offline editing, stale retarget/helper refusal and own-leaf post-write verification
   are covered. Independent source-only review found P1 resolved and no blockers.
-- [ ] Approve a compatible **bridge-only update preserving user TSV**, with fresh
-  checks/backups outside watched paths. No main replacement, auto-migration or automatic
-  Super+T disable. Old/missing helpers must explicitly block disabled Save: old bridge
-  rejects the token and restores all 80 defaults. Review/commit require the companion's
-  `-- Attune source bindings capabilities: disabled-v1` header and captured proof.
-- [ ] After that update, user restarts Attune, confirms the installed default TSV
-  (not Prepared), Disables `terminal.t`, reviews source and Saves source.
-  The bridge must consume all 80 IDs but skip `hl.bind` for disabled rows, never pass
-  `disabled` as a Hyprland option. Removal takes effect on the next configuration
-  load; watcher auto-reload is not guaranteed and no IPC is sent.
+- [x] Complete the explicitly user-approved compatible **bridge-only update**, preserving
+  main Lua and TSV, with private backups and exact readback. Installed observation and
+  in-memory-only disable review pass; no persistence or Super+T disable occurred.
+  Runtime metadata remains unchanged; this does not prove new-helper loading or
+  disabled-key behavior. Historical tests were not rerun for this code-unchanged deployment.
+- [x] Complete final validation of true Delete versus Disable, implemented in
+  the checkout. Delete/blank-field clearing stores exactly empty key without `disabled`,
+  removing the old combo, not an off tombstone. Disable retains the assigned key;
+  enabled means assigned and not disabled; empty+disabled is invalid. Keep all 80
+  declarations, immutable ID/context/submap/base flags/order and authored callbacks.
+   The former Assigned shortcuts (N) excluded unassigned actions; collapsed Unassigned
+   actions offered Assign New starting empty. Pending Delete was Removed, Disable Modified;
+  Undo/Redo/Discard/Revert preserve enabled/disabled/unassigned states.
+- [x] Validate Save/reopen and repeated compatible-bridge loads of valid saved data
+  without default resurrection. Missing/broken helper or invalid catalog still uses
+  whole defaults. Existing valid assigned data, disabled format and v1 schema stay
+  unchanged. Candidate helper retains first-line `disabled-v1`, adds second-line
+  `unassigned-v1`; any unassigned proposal requires both markers on selected and
+  relevant installed companions under the existing alias guard, at review and commit.
+- [x] Record final validation: full pytest **4,361 passed, 383 skipped, 12 dependency
+  warnings, 783.67 seconds**; six Broadway suites **380 passed, 2 skipped, 6,332
+  dependency warnings, 138.21 seconds**. Required Ruff/format passed (210 files
+  unchanged); full-tree error-level Pyright zero errors, not GI-warning clearance.
+  Independent review found no material findings. Review-run backend/equivalence
+  332 passed and source GUI 82 passed; post-review mixed-state disk roundtrip (1 pass)
+  and actual Pending Delete/key reuse/Revert (2 cases, both modes) are included in
+  final suites. Wheel/syntax/help/diff passed. Final suites used process HOME/XDG set
+  before Python; the earlier non-prefixed 767.71-second run was rerun properly.
+  See `docs/validation.md` for qualifications and unchanged live hashes. No live update.
+- [x] Complete explicitly approved Delete-capable **bridge-only** deployment, preserving
+  main Lua and mappings. Both capability headers and separate in-memory Delete/Disable
+  reviews pass without persistence. All 80 remain assigned/enabled. App code is unchanged;
+  no full-suite rerun is claimed. See the deployment record for hashes and private evidence.
+- [ ] Ready now, without another deployment approval gate: the user closes/reopens Attune
+  for the new UI and fresh bridge proof, confirms installed default TSV (not Prepared),
+   finds Open terminal (T) / `terminal.t`, clicks its pencil, clears Shortcut, chooses
+   Update Pending, Reviews Source and Saves Source. Expect all 80 rows in the same
+   order, that shortcut blank after Save/restart and its dialog empty. Do not perform these actions
+  for the user. Both disabled and unassigned rows are consumed but not passed to
+  `hl.bind`; never forward `disabled` as an option. Effects occur on configuration
+  load, not automatic IPC. Watcher reload is unproven and may occur immediately;
+  Ctrl+S/visual Save is not source Save. Reload configuration if needed; the user chooses
+  any manual command, which can reset unsaved live previews. No reload IPC was sent.
 - [ ] Validate actual shortcut behavior,
   including manager Lua-state gating, Wisp native submap and hardware/pointer flags.
   Isolated 80-registration equivalence is not live callback behavior proof.
 
-The next single user decision is explicit approval of the compatible companion
-update in the [activation record](docs/validation.md#source-integration-activation-and-rollback),
-not main replacement, TSV migration or more Device/Input breadth. Only the project
-candidate helper has been updated for disable support; no live update or rollback
-for this fix has been executed.
+The compatible bridge-only update is complete; next is the user's installed-default
+pencil/clear/Update Pending/Review/Save and live acceptance, not another deployment request.
+Do not repeat the original three-file installation, replace main/data, migrate TSV
+or expand Device/Input breadth now. Earlier counts above remain historical; only
+the earlier Delete checkpoint validates its former code/widgets, not this UI correction or live behavior.
+See the [deployment record](docs/validation.md#approved-delete-capable-bridge-only-deployment).
+No rollback is recorded. The prior disable-only helper cannot accept empty keys: do
+not blindly downgrade after Delete and resurrect defaults. Require fresh compatibility
+review and user reassignment or a safe updated-helper plan; never
+restore snapshot TSV over later edits.
 
 ### Device/Input: after existing-shortcut activation and validation
 

@@ -8,7 +8,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Source shortcut UI correction: implemented and validated
+
+- Keep all 80 rows in one stable Keybindings list. Every pencil opens Edit Source
+  Shortcut; no Delete button, Assign New action or Unassigned expander. Clear Shortcut,
+  Update Pending, Review Source, then Save Source: the same row remains blank after
+  Save/restart and its edit dialog opens empty. Pending says Clear shortcut, not Delete.
+  Disable retains the assigned key off. Use the actual installed default TSV, not Prepared.
+- Backend/state/schema and installed bridge capabilities are unchanged; no deployment
+  is needed. Earlier counts below are historical, not validation of this UI correction.
+  Entering a key from blank defaults Enabled on. Final supplied validation: Ruff
+  `--fix`/format passed (210 files unchanged), error-level Pyright zero errors (not
+  GI-warning clearance); isolated full pytest **4,361 passed, 383 skipped, 12 dependency
+  warnings, 763.64 seconds**; all six Broadway suites **380 passed, 2 skipped, 6,315
+  dependency warnings, 129.00 seconds**. Source GUI 84 passed; source regressions
+  333 passed; quick independent source-only review READY, no material bugs.
+  Wheel/help/diff checks passed; sentinel and real main/bridge/TSV hashes unchanged.
+  No live UI/callback acceptance, IPC, reload, live source Save, staging or commits.
+  See [current validation](docs/validation.md#ui-only-correction-final-validation)
+  for isolation and effects limits. This docs-only pass ran no checks.
+
+### Source shortcut Delete versus Disable: implemented and validated in code
+
+Historical pre-correction UI and validation checkpoint, with deployment dated
+2026-11-03 UTC. Former Delete/Assign New instructions below are not current guidance.
+
+- Delete shortcut and blank-field clearing now truly unassign: save exactly empty
+  `key` without `disabled`, removing the old key value rather than retaining an off
+  tombstone. Disable separately retains the assigned key. `assigned` means nonempty
+  key; `enabled` means assigned and not disabled. Empty plus disabled is invalid.
+  Preserve all 80 catalog declarations, descriptions, IDs/context/native submap/base
+  flags/order and authored callbacks, not necessarily 80 assigned bindings. No callback
+  source removal, action deletion or normal main-Lua rewrite is involved.
+- Assigned shortcuts (N) excludes unassigned records; collapsed Unassigned actions
+  offers Assign New starting empty, not the old/default combo. Pending Delete is
+  Removed, assignment Added and Disable/Enable Modified; Undo/Redo/Discard/Revert
+   preserve enabled, disabled and unassigned states. Save/reopen and compatible-bridge
+   reload behavior passed automated and isolated tests, not live acceptance. Historical
+   counts below remain separate from this fix's final validation.
+- Candidate bridge retains first-line `-- Attune source bindings capabilities: disabled-v1`
+  and adds second-line `-- Attune source bindings capabilities: unassigned-v1`.
+  Unassigned proposals require both headers on selected and relevant actual installed
+  companions under the existing alias guard. Review and direct commit block unsupported
+  helpers with an update message, retaining metadata/route binding. Existing valid data,
+  disabled format and v1 schema stay unchanged. Valid saved data with a compatible
+  bridge does not resurrect defaults; missing/broken helpers or invalid catalogs
+  retain whole-default fallback, not an unconditional corruption guarantee.
+- User-approved Delete-capable bridge-only deployment completed on 2026-11-03 UTC.
+  Installed `1d1023aa...` supports both capabilities, replacing disable-only `0fc1fa9f...`;
+  main Lua and mappings are unchanged, all 80 assigned/enabled including Super+T.
+  Separate in-memory Delete and Disable reviews passed without persistence. App code
+  is unchanged and no full-suite rerun is claimed. The user's installed-default
+   `terminal.t` Delete / Review Source / Save Source was then ready, without another
+  deployment approval gate. Do not apply this on the user's behalf. Effects occur on
+  configuration load, not automatic IPC; watcher reload remains unproven. No shell,
+  tests, live installation/data deletion, staging or commits in this documentation pass.
+  The prior helper cannot accept empty keys: rollback after Delete needs fresh
+  compatibility review and user reassignment or a safe updated-helper plan, never
+  restoring snapshot TSV over later edits. Exact evidence is in
+  [the deployment record](docs/validation.md#approved-delete-capable-bridge-only-deployment).
+   Profiles/layouts, deferred foreign work and Device/Input priorities are unchanged.
+- Final validation passed: full-tree Ruff `--fix`/format, 210 files unchanged;
+  full-tree Pyright `--level error` zero errors, not unfiltered GI-warning clearance.
+  Final full pytest **4,361 passed, 383 skipped, 12 dependency warnings, 783.67 seconds**;
+  six Broadway suites **380 passed, 2 skipped, 6,332 dependency warnings, 138.21 seconds**.
+  Final runs used temporary process HOME/XDG before Python; the earlier non-prefixed
+  full run (same counts, 13 warnings, 767.71 seconds) was rerun properly. Do not infer
+  all-run isolation or established config writes from that earlier run. GUI IPC disabled,
+  writers mocked by default, actual publishers temporary only; daemon stopped.
+  Independent review found no material findings; review-run backend/equivalence
+  **332 passed**, source GUI **82 passed**. Post-review mixed-state actual-disk
+  persist/reopen **1 passed** and actual Pending Delete/key reuse/Revert **2 cases
+  passed**, both modes, are included in final suites. Wheel
+  `/tmp/opencode/attune-source-delete-dist`, staged bridge Lua parse, installed launcher
+  help and diff check passed. Sentinel and live hashes unchanged; all 80 mappings remain
+  assigned/enabled. No live data/helper/key edits, install, reload, shortcut invocation,
+  staging or commits during that code-validation checkpoint, before the approved
+  helper-only deployment. This docs pass only records supplied results; see
+  `docs/validation.md` for exact hashes, isolation qualifications and activation limits.
+
 ### Source shortcut disable fix: implemented and validated in code
+
+Historical disable-only checkpoint and deployment below, not validation of Delete.
+Its next-action instructions are superseded by the unassignment sequence above.
 
 - Address the key/description-only editor's inability to remove Super+T with
   reversible Disable/Enable and an Enabled switch. Enabled state uses a metadata-only
@@ -21,12 +103,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Review/commit require the companion's `disabled-v1` capability header and captured
   bridge proof for disabled proposals. Old/missing helpers explicitly block Save:
   the old bridge would reject the token and restore all 80 defaults. Old all-enabled
-  data stays readable by both bridges. Only the project candidate helper is updated;
-  installed live bridge/TSV remain untouched and all 80 rows enabled. No Super+T
-  disable was performed. Next activation requires explicit approval for a compatible
-  bridge-only update preserving user TSV, not main replacement or auto-migration.
+  data stays readable by both bridges. The explicitly user-approved compatible
+  bridge-only deployment completed on 2026-11-03 UTC, preserving main Lua and TSV;
+  all 80 rows remain enabled and no Super+T disable was performed. Installed-path
+  observation and an in-memory-only disable review passed without persistence;
+  read-only runtime metadata stayed unchanged. This does not prove new-helper loading
+   in the running process or disabled-key runtime behavior. The then-planned user action was to restart
+  Attune, selects Existing shortcuts' installed default TSV, Disables `terminal.t`,
+  Reviews Source Shortcuts and Saves Reviewed Source Shortcuts, not visual Save.
   The saved removal takes effect on the next configuration load, with watcher reload
-  unproven and no IPC sent. No commands/tests/live changes/staging/commits
+  unproven and no IPC sent; the user may manually reload after Save if necessary.
+  Do not downgrade to the old helper with disabled data without fresh compatibility
+  review and user re-enabling or a safe plan; never restore snapshots over later TSV edits.
+  No commands/tests/live changes/staging/commits
   were performed by this documentation pass. Foreign/profiles/layout scope is unchanged.
 - Fix the P1 direct-Stow compatibility bypass: `SourceBaseline.installed_route`
   captures the actual config-root TSV's metadata proof with strict JSON validation.
@@ -51,7 +140,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   installed launcher `--help` and diff check passed. Process HOME/XDG isolated;
   sentinel and final read-only live hashes unchanged. No live writes, user-key
   changes, Super+T disable, bridge installation, reload, staging or commits occurred.
-  See `docs/validation.md` for hashes and the separate helper-only approval gate.
+  These are historical code-validation effects, not the later deployment record.
+   Source code was unchanged for that deployment; no fresh full CI/suite rerun is claimed. See
+  `docs/validation.md` for installed hashes, private evidence and rollback safeguards.
 
 ### Added
 

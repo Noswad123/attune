@@ -1,4 +1,5 @@
 -- Attune source bindings capabilities: disabled-v1
+-- Attune source bindings capabilities: unassigned-v1
 -- Trusted adapter. The mapping is data, never a Lua chunk.
 local defaults_text = [=[
 # Attune source bindings v1
@@ -146,15 +147,17 @@ local function parse(text)
           end
         end
       end
-      local combo = submap .. "\t" .. shortcut(key)
-      if not disabled then
+      local assigned = key ~= ""
+      assert(assigned or not disabled, "unassigned shortcut cannot be disabled")
+      local combo = assigned and (submap .. "\t" .. shortcut(key))
+      if assigned and not disabled then
         assert(not combos[combo], "duplicate shortcut in native submap")
         combos[combo] = true
       end
       ids[id] = true
       rows[#rows + 1] = {
         id = id, context = context, submap = submap, flags = table.concat(base_flags, ","),
-        disabled = disabled,
+        assigned = assigned, disabled = disabled,
         key = key, description = description, options = options,
       }
     end
@@ -193,7 +196,7 @@ return function(hl, path)
       assert(not registered[id], "source binding registered twice: " .. id)
       assert(row.submap == native_submap, "source binding native submap mismatch: " .. id)
       registered[id], count = true, count + 1
-      if row.disabled then return end
+      if not row.assigned or row.disabled then return end
       local options = { description = row.description }
       for flag, value in pairs(row.options) do options[flag] = value end
       return hl.bind(row.key, action, options)

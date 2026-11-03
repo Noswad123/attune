@@ -67,6 +67,36 @@ def draft(selected):
 
 
 class TestCodec:
+    def test_unassigned_is_distinct_from_disabled(self, bundle, monkeypatch):
+        config = source.read_text(bundle)
+        disabled = changed(config, flags=("disabled",))
+        unassigned = changed(disabled, key="", flags=())
+        assert config.bindings[0].assigned and config.bindings[0].enabled
+        assert disabled.bindings[0].assigned and not disabled.bindings[0].enabled
+        assert not unassigned.bindings[0].assigned and not unassigned.bindings[0].enabled
+        assert source.fixed_metadata(config) == source.fixed_metadata(unassigned)
+        assert source.read_text(source.build_text(unassigned)) == unassigned
+        assert source._config_from(json.loads(json.dumps(asdict(unassigned)))) == unassigned
+        with pytest.raises(ValueError, match="Duplicate"):
+            replace(unassigned, bindings=(*unassigned.bindings, unassigned.bindings[0]))
+        for key in (" ", "   ", "\t", "\n", "\x00", "\u202e"):
+            with pytest.raises(ValueError):
+                changed(unassigned, key=key)
+        for validate in (source.validate_key, source.key_identity):
+            with pytest.raises(ValueError):
+                validate("")
+        identity = source.key_identity
+
+        def nonempty(key):
+            assert key != ""
+            return identity(key)
+
+        monkeypatch.setattr(source, "key_identity", nonempty)
+        all_unassigned = replace(
+            config, bindings=tuple(replace(row, key="") for row in config.bindings)
+        )
+        assert source.read_text(source.build_text(all_unassigned)) == all_unassigned
+
     def test_disabled_transport_and_unique_ids(self, bundle):
         config = source.read_text(bundle)
         disabled = changed(config, flags=("disabled",))
@@ -74,6 +104,9 @@ class TestCodec:
         assert config.bindings[0].enabled
         assert source.fixed_metadata(disabled) == source.fixed_metadata(config)
         assert source.read_text(source.build_text(disabled)) == disabled
+        assert source.build_text(disabled) == bundle.replace(
+            "terminal.return\tglobal\t\t\t", "terminal.return\tglobal\t\tdisabled\t", 1
+        )
         assert source._config_from(json.loads(json.dumps(asdict(disabled)))) == disabled
         with pytest.raises(ValueError, match="Duplicate"):
             replace(disabled, bindings=(*disabled.bindings, disabled.bindings[0]))
@@ -97,6 +130,22 @@ class TestCodec:
             draft, bindings=tuple(replace(row, flags=("disabled",)) for row in rows)
         )
         assert source.read_text(source.build_text(both_disabled)) == both_disabled
+
+    def test_unassigned_frees_key_and_preserves_base_flags(self, bundle):
+        config = source.read_text(bundle)
+        rows = config.bindings
+        proposal = replace(
+            config,
+            bindings=(replace(rows[0], key=rows[1].key), replace(rows[1], key=""), *rows[2:]),
+        )
+        assert source.read_text(source.build_text(proposal)) == proposal
+        with pytest.raises(ValueError, match="Duplicate"):
+            replace(proposal, bindings=(proposal.bindings[0], rows[1], *rows[2:]))
+        unassigned = replace(
+            config, bindings=tuple(replace(row, key="") for row in config.bindings)
+        )
+        assert source.fixed_metadata(config) == source.fixed_metadata(unassigned)
+        assert unassigned.bindings[-1].flags == ("locked", "repeating")
 
     def test_actual_bundle_byte_exact_and_no_callbacks(self, bundle):
         config = source.read_text(bundle)
@@ -212,6 +261,26 @@ class TestCodec:
 
 
 class TestReview:
+    @pytest.mark.parametrize(
+        "headers",
+        [
+            source.BRIDGE_CAPABILITY + "\n",
+            source.UNASSIGNED_CAPABILITY + "\n",
+            source.UNASSIGNED_CAPABILITY + "\n" + source.BRIDGE_CAPABILITY + "\n",
+        ],
+    )
+    def test_unassigned_requires_both_ordered_capabilities(self, selected, headers):
+        path, state = selected
+        path.with_name(source.BRIDGE_BASENAME).write_text(headers)
+        baseline = source.observe(*selected)
+        proposal = changed(baseline.config, key="")
+        with pytest.raises(ValueError, match="bridge.*unassigned-v1"):
+            source.run_prepare_review(baseline, proposal)
+        review = source.SourceReview(baseline, proposal, *source._review_fields(baseline, proposal))
+        result = source.persist_reviewed(review, proposal)
+        assert result.outcome == "failed" and not result.may_have_written
+        assert not state.exists() and path.read_text() == baseline.text
+
     @pytest.mark.parametrize(
         "companion", [None, "-- old bridge\n", "\n" + source.BRIDGE_CAPABILITY + "\n"]
     )
@@ -475,16 +544,131 @@ class TestObservation:
 
 
 class TestPublication:
-    @pytest.mark.parametrize("companion", ["old", "missing"])
-    def test_installed_alias_requires_both_capable_bridges(self, linked_installation, companion):
+    def test_mixed_assignment_states_disk_roundtrip(self, linked_installation):
+        selected, root, installed = linked_installation
+        path, state = selected
+        baseline = source.observe(path, state, config_root=root)
+        rows = baseline.config.bindings
+        proposal = replace(
+            baseline.config,
+            bindings=(
+                rows[0],
+                replace(rows[1], key=""),
+                *rows[2:-1],
+                replace(rows[-1], flags=tuple(sorted((*rows[-1].flags, "disabled")))),
+            ),
+        )
+        review = source.prepare_review(baseline, proposal)
+        assert source.SourceReview.from_json(review.to_json()) == review
+        result = source.persist_reviewed(review, proposal)
+        assert result.outcome == "saved", result.error
+        saved = path.read_bytes()
+        assert saved == source.build_text(proposal).encode("utf-8") == installed.read_bytes()
+        assert source.read_text(saved.decode("utf-8")) == proposal
+        assert source._config_from(json.loads(json.dumps(asdict(proposal)))) == proposal
+        for _ in range(2):
+            reopened = source.observe(path, state, config_root=root)
+            assert reopened == result.baseline and reopened.config == proposal
+            assert len(reopened.config.bindings) == 80
+            assert source.fixed_metadata(reopened.config) == source.fixed_metadata(baseline.config)
+            enabled, unassigned, disabled = (
+                reopened.config.bindings[index] for index in (0, 1, -1)
+            )
+            assert enabled == rows[0] and enabled.assigned and enabled.enabled
+            assert unassigned.key == "" and unassigned.flags == rows[1].flags
+            assert not unassigned.assigned and not unassigned.enabled
+            assert disabled.key == rows[-1].key and "disabled" in disabled.flags
+            assert disabled.assigned and not disabled.enabled
+            assert reopened.config.bindings[2:-1] == rows[2:-1]
+            assert path.read_bytes() == saved
+
+    @pytest.mark.parametrize("initially_disabled", [False, True])
+    def test_unassign_save_restart_and_assign_new(self, linked_installation, initially_disabled):
+        selected, root, installed = linked_installation
+        path, state = selected
+        if initially_disabled:
+            config = source.read_text(path.read_text())
+            rows = config.bindings
+            config = replace(
+                config, bindings=(rows[0], replace(rows[1], flags=("disabled",)), *rows[2:])
+            )
+            path.write_text(source.build_text(config))
+        baseline = source.run_observe(path, state, config_root=root)
+        rows = baseline.config.bindings
+        proposal = replace(
+            baseline.config, bindings=(rows[0], replace(rows[1], key="", flags=()), *rows[2:])
+        )
+        review = source.run_prepare_review(baseline, proposal)
+        assert source.SourceReview.from_json(review.to_json()) == review
+        result = source.persist_reviewed(review, proposal)
+        assert result.outcome == "saved", result.error
+        reopened = source.run_observe(path, state, config_root=root)
+        assert reopened == result.baseline and reopened.config == proposal
+        row = reopened.config.bindings[1]
+        assert row.id == "terminal.t" and row.key == "" and row.flags == ()
+        assert not row.assigned and not row.enabled
+        saved_record = next(
+            line for line in path.read_text().splitlines() if line.startswith("terminal.t\t")
+        )
+        assert "SUPER + T" not in saved_record and "disabled" not in saved_record
+        assert installed.read_bytes() == path.read_bytes()
+        assert source.fixed_metadata(proposal) == source.fixed_metadata(baseline.config)
+        noop = source.persist_reviewed(source.run_prepare_review(reopened, proposal), proposal)
+        assert noop.outcome == "no-op", noop.error
+        assert source.run_observe(path, state, config_root=root).config == proposal
+        reassigned = replace(
+            proposal, bindings=(rows[0], replace(row, key="SUPER + F12"), *rows[2:])
+        )
+        result = source.persist_reviewed(
+            source.run_prepare_review(reopened, reassigned), reassigned
+        )
+        assert result.outcome == "saved", result.error
+        assert source.run_observe(path, state, config_root=root).config == reassigned
+
+    @pytest.mark.parametrize("recovery", ["assigned", "disabled"])
+    def test_recovery_to_old_fields_needs_only_old_capabilities(self, selected, recovery):
+        path, state = selected
+        original = source.read_text(path.read_text())
+        unassigned = replace(
+            original, bindings=tuple(replace(row, key="") for row in original.bindings)
+        )
+        path.write_text(source.build_text(unassigned))
+        bridge = path.with_name(source.BRIDGE_BASENAME)
+        bridge.write_text(source.BRIDGE_CAPABILITY + "\n" if recovery == "disabled" else "-- old\n")
+        baseline = source.run_observe(*selected)
+        proposal = original
+        if recovery == "disabled":
+            proposal = replace(
+                original,
+                bindings=tuple(
+                    replace(row, flags=tuple(sorted((*row.flags, "disabled"))))
+                    for row in original.bindings
+                ),
+            )
+        result = source.persist_reviewed(source.run_prepare_review(baseline, proposal), proposal)
+        assert result.outcome == "saved", result.error
+        assert source.run_observe(path, state).config == proposal
+
+    @pytest.mark.parametrize("unassigned", [False, True])
+    @pytest.mark.parametrize("companion", ["old", "missing", "disabled-only"])
+    def test_installed_alias_requires_both_capable_bridges(
+        self, linked_installation, companion, unassigned
+    ):
         selected, root, installed = linked_installation
         path, state = selected
         bridge = installed.with_name(source.BRIDGE_BASENAME)
         bridge.unlink()
         if companion == "old":
             bridge.write_text("-- old installed bridge\n")
+        elif companion == "disabled-only":
+            bridge.write_text(source.BRIDGE_CAPABILITY + "\n")
         baseline = source.observe(path, state, config_root=root)
-        proposal = changed(baseline.config, flags=("disabled",))
+        proposal = changed(
+            baseline.config, **({"key": ""} if unassigned else {"flags": ("disabled",)})
+        )
+        if companion == "disabled-only" and not unassigned:
+            assert source.prepare_review(baseline, proposal).proposed == proposal
+            return
         with pytest.raises(
             ValueError, match="Update the source keybindings bridge.*restore defaults"
         ):
@@ -529,8 +713,9 @@ class TestPublication:
         assert restored.outcome == "saved", restored.error
         assert path.read_text() == baseline.text and installed.lstat() == link_stat
 
+    @pytest.mark.parametrize("unassigned", [False, True])
     def test_unrelated_offline_source_ignores_old_installed_bridge(
-        self, linked_installation, monkeypatch
+        self, linked_installation, monkeypatch, unassigned
     ):
         selected, root, installed = linked_installation
         path, state = selected
@@ -552,7 +737,9 @@ class TestPublication:
         monkeypatch.setattr(persistence, "read_stable", guarded_read)
         monkeypatch.setattr(source.os, "open", guarded_open)
         baseline = source.observe(path, state, config_root=root)
-        proposal = changed(baseline.config, flags=("disabled",))
+        proposal = changed(
+            baseline.config, **({"key": ""} if unassigned else {"flags": ("disabled",)})
+        )
         result = source.persist_reviewed(source.prepare_review(baseline, proposal), proposal)
         assert result.outcome == "saved", result.error
         assert installed.stat() == original
@@ -561,14 +748,15 @@ class TestPublication:
 
     @pytest.mark.parametrize("dependency", ["route", "bridge"])
     @pytest.mark.parametrize("stage", ["before-save", "under-lock", "final-publish"])
+    @pytest.mark.parametrize("unassigned", [False, True])
     def test_installed_route_or_bridge_retarget_after_review(
-        self, linked_installation, tmp_path, monkeypatch, dependency, stage
+        self, linked_installation, tmp_path, monkeypatch, dependency, stage, unassigned
     ):
         selected, root, installed = linked_installation
         path, state = selected
         bridge = installed.with_name(source.BRIDGE_BASENAME)
         old_bridge = tmp_path / "old-bridge.lua"
-        old_bridge.write_text("-- old bridge\n")
+        old_bridge.write_text(source.BRIDGE_CAPABILITY + "\n" if unassigned else "-- old bridge\n")
         if dependency == "route":
             # Initially unrelated. Retargeting makes the old installed loader relevant.
             unrelated = tmp_path / "unrelated/keybindings.tsv"
@@ -579,7 +767,9 @@ class TestPublication:
             bridge.unlink()
             bridge.symlink_to(old_bridge)
         baseline = source.observe(path, state, config_root=root)
-        proposal = changed(baseline.config, flags=("disabled",))
+        proposal = changed(
+            baseline.config, **({"key": ""} if unassigned else {"flags": ("disabled",)})
+        )
         review = source.prepare_review(baseline, proposal)
 
         def retarget():
@@ -698,16 +888,19 @@ class TestPublication:
         assert path.read_bytes() == original
 
     @pytest.mark.parametrize("stage", ["before-save", "under-lock", "final-publish"])
-    def test_capability_drift_invalidates_review(self, selected, monkeypatch, stage):
+    @pytest.mark.parametrize("unassigned", [False, True])
+    def test_capability_drift_invalidates_review(self, selected, monkeypatch, stage, unassigned):
         path, state = selected
         bridge = path.with_name(source.BRIDGE_BASENAME)
         bridge.write_bytes(BUNDLE.with_name(source.BRIDGE_BASENAME).read_bytes())
         baseline = source.observe(*selected)
-        proposal = changed(baseline.config, flags=("disabled",))
+        proposal = changed(
+            baseline.config, **({"key": ""} if unassigned else {"flags": ("disabled",)})
+        )
         review = source.prepare_review(baseline, proposal)
 
         def drift():
-            bridge.write_text("-- old bridge\n")
+            bridge.write_text(source.BRIDGE_CAPABILITY + "\n" if unassigned else "-- old bridge\n")
 
         if stage == "before-save":
             drift()

@@ -259,15 +259,11 @@ class SourceBindingsPage(SectionPage):
             raise ValueError("Enabled must be a boolean")
         rows = list(self._owned)
         original = rows[index]
-        active = original.enabled if enabled is None else enabled
+        active = (original.enabled if original.assigned else True) if enabled is None else enabled
         if not key.strip():
-            if active:
-                raise ValueError(
-                    "Use Enabled/Disable to remove shortcut; key retained for restoring"
-                )
-            key = original.key
+            key = ""
         flags = tuple(f for f in original.flags if f != "disabled")
-        if not active:
+        if key and not active:
             flags = tuple(sorted((*flags, "disabled")))
         rows[index] = replace(original, key=key, description=description, flags=flags)
         self._check_proposal(source.SourceConfig(source.CATALOG, tuple(rows)))
@@ -282,6 +278,8 @@ class SourceBindingsPage(SectionPage):
         if not 0 <= index < len(self._owned):
             raise ValueError("Source shortcut no longer exists")
         row = self._owned[index]
+        if not row.assigned:
+            raise ValueError("Enter a shortcut first")
         self.edit_binding(index, row.key, row.description, enabled=enabled)
 
     def _toggle_enabled(self, index, enabled):
@@ -312,11 +310,21 @@ class SourceBindingsPage(SectionPage):
         group = Adw.PreferencesGroup(description="Authored Lua action (unchanged)")
         key = Adw.EntryRow(title="Shortcut", text=original.key)
         description = Adw.EntryRow(title="Description", text=original.description)
-        enabled = Adw.SwitchRow(title="Enabled", active=original.enabled)
+        enabled = Adw.SwitchRow(
+            title="Enabled",
+            subtitle="Applies when a shortcut is assigned",
+            active=original.enabled or not original.assigned,
+        )
         group.add(key)
         group.add(description)
         group.add(enabled)
         box.append(group)
+        box.append(
+            make_inline_hint(
+                "Leave Shortcut empty for no assignment. "
+                "Disable keeps the assigned shortcut stored and off."
+            )
+        )
         apply = Gtk.Button(label="Update Pending")
 
         def update(_button):
@@ -410,22 +418,33 @@ class SourceBindingsPage(SectionPage):
         for index, row in enumerate(self._owned):
             old = self._owned.get_baseline(index)
             if old is not None and old != row:
-                yield PendingChange(
-                    category="Source Shortcuts",
-                    title=(
+                if old.assigned and not row.assigned:
+                    title, kind = f"Clear shortcut: {row.description}", "removed"
+                elif not old.assigned and row.assigned:
+                    title, kind = f"Assign shortcut: {row.description}", "added"
+                else:
+                    title = (
                         f"{'Disable' if not row.enabled else 'Enable'}: {row.description}"
                         if old.enabled != row.enabled
                         else row.description
-                    ),
+                    )
+                    kind = "modified"
+                old_status = (
+                    "Unassigned" if not old.assigned else "Enabled" if old.enabled else "Disabled"
+                )
+                new_status = (
+                    "Unassigned" if not row.assigned else "Enabled" if row.enabled else "Disabled"
+                )
+                yield PendingChange(
+                    category="Source Shortcuts",
+                    title=title,
                     subtitle=(
-                        f"{'Enabled' if old.enabled else 'Disabled'}: "
+                        f"{old_status}: "
                         f"{old.key}: {old.description} -> "
-                        f"{'Enabled' if row.enabled else 'Disabled'}: "
+                        f"{new_status}: "
                         f"{row.key}: {row.description}"
                     ),
-                    kind=("removed" if not row.enabled else "added")
-                    if old.enabled != row.enabled
-                    else "modified",
+                    kind=kind,
                     navigate_to="binds",
                     icon=BINDS_ICON,
                     revert=lambda i=index, b=old: self.edit_binding(
@@ -450,6 +469,7 @@ class SourceBindingsPage(SectionPage):
         self._content_box.append(
             make_inline_hint(
                 "Shortcuts, descriptions and Enabled are editable. "
+                "Leave Shortcut empty for no assignment. "
                 "Disable retains the key for restoring and frees it for another enabled shortcut. "
                 "Authored Lua actions stay unchanged. "
                 "Attune does not install a loader or send reload IPC. No Lua execution."
@@ -467,25 +487,37 @@ class SourceBindingsPage(SectionPage):
             self._content_box.append(
                 make_inline_hint("Reading source mappings / preparing review...")
             )
-        group = Adw.PreferencesGroup(title=f"Existing shortcuts ({len(self._owned)})")
+        assigned = sum(b.assigned for b in self._owned)
+        disabled = sum(b.assigned and not b.enabled for b in self._owned)
+        self._content_box.append(
+            make_inline_hint(
+                f"{len(self._owned)} keybindings | {assigned} shortcut fields set | "
+                f"{disabled} disabled"
+            )
+        )
+        group = Adw.PreferencesGroup(title="Keybindings")
+        self._content_box.append(group)
         for index, binding in enumerate(self._owned):
+            binding_status = (
+                "Unassigned"
+                if not binding.assigned
+                else "Enabled"
+                if binding.enabled
+                else "Disabled"
+            )
             metadata = (
                 f"{binding.id} | Context: {binding.context} | Native submap: "
                 f"{binding.submap or 'global'} | Flags: {', '.join(binding.flags) or 'none'}"
             )
             row = Adw.ActionRow(
                 title=f"{binding.description}  |  {binding.key}",
-                subtitle=f"{'Enabled' if binding.enabled else 'Disabled'} | "
-                f"Authored Lua action (unchanged)\n{metadata}",
+                subtitle=f"{binding_status} | Authored Lua action (unchanged)\n{metadata}",
             )
             row.set_use_markup(False)
             row.set_subtitle_lines(0)
             row.set_visible(
                 self._search_term
-                in (
-                    f"{'Enabled' if binding.enabled else 'Disabled'} "
-                    f"{binding.description} {binding.key} {metadata}".casefold()
-                )
+                in (f"{binding_status} {binding.description} {binding.key} {metadata}".casefold())
             )
             edit = Gtk.Button(
                 icon_name="document-edit-symbolic",
@@ -498,14 +530,15 @@ class SourceBindingsPage(SectionPage):
             toggle = Gtk.Button(
                 label="Disable" if binding.enabled else "Enable", valign=Gtk.Align.CENTER
             )
-            toggle.set_sensitive(not self.locked and not self._saving)
+            toggle.set_sensitive(binding.assigned and not self.locked and not self._saving)
+            if not binding.assigned:
+                toggle.set_tooltip_text("Edit Shortcut to enter a shortcut first")
             toggle.connect(
                 "clicked",
                 lambda _b, i=index, active=binding.enabled: self._toggle_enabled(i, not active),
             )
             row.add_suffix(toggle)
             group.add(row)
-        self._content_box.append(group)
 
     def _render_review(self, review):
         box, button = self._review_box, self._save_button

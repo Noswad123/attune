@@ -7,6 +7,18 @@
 
 ## Current product decision
 
+**Source UI correction:** implemented and validated. A unified
+Keybindings list keeps all 80 rows in stable order; every pencil opens Edit Source
+Shortcut. No Delete button, Assign New or Unassigned expander. On the actual installed
+default TSV (not Prepared): pencil -> clear Shortcut -> Update Pending -> Review
+Source -> Save Source. The same row remains blank after Save/restart and its dialog
+opens empty. Pending says Clear shortcut; Disable retains the assigned key off.
+Backend/state/schema, installed bridge capabilities and this ADR's ownership/save
+boundaries are unchanged; no deployment is needed. Earlier counts below are historical,
+not validation of this correction. Its supplied final results are in
+[current validation](../validation.md#ui-only-correction-final-validation);
+live behavior remains unverified. Entering a key from blank defaults Enabled on.
+
 Deliver normal edit, review, Save, and continued editing for an **existing explicitly
 registered canonical pair**, using the mature journaled writer. Do not make automatic
 scoped foreign preservation or migration a prerequisite for that path. Current user
@@ -76,15 +88,52 @@ found no blockers. Actual-config-root metadata-only alias protection and immedia
 watched-TSV reload warnings reinforce this boundary. Earlier counts above remain
 historical; see the validation record for full qualifications.
 
-The reversible source-disable fix is **implemented and validated in code** through
+The true source Delete/unassignment fix is **implemented and validated in code and
+isolated tests**. It does not change this ADR's visual scopes or independent save units.
+Final full pytest: **4,361 passed, 383 skipped**; six Broadway suites: **380 passed,
+2 skipped**. Required Ruff/format and error-level Pyright passed, not GI-warning
+clearance; independent review found no material findings. See
+[final validation](../validation.md#source-shortcut-delete-versus-disable-implemented-and-validated)
+for the final isolated run, earlier-run qualification, warnings and unchanged live hashes.
+Delete/blank-field clearing saves exactly empty key without `disabled`, removing
+the old combo rather than retaining an off tombstone. Disable separately retains
+the assigned key. `assigned` means nonempty key; `enabled` means assigned and not
+disabled. Empty+disabled is invalid. All 80 catalog declarations remain, not necessarily
+80 assigned bindings; IDs/context/native submap/base flags/order and authored callback
+sites stay fixed. No callback source removal, action deletion or main-Lua rewrite.
+The former pre-correction UI used Assigned shortcuts (N) and a collapsed Unassigned
+actions section with Assign New. The current unified list supersedes that presentation.
+Pending Clear shortcut is Removed, assignment Added and Disable/Enable Modified; Undo/Redo/
+Discard/Revert preserve enabled, disabled and unassigned states.
+
+The candidate retains first-line `-- Attune source bindings capabilities: disabled-v1`
+and adds second-line `-- Attune source bindings capabilities: unassigned-v1`.
+Any unassigned proposal requires both markers on selected and relevant actual installed
+companions under the existing alias guard. Review and direct commit block unsupported
+helpers with an update message, preserving metadata/route binding. Existing valid
+assigned data, disabled format and v1 schema are unchanged. Valid saved data with a
+compatible bridge preserves unassignment through Save/reopen and repeated configuration
+loads without resurrection; absent/broken helpers or invalid catalogs still use whole
+defaults. This is not a guarantee under corruption. The approved Delete-capable
+bridge-only deployment completed on 2026-11-03 UTC: installed `1d1023aa...` supports
+both capabilities, replacing disable-only `0fc1fa9f...`, preserving mappings/main Lua.
+The user's installed-default `terminal.t` pencil / clear Shortcut / Update Pending /
+Review Source / Save Source needs no deployment. At deployment all 80 remained assigned/enabled;
+separate in-memory Delete and Disable reviews passed without persistence. App code is
+unchanged; no full suite was rerun. See the
+[deployment record](../validation.md#approved-delete-capable-bridge-only-deployment).
+Do not perform those actions for the user. Effects occur on configuration load, not
+automatic IPC; watcher reload remains unproven. Profiles/layout scope remains unchanged.
+
+The earlier reversible source-disable fix was **implemented and validated in code** through
 automated and isolated GTK checks, separately from those historical counts.
-Current results: full pytest **4,332 passed, 367 skipped**; six Broadway suites
+Historical disable-only results: full pytest **4,332 passed, 367 skipped**; six Broadway suites
 **364 passed, 2 skipped**, IPC disabled, explicit real publishers temporary only;
 backend/equivalence **304 passed**, source GUI **68 passed**. Ruff/format, full-tree
 error-level Pyright, wheel/candidate syntax/launcher help/diff checks passed;
 unfiltered GI warnings remain. Timings, warnings and unchanged live hashes are in
 [validation](../validation.md#source-shortcut-disable-fix-implemented-and-validated).
-`SourceBinding.enabled` derives
+At that checkpoint, `SourceBinding.enabled` derived
 from metadata-only `disabled` in the existing flags column, retaining the v1 marker
 and all-enabled bytes. Catalog, all 80 IDs/records, contexts, submaps, base flags,
 order and callbacks remain immutable; keys/descriptions remain available for restore.
@@ -106,15 +155,22 @@ leaf's own identity change, including the aliased installed route. Unrelated off
 editing remains independent; no main Lua reads/evaluation. Direct-writer refusal,
 both-new success and stale-route/helper regressions passed. Independent source-only
 review confirmed P1 resolved with no blockers. This protects against old-loader
-fallback, not a general future-format compatibility guarantee. The live
-bridge is still old and the live TSV remains all enabled. No Super+T disable has
-been performed. Next approval must explicitly authorize a compatible **bridge-only
-update preserving user TSV**, not main replacement, automatic data migration or
-automatic disabling from the bug report. After that update, restart Attune, confirm
+fallback, not a general future-format compatibility guarantee. The user-approved
+compatible **bridge-only update is installed**, preserving main Lua and TSV.
+All 80 rows remain enabled; no Super+T disable has been performed. Installed-path
+observation and an in-memory-only disable review pass without persistence. Stable
+runtime metadata does not prove the process loaded the new helper or disabled-key
+behavior; the process may retain the old helper until the next config parse.
+The then-planned user workflow, superseded by the Delete sequence above, was to restart Attune, confirm
 the installed default TSV (not Prepared), Disable `terminal.t`, Review Source
 Shortcuts and Save Source. The removal takes
-effect on the next configuration load; watchers may or may not reload and Attune
-sends no IPC. This adds no visual scope, foreign repair, profiles or layouts.
+effect on the next configuration load; watcher reload is unproven and Attune sends
+no IPC. Ctrl+S or visual Save alone is not source Save; the user may manually reload
+after source Save if needed. Do not downgrade to the old helper with disabled data
+without fresh compatibility review and user re-enabling of disabled rows or another
+safe plan; never restore snapshot TSV over later edits. See the validation record
+for deployment evidence. Historical tests were not rerun for this code-unchanged
+deployment. This adds no visual scope, foreign repair, profiles or layouts.
 
 Startup now uses `editor_layout.EditorEntry`: `legacy-clear` retains unchanged v1;
 `pair-ready` requires a valid registered canonical v2 pair, safe initialized store,

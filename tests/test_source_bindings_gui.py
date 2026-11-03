@@ -48,7 +48,12 @@ def copy_source(path, *, disabled=False, bridge="new"):
         original = (
             CATALOG.with_name(source.BRIDGE_BASENAME)
             if bridge == "new"
-            else Path(__file__).parent / "fixtures/source-bindings-old-bridge.lua"
+            else Path(__file__).parent
+            / (
+                "fixtures/source-bindings-old-disabled-bridge.lua"
+                if bridge == "disabled-only"
+                else "fixtures/source-bindings-old-bridge.lua"
+            )
         )
         companion = path.with_name(source.BRIDGE_BASENAME)
         companion.write_bytes(original.read_bytes())
@@ -79,7 +84,322 @@ def reviewed(page):
     return page._review
 
 
+def keybinding_rows(page):
+    content = list(widgets(page._content_box))
+    assert not any(isinstance(w, Gtk.Expander) for w in content)
+    assert not any(
+        isinstance(w, Gtk.Button) and w.get_label() in {"Delete shortcut", "Assign New"}
+        for w in content
+    )
+    assert not any(
+        isinstance(w, Gtk.Label) and w.get_text() in {"Unassigned actions", "Deleted"}
+        for w in content
+    )
+    groups = [w for w in content if isinstance(w, Adw.PreferencesGroup)]
+    assert len(groups) == 1 and groups[0].get_title() == "Keybindings"
+    rows = [w for w in widgets(groups[0]) if isinstance(w, Adw.ActionRow)]
+    assert len(rows) == 80
+    for row, binding in zip(rows, page.get_config().bindings, strict=True):
+        assert row.get_title() == f"{binding.description}  |  {binding.key}"
+        assert f"\n{binding.id} |" in (row.get_subtitle() or "")
+        buttons = [w for w in widgets(row) if isinstance(w, Gtk.Button)]
+        assert len(buttons) == 2
+        assert buttons[0].get_icon_name() == "document-edit-symbolic"
+        assert buttons[1].get_sensitive() == binding.assigned
+        if not binding.assigned:
+            assert "Edit Shortcut" in (buttons[1].get_tooltip_text() or "")
+    return rows
+
+
 class TestSourceWidgets:
+    @pytest.mark.parametrize("initially_disabled", [False, True])
+    def test_clear_terminal_save_reopen_edit_same_row_without_resurrection(
+        self, loaded, monkeypatch, initially_disabled
+    ):
+        window, page, path, ipc = loaded
+        if initially_disabled:
+            copy_source(path, disabled=True)
+            page.open_path(path)
+            wait_for(lambda: page._read_cancel is None)
+        before = page.get_config()
+        index = next(i for i, b in enumerate(before.bindings) if b.id == "terminal.t")
+        original = before.bindings[index]
+        row = keybinding_rows(page)[index]
+        assert all(w.get_visible() for w in keybinding_rows(page))
+        next(
+            w
+            for w in widgets(row)
+            if isinstance(w, Gtk.Button) and w.get_icon_name() == "document-edit-symbolic"
+        ).emit("clicked")
+        dialog = window.get_visible_dialog()
+        assert dialog is not None and dialog.get_title() == "Edit Source Shortcut"
+        entry = next(w for w in widgets(dialog) if isinstance(w, Adw.EntryRow))
+        assert entry.get_text() == original.key
+        entry.set_text("")
+        next(
+            w
+            for w in widgets(dialog)
+            if isinstance(w, Gtk.Button) and w.get_label() == "Update Pending"
+        ).emit("clicked")
+        deleted = page.get_config()
+        assert deleted.bindings[index] == replace(original, key="", flags=())
+        assert source.fixed_metadata(deleted) == source.fixed_metadata(before)
+        assert all(w.get_visible() for w in keybinding_rows(page))
+        assert keybinding_rows(page)[index].get_title() == f"{original.description}  |  "
+        change = next(page.iter_pending_changes())
+        assert change.kind == "removed" and change.title.startswith("Clear shortcut:")
+        assert original.key in change.subtitle and "-> Unassigned:" in change.subtitle
+        window._on_undo()
+        assert page.get_config() == before and not page.is_dirty()
+        window._on_redo()
+        assert page.get_config() == deleted
+        window.save()
+        pending = window._pending_page
+        assert pending is not None
+        next(
+            w
+            for w in widgets(pending._groups_box)
+            if isinstance(w, Gtk.Button) and w.get_tooltip_text() == "Revert this change"
+        ).emit("clicked")
+        assert page.get_config() == before and not page.is_dirty()
+        window._on_undo()
+        assert page.get_config() == deleted
+        page.discard()
+        assert page.get_config() == before
+        page.edit_binding(index, "", original.description)
+        window.show_page("binds")
+        managed = window._managed_bindings_page
+        assert managed is not None
+        wait_for(lambda: managed.baseline is not None)
+        managed.add_line("bind = SUPER, F9, killactive")
+        window._on_option_changed("general:border_size", 8)
+        reviewed(page)
+        monkeypatch.setattr(source, "persist_reviewed", REAL_SOURCE_SAVE)
+        page._save_button.emit("clicked")
+        wait_for(lambda: not window._restore_in_progress)
+        assert not page.is_dirty() and not page.locked
+        assert managed.is_dirty() and window.app_state.has_dirty()
+        assert source.read_text(path.read_text()) == deleted
+        stored = next(
+            line for line in path.read_text().splitlines() if line.startswith("terminal.t\t")
+        )
+        assert "disabled" not in stored and original.key not in stored
+        page.open_path(path)
+        wait_for(lambda: page._read_cancel is None)
+        assert page.get_config() == deleted
+        rows = keybinding_rows(page)
+        assert all(w.get_visible() for w in rows)
+        assert rows[index].get_title() == f"{original.description}  |  "
+        labels = [w.get_text() for w in widgets(page._content_box) if isinstance(w, Gtk.Label)]
+        assert "80 keybindings | 79 shortcut fields set | 0 disabled" in labels
+        with pytest.raises(ValueError, match="Enter a shortcut first"):
+            page.set_enabled(index, True)
+        search = Gtk.SearchEntry(text=original.key)
+        page._search_changed(search)
+        assert not keybinding_rows(page)[index].get_visible()
+        search = Gtk.SearchEntry(text="terminal.t")
+        page._search_changed(search)
+        assert keybinding_rows(page)[index].get_visible()
+        search.set_text("")
+        page._search_changed(search)
+        assert all(w.get_visible() for w in keybinding_rows(page))
+        next(
+            w
+            for w in widgets(keybinding_rows(page)[index])
+            if isinstance(w, Gtk.Button) and w.get_icon_name() == "document-edit-symbolic"
+        ).emit("clicked")
+        dialog = window.get_visible_dialog()
+        assert dialog is not None and dialog.get_title() == "Edit Source Shortcut"
+        entries = [w for w in widgets(dialog) if isinstance(w, Adw.EntryRow)]
+        assert entries[0].get_text() == ""
+        assert entries[1].get_text() == original.description
+        assert next(w for w in widgets(dialog) if isinstance(w, Adw.SwitchRow)).get_active()
+        entries[0].set_text("Shift+Super+F12")
+        next(
+            w
+            for w in widgets(dialog)
+            if isinstance(w, Gtk.Button) and w.get_label() == "Update Pending"
+        ).emit("clicked")
+        assigned_config = page.get_config()
+        assert assigned_config.bindings[index] == replace(original, key="Shift+Super+F12", flags=())
+        change = next(page.iter_pending_changes())
+        assert change.kind == "added" and change.title.startswith("Assign shortcut:")
+        window._on_undo()
+        assert page.get_config() == deleted and not page.is_dirty()
+        window._on_redo()
+        assert page.get_config() == assigned_config
+        change.revert()
+        assert page.get_config() == deleted
+        window._on_undo()
+        assert page.get_config() == assigned_config
+        page.discard()
+        assert page.get_config() == deleted
+        page.edit_binding(index, "Shift+Super+F12", original.description)
+        assert page.get_config() == assigned_config
+        reviewed(page)
+        page._save_reviewed()
+        wait_for(lambda: not window._restore_in_progress)
+        assert not page.is_dirty() and not page.locked
+        page.open_path(path)
+        wait_for(lambda: page._read_cancel is None)
+        assert page.get_config() == assigned_config
+        assert page.get_config().bindings[index].enabled
+        assert all(w.get_visible() for w in keybinding_rows(page))
+        ipc.assert_not_called()
+
+    def test_pending_revert_clear_refuses_reused_key_atomically(self, loaded, monkeypatch):
+        window, page, path, ipc = loaded
+        before = page.get_config()
+        baseline = page.baseline
+        original_bytes = path.read_bytes()
+        terminal = next(i for i, b in enumerate(before.bindings) if b.id == "terminal.t")
+        other = next(i for i, b in enumerate(before.bindings) if b.id == "terminal.return")
+        assert source.key_identity(before.bindings[terminal].key) == source.key_identity("SUPER+T")
+        page.edit_binding(terminal, "", before.bindings[terminal].description)
+        page.edit_binding(other, "SUPER+T", "Reused deleted shortcut")
+        proposed = page.get_config()
+        assert proposed.bindings[terminal] == replace(before.bindings[terminal], key="")
+        assert proposed.bindings[other].key == "SUPER+T" and proposed.bindings[other].enabled
+        window.show_page("pending")
+        pending = window._pending_page
+        assert pending is not None
+        row = next(
+            w
+            for w in widgets(pending._groups_box)
+            if isinstance(w, Adw.ActionRow) and w.get_title().startswith("Clear shortcut:")
+        )
+        assert before.bindings[terminal].description in row.get_title()
+        history = (list(window._undo._undo_stack), list(window._undo._redo_stack))
+        changes = [(c.title, c.subtitle, c.kind) for c in page.iter_pending_changes()]
+        toast = MagicMock()
+        monkeypatch.setattr(window, "show_toast", toast)
+        publisher = MagicMock(side_effect=AssertionError("Revert must not save"))
+        monkeypatch.setattr(source, "persist_reviewed", publisher)
+        next(
+            w
+            for w in widgets(row)
+            if isinstance(w, Gtk.Button) and w.get_tooltip_text() == "Revert this change"
+        ).emit("clicked")
+        wait_for(lambda: not pending._refresh_pending)
+        toast.assert_called_once()
+        assert "Duplicate" in toast.call_args.args[0]
+        assert page.get_config() == proposed and page.baseline is baseline
+        assert page.is_dirty() and not page.locked
+        assert (list(window._undo._undo_stack), list(window._undo._redo_stack)) == history
+        assert [(c.title, c.subtitle, c.kind) for c in page.iter_pending_changes()] == changes
+        assert path.read_bytes() == original_bytes
+        assert page._review is None and not page._saving
+        publisher.assert_not_called()
+        ipc.assert_not_called()
+
+    @pytest.mark.parametrize("enabled", [False, True])
+    def test_blank_dialog_clears_regardless_of_switch(self, loaded, enabled):
+        window, page, _path, ipc = loaded
+        before = page.get_config()
+        page._open_dialog(1)
+        dialog = window.get_visible_dialog()
+        assert dialog is not None
+        next(w for w in widgets(dialog) if isinstance(w, Adw.EntryRow)).set_text("  ")
+        next(w for w in widgets(dialog) if isinstance(w, Adw.SwitchRow)).set_active(enabled)
+        labels = [w.get_text() for w in widgets(dialog) if isinstance(w, Gtk.Label)]
+        assert (
+            "Leave Shortcut empty for no assignment. "
+            "Disable keeps the assigned shortcut stored and off."
+        ) in labels
+        next(
+            w
+            for w in widgets(dialog)
+            if isinstance(w, Gtk.Button) and w.get_label() == "Update Pending"
+        ).emit("clicked")
+        assert page.get_config().bindings[1] == replace(before.bindings[1], key="")
+        ipc.assert_not_called()
+
+    def test_edit_callback_errors_and_disabled_edit_preserves_state(self, loaded, monkeypatch):
+        window, page, _path, ipc = loaded
+        before = page.get_config()
+        page.set_enabled(1, False)
+        page.edit_binding(1, "Shift+Super+F12", "Still disabled")
+        assert page.get_config().bindings[1] == replace(
+            before.bindings[1],
+            key="Shift+Super+F12",
+            description="Still disabled",
+            flags=("disabled",),
+        )
+        draft = page.get_config()
+        row = next(
+            w
+            for w in widgets(page._content_box)
+            if isinstance(w, Adw.ActionRow) and before.bindings[1].id in w.get_subtitle()
+        )
+        edit = next(
+            w
+            for w in widgets(row)
+            if isinstance(w, Gtk.Button) and w.get_icon_name() == "document-edit-symbolic"
+        )
+        toast = MagicMock()
+        monkeypatch.setattr(window, "show_toast", toast)
+        with monkeypatch.context() as patch:
+            patch.setattr(window, "editor_edit_allowed", lambda: False)
+            edit.emit("clicked")
+        toast.assert_called_once()
+        assert page.get_config() == draft
+        for index in (-1, len(before.bindings)):
+            with pytest.raises(ValueError, match="no longer exists"):
+                page.edit_binding(index, "", before.bindings[1].description)
+        page.discard()
+        for id in ("pointer.move", "hardware.volume.up", "manager.escape", "wisp.action.terminal"):
+            index = next(i for i, b in enumerate(before.bindings) if b.id == id)
+            original = before.bindings[index]
+            page.set_enabled(index, False)
+            page.edit_binding(index, "", original.description)
+            assert page.get_config().bindings[index] == replace(original, key="")
+        assert source.fixed_metadata(page.get_config()) == source.fixed_metadata(before)
+        page.discard()
+        assert page.get_config() == before
+        ipc.assert_not_called()
+
+    @pytest.mark.parametrize("installed", [False, True])
+    def test_unassigned_disabled_only_bridge_refuses_review(
+        self, window, tmp_path, monkeypatch, installed
+    ):
+        page = window._source_bindings_page
+        assert page is not None
+        if installed:
+            path = Path(os.environ["XDG_CONFIG_HOME"]) / "hypr" / source.BASENAME
+        else:
+            path = tmp_path / source.BASENAME
+        copy_source(path, bridge="disabled-only")
+        selected = tmp_path / "selected"
+        if installed:
+            selected.mkdir()
+            selected_path = selected / source.BASENAME
+            selected_path.symlink_to(path)
+            selected_path.with_name(source.BRIDGE_BASENAME).write_bytes(
+                CATALOG.with_name(source.BRIDGE_BASENAME).read_bytes()
+            )
+            path = selected_path
+        original = path.read_bytes()
+        page.open_path(path)
+        wait_for(lambda: page._read_cancel is None)
+        assert page.baseline is not None, page.load_error
+        baseline = page.baseline
+        index = next(i for i, b in enumerate(page.get_config().bindings) if b.id == "terminal.t")
+        page.edit_binding(index, "", page.get_config().bindings[index].description)
+        proposed = page.get_config()
+        toast = MagicMock()
+        monkeypatch.setattr(window, "show_toast", toast)
+        publisher = MagicMock(side_effect=AssertionError("Review required"))
+        monkeypatch.setattr(source, "persist_reviewed", publisher)
+        page.review_changes()
+        wait_for(lambda: page._read_cancel is None)
+        assert page._review is None and not page._save_button.get_visible()
+        assert any("unassigned-v1" in str(c) for c in toast.call_args_list)
+        page._save_reviewed()
+        publisher.assert_not_called()
+        assert page.is_dirty() and not page.locked
+        assert page.baseline is baseline and page.get_config() == proposed
+        assert path.read_bytes() == original
+
     def test_disable_terminal_pending_save_reopen_and_enable(self, loaded, monkeypatch):
         window, page, path, ipc = loaded
         before = page.get_config()
@@ -98,7 +418,7 @@ class TestSourceWidgets:
         assert source.fixed_metadata(disabled) == source.fixed_metadata(before)
         assert len(disabled.bindings) == 80
         change = next(page.iter_pending_changes())
-        assert change.kind == "removed" and change.title.startswith("Disable:")
+        assert change.kind == "modified" and change.title.startswith("Disable:")
         assert "Enabled:" in change.subtitle and "-> Disabled:" in change.subtitle
         managed = window._managed_bindings_page
         assert managed is not None
@@ -135,6 +455,8 @@ class TestSourceWidgets:
             assert len(rows) == 80
             row = next(w for w in rows if original.id in w.get_subtitle())
             assert "Disabled" in (row.get_subtitle() or "") and row.get_visible()
+            assert keybinding_rows(reopened)[index] is row
+            assert original.key in row.get_title()
             search = Gtk.SearchEntry()
             search.set_text("disabled")
             reopened._search_changed(search)
@@ -145,7 +467,8 @@ class TestSourceWidgets:
                 w for w in widgets(row) if isinstance(w, Gtk.Button) and w.get_label() == "Enable"
             ).emit("clicked")
             assert reopened.get_config() == before
-            assert next(reopened.iter_pending_changes()).kind == "added"
+            change = next(reopened.iter_pending_changes())
+            assert change.kind == "modified" and change.title.startswith("Enable:")
             reviewed(reopened)
             reopened._save_reviewed()
             wait_for(lambda: not window._restore_in_progress)
@@ -285,6 +608,8 @@ class TestSourceWidgets:
         window._on_redo()
         assert page.get_config() == changed
         change = next(page.iter_pending_changes())
+        assert change.kind == "modified"
+        assert change.title.startswith("Enable:" if initially_disabled else "Disable:")
         window.save()
         pending = window._pending_page
         assert pending is not None
@@ -355,13 +680,13 @@ class TestSourceWidgets:
             assert page.get_config() == before
         apply.emit("clicked")
         assert page.get_config().bindings[1] == replace(
-            before.bindings[1], flags=("disabled",), description="Disabled terminal"
+            before.bindings[1], key="", description="Disabled terminal"
         )
         page._open_dialog(1)
         dialog = window.get_visible_dialog()
         assert dialog is not None
         switch = next(w for w in widgets(dialog) if isinstance(w, Adw.SwitchRow))
-        assert not switch.get_active()
+        assert switch.get_active()
         dialog.close()
         ipc.assert_not_called()
 
@@ -371,9 +696,13 @@ class TestSourceWidgets:
         for enabled in (1, "false", None):
             with pytest.raises(ValueError, match="boolean"):
                 page.set_enabled(1, enabled)
-        with pytest.raises(ValueError, match="Use Enabled/Disable"):
-            page.edit_binding(1, "  ", "Remove")
-        assert page.get_config() == before
+        page.edit_binding(1, "  ", "Remove")
+        assert page.get_config().bindings[1] == replace(
+            before.bindings[1], key="", description="Remove"
+        )
+        with pytest.raises(ValueError, match="Enter a shortcut first"):
+            page.set_enabled(1, True)
+        page.discard()
         page.set_enabled(1, False)
         page.edit_binding(0, before.bindings[1].key, "Reused")
         disabled = page.get_config()

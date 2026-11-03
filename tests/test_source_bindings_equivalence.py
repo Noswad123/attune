@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest
 
+from hyprmod.core import source_bindings
+
 ROOT = Path(__file__).resolve().parents[1]
 BUNDLE = ROOT / "integrations/hyprland/jdawson"
 ORIGINAL = ROOT / "tests/fixtures/source-bindings-original.lua"
@@ -250,6 +252,78 @@ def edit_row(text: str, row_id: str, column: int, value: str) -> str:
 
 
 class TestSourceBindingsEquivalence:
+    def test_unassign_restart_and_assign_new_declarations(self, tmp_path):
+        mapping = (BUNDLE / "keybindings.tsv").read_text()
+        source = (BUNDLE / "hyprland.lua").read_text()
+        before, startup, _ = declarations(source, mapping)
+        unassigned = edit_row(mapping, "terminal.t", 4, "")
+        path = tmp_path / "keybindings.tsv"
+        path.write_text(mapping)
+        path.with_name(source_bindings.BRIDGE_BASENAME).write_bytes(
+            (BUNDLE / source_bindings.BRIDGE_BASENAME).read_bytes()
+        )
+        baseline = source_bindings.run_observe(path, tmp_path / "state")
+        proposal = source_bindings.read_text(unassigned)
+        result = source_bindings.persist_reviewed(
+            source_bindings.run_prepare_review(baseline, proposal), proposal
+        )
+        assert result.outcome == "saved", result.error
+        for _ in range(2):
+            reopened = source_bindings.run_observe(path, tmp_path / "state")
+            assert reopened.text == unassigned and reopened.config == proposal
+            after, startup_after, warnings = declarations(source, reopened.text, expected_count=79)
+            assert after == [row for row in before if row[0] != "terminal.t"]
+            assert any(row[0] == "terminal.return" for row in after)
+            assert startup_after == startup and warnings == 0
+        reassigned = edit_row(unassigned, "terminal.t", 4, "SUPER + F12")
+        proposal = source_bindings.read_text(reassigned)
+        result = source_bindings.persist_reviewed(
+            source_bindings.run_prepare_review(
+                source_bindings.run_observe(path, tmp_path / "state"), proposal
+            ),
+            proposal,
+        )
+        assert result.outcome == "saved", result.error
+        after, startup_after, warnings = declarations(source, path.read_text())
+        assert after == [
+            row[:2] + ("SUPER + F12",) + row[3:] if row[0] == "terminal.t" else row
+            for row in before
+        ]
+        assert startup_after == startup and warnings == 0
+
+    def test_all_unassigned_consumes_entire_catalog_without_binds(self):
+        mapping = (BUNDLE / "keybindings.tsv").read_text()
+        source = (BUNDLE / "hyprland.lua").read_text()
+        unassigned = mapping
+        for row_id in BINDING_IDS:
+            unassigned = edit_row(unassigned, row_id, 4, "")
+        for _ in range(2):
+            records, _, warnings = declarations(source, unassigned, expected_count=0)
+            assert records == [] and warnings == 0
+        incomplete = source.replace('source_bind("terminal.t",', 'omitted_bind("terminal.t",')
+        incomplete = "local function omitted_bind(...) end\n" + incomplete
+        with pytest.raises(subprocess.CalledProcessError):
+            declarations(incomplete, unassigned, expected_count=0)
+
+    def test_old_disabled_bridge_restores_defaults_for_unassigned_data(self):
+        mapping = (BUNDLE / "keybindings.tsv").read_text()
+        old_bridge = (ROOT / "tests/fixtures/source-bindings-old-disabled-bridge.lua").read_text()
+        old_bridge = old_bridge.replace("@DEFAULT_CATALOG@", mapping)
+        assert hashlib.sha256(old_bridge.encode()).hexdigest() == (
+            "0fc1fa9f6b7351e13ef140ad62ab2a4f4832cc64af73e08c942e25e7c2fa88a8"
+        )
+        source = (BUNDLE / "hyprland.lua").read_text()
+        before, startup, _ = declarations(source, mapping, bridge_text=old_bridge)
+        disabled = edit_row(mapping, "terminal.t", 3, "disabled")
+        after, _, warnings = declarations(
+            source, disabled, bridge_text=old_bridge, expected_count=79
+        )
+        assert after == [row for row in before if row[0] != "terminal.t"] and warnings == 0
+        after, startup_after, warnings = declarations(
+            source, edit_row(mapping, "terminal.t", 4, ""), bridge_text=old_bridge
+        )
+        assert after == before and startup_after == startup and warnings == 1
+
     @pytest.mark.parametrize("disabled_id", ["terminal.return", "terminal.t"])
     def test_disabled_key_can_be_reassigned_but_reenable_collides(self, disabled_id):
         mapping = (BUNDLE / "keybindings.tsv").read_text()
@@ -390,6 +464,8 @@ class TestSourceBindingsEquivalence:
             "no-final-lf",
             "oversized",
             "bad-key",
+            "blank-key",
+            "unassigned-disabled",
             "empty-description",
             "executable-data",
         ],
@@ -423,6 +499,10 @@ class TestSourceBindingsEquivalence:
             "no-final-lf": changed.rstrip("\n"),
             "oversized": changed + "x" * (256 * 1024),
             "bad-key": edit_row(changed, "terminal.t", 4, "SUPER ++ T"),
+            "blank-key": edit_row(changed, "terminal.t", 4, "   "),
+            "unassigned-disabled": edit_row(
+                edit_row(changed, "terminal.t", 4, ""), "terminal.t", 3, "disabled"
+            ),
             "empty-description": edit_row(changed, "terminal.t", 5, ""),
             "executable-data": 'os.execute("false")\n',
         }

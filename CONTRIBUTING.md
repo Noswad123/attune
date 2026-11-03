@@ -142,10 +142,25 @@ Things to avoid:
 
 ## Scope
 
+- Current source UI correction is implemented and validated:
+  one stable Keybindings list retains all 80 rows. Every pencil opens Edit Source
+  Shortcut; no Delete button, Assign New or Unassigned expander. Use the actual
+  installed default TSV (not Prepared): pencil -> clear Shortcut -> Update Pending
+  -> Review Source -> Save Source. The row stays blank in place after Save/restart
+  and its dialog opens empty. Pending says Clear shortcut (Removed), not Delete.
+  Disable retains the assigned key off. Backend/state/schema and installed bridge
+  capabilities are unchanged; no deployment is needed. Counts below predate this
+  UI correction; its supplied final results are in
+  [current validation](docs/validation.md#ui-only-correction-final-validation).
+  Entering a key from blank defaults Enabled on. Live behavior remains unverified.
 - Product priority is useful existing Keybindings through approved activation and
   validation, then Device/Input, with cursor, rules, startup, and environment later.
   Additional managed bindings have a validated checkpoint; source-aware editing is
-  implemented and validated offline; activation/live acceptance remain pending. Profiles/layout
+  implemented and validated offline; the approved compatible bridge-only update is
+   installed for Disable and unassignment. True Delete/unassignment is implemented and
+   validated in code and isolated tests; the approved Delete-capable helper-only
+   deployment completed on 2026-11-03 UTC. Runtime behavior/live acceptance
+   remain pending. Profiles/layout
   pages remain out of scope. Existing-pair validation is an earlier checkpoint,
   not validation of the new bindings work. Migration and automatic foreign repair
   are deferred, nonblocking work, not feature-breadth prerequisites.
@@ -158,13 +173,26 @@ Things to avoid:
 - Source shortcuts are a separate `core/source_bindings.py` TSV workflow, not an
   extension to generated managed Lua. Write metadata only to the explicitly selected
   existing `keybindings.tsv`; preserve catalog, IDs, context, native submap, base
-  flags and order. Permit key/description/enabled edits only, deriving enabled from
-  the metadata-only `disabled` flag. Keep all 80 catalog rows and restoration keys/
-  descriptions/callbacks; no row deletion or forwarding `disabled` as a Hyprland
+   flags and order. Permit key/description/assignment/enabled edits only: `assigned`
+   means nonempty key; `enabled` means assigned and not metadata-only `disabled`.
+   Delete/blank-field clearing stores exactly empty key without `disabled`, removing
+   the old key value from the mapping, not retaining an off tombstone. Empty plus
+   `disabled` is invalid. Disable separately retains the assigned key. Keep all 80
+   catalog declarations, descriptions and callbacks, not necessarily 80 assigned
+   bindings; no row deletion or forwarding `disabled` as a Hyprland
   option. Keep v1/all-enabled bytes unchanged. Review/commit of any disabled row
   requires the companion's first-line `-- Attune source bindings capabilities: disabled-v1`
   and captured bridge path proof; old/missing helpers must explicitly block Save,
-  since the old bridge would select all defaults. Validate state-aware pending,
+   since the old bridge would select all defaults. Any unassigned proposal requires
+   both that first line and second-line `-- Attune source bindings capabilities: unassigned-v1`.
+   Apply the existing selected/actual-installed alias guard to both capabilities,
+   including direct backend commits, with a clear helper-update refusal. Keep route
+   and metadata binding unchanged. Keep all rows in catalog order, including blank
+    shortcuts; the same pencil edits assigned, disabled and unassigned rows.
+    Pending Clear shortcut is Removed, Disable/Enable Modified and assignment Added. Validate
+   all three states through Undo/Redo/Discard/Revert and Save/reopen. Valid saved data
+   with a compatible bridge must not resurrect defaults; absent/broken helpers or
+   invalid catalog data still select whole defaults. Validate state-aware pending,
   Undo/Redo/Discard/Revert and active-only combo uniqueness, including atomic refusal
   on conflicting re-enable. The disable fix is implemented and validated through
   automated and isolated GTK checks; see the current validation record for results.
@@ -176,9 +204,24 @@ Things to avoid:
   replacement. Post-save verification may ignore only the writer's own selected
   regular-leaf identity change, including an aliased installed route; never relax
   other route/bridge facts. Unrelated offline TSVs remain independent. No main Lua
-  reads/evaluation. Live bridge activation requires fresh explicit
-  approval for a compatible helper-only update preserving user TSV and main Lua, not
-  main/data replacement or automatic Super+T disabling. Keep complete reviewed Save, dedicated
+  reads/evaluation. The user-approved compatible helper-only update is installed,
+   preserving TSV and main Lua; all 80 rows remain enabled. Installed `1d1023aa...`
+   supports both capabilities, replacing disable-only `0fc1fa9f...`. The Delete fix is implemented
+   and validated in code and isolated tests: final full pytest 4,361 passed, 383 skipped;
+   six Broadway suites 380 passed, 2 skipped. Required Ruff/format and error-level
+   Pyright passed; GI warnings are not claimed clear. Independent review found no
+   material findings. See `docs/validation.md` for final process HOME/XDG isolation,
+   the earlier non-prefixed run qualification, warnings, timings and unchanged live hashes.
+   Deployment is complete, with separate in-memory Delete and Disable reviews accepted
+   without persistence; app code is unchanged and no full rerun is claimed. Ready now,
+    without deployment: close/reopen Attune, then installed-default `terminal.t`
+    pencil / clear Shortcut / Update Pending / Review Source / Save Source. Do not apply it for the user. Configuration
+   load applies it, not automatic IPC. Further live writes still
+  require fresh explicit approval, not main/data replacement or automatic Super+T
+  disabling. The prior disable-only helper cannot accept empty keys: do not blindly
+  downgrade after Delete and resurrect defaults. Require fresh compatibility review
+  and user reassignment or a safe updated-helper plan; never restore
+  snapshot TSV over later edits. Keep complete reviewed Save, dedicated
   lock/private backups, fresh route/byte checks, direct non-daemon lifetime and
   source-local dirty/undo/uncertainty. Source, additional bindings and visual Save
   remain independent. Test with temporary files and process HOME/XDG isolation.

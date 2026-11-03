@@ -28,6 +28,7 @@ from hyprmod.core.scopes import SCOPE_BASENAMES
 BASENAME = "keybindings.tsv"
 BRIDGE_BASENAME = "keybindings-bridge.lua"
 BRIDGE_CAPABILITY = "-- Attune source bindings capabilities: disabled-v1"
+UNASSIGNED_CAPABILITY = "-- Attune source bindings capabilities: unassigned-v1"
 CATALOG = "jdawson.hyprland"
 HEADER = f"# Attune source bindings v1\n# catalog: {CATALOG}\n"
 COLUMNS = "id\tcontext\tsubmap\tflags\tkey\tdescription\n"
@@ -108,12 +109,20 @@ class SourceBinding:
             or tuple(sorted(set(self.flags))) != self.flags
         ):
             raise ValueError("Expected sorted unique known flags")
-        validate_key(self.key)
+        if type(self.key) is str and self.key == "":
+            if "disabled" in self.flags:
+                raise ValueError("Unassigned shortcuts cannot be disabled")
+        else:
+            validate_key(self.key)
         _text(self.description, MAX_DESCRIPTION_CHARS)
 
     @property
+    def assigned(self) -> bool:
+        return self.key != ""
+
+    @property
     def enabled(self) -> bool:
-        return "disabled" not in self.flags
+        return self.assigned and "disabled" not in self.flags
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,11 +140,13 @@ class SourceConfig:
         for row in self.bindings:
             if type(row) is not SourceBinding or SourceBinding(**asdict(row)) != row:
                 raise ValueError("Expected exact immutable SourceBinding")
-            identity = (row.submap, key_identity(row.key))
-            if row.id in ids or (row.enabled and identity in combos):
+            if row.id in ids:
                 raise ValueError("Duplicate ID or shortcut in native submap")
             ids.add(row.id)
             if row.enabled:
+                identity = (row.submap, key_identity(row.key))
+                if identity in combos:
+                    raise ValueError("Duplicate ID or shortcut in native submap")
                 combos.add(identity)
             size += len(_row_text(row).encode("utf-8"))
         if size > MAX_INPUT_BYTES:
@@ -368,7 +379,7 @@ def _review_fields(baseline: SourceBaseline, proposal: SourceConfig) -> tuple:
     if fixed_metadata(baseline.config) != fixed_metadata(proposal):
         raise ValueError(
             "Source metadata, IDs, base flags and order are read-only; "
-            "keep every row and disable unwanted shortcuts instead of deleting them"
+            "keep every catalog row and clear its key to unassign a shortcut"
         )
     text = build_text(proposal)
     changes = tuple(
@@ -527,7 +538,9 @@ def observe(path: Path, state_root: Path, *, config_root: Path | None = None) ->
 
 
 def _check_bridge(baseline: SourceBaseline, proposal: SourceConfig) -> None:
-    if all(row.enabled for row in proposal.bindings):
+    unassigned = any(not row.assigned for row in proposal.bindings)
+    disabled = any("disabled" in row.flags for row in proposal.bindings)
+    if not unassigned and not disabled:
         return
     bridges = [Path(baseline.lexical_path).parent / BRIDGE_BASENAME]
     installed = baseline.installed_route
@@ -543,7 +556,8 @@ def _check_bridge(baseline: SourceBaseline, proposal: SourceConfig) -> None:
     ):
         bridges.append(Path(installed.lexical_path).parent / BRIDGE_BASENAME)
     message = (
-        "Update the source keybindings bridge before saving disabled shortcuts; "
+        "Update the source keybindings bridge before saving disabled or unassigned shortcuts "
+        f"(requires disabled-v1{' and unassigned-v1' if unassigned else ''}); "
         "older bridges would restore defaults."
     )
     try:
@@ -569,6 +583,8 @@ def _check_bridge(baseline: SourceBaseline, proposal: SourceConfig) -> None:
                 ):
                     raise ValueError(message)
                 header = (BRIDGE_CAPABILITY + "\n").encode()
+                if unassigned:
+                    header += (UNASSIGNED_CAPABILITY + "\n").encode()
                 if stream.read(len(header)) != header:
                     raise ValueError(message)
                 if identity != route_approval._stat_identity(os.fstat(stream.fileno())):
