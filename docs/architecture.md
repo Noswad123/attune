@@ -2,25 +2,31 @@
 
 ## Overview
 
-Attune is the focused appearance/monitor fork of BlueManCZ/hyprmod at `b475087`.
+Attune is the focused appearance/monitor and managed-keybindings fork of
+BlueManCZ/hyprmod at `b475087`.
 The public executable is `attune`; the Python package remains `hyprmod`.
 Upstream attribution and GPL-3.0-or-later licensing are retained in [LICENSE](../LICENSE).
 
 The supported GUI is constrained before page construction, state registration,
 and search indexing. It exposes general visual options (gaps, border size/colors),
-decoration, animations/beziers, monitors, Pending Changes, and read-only Settings.
+decoration, animations/beziers, monitors, managed Keybindings, Pending Changes,
+and read-only Settings.
 Health is an independent read-only utility, also available from startup recovery.
 Backup inspection is another independent read-only utility. Its separate disk
 restoration workflow participates in the editor exclusion gate, not ordinary
 dirty/undo contributions or live preview.
-Inherited profile, binding, rule, workspace, autostart, environment, plugin, and
+Inherited profile, general binding/override, rule, workspace, autostart, environment, plugin, and
 generic configuration helpers are not the focused application's feature contract.
-Hand-authored behavior remains outside the GUI.
+Authored callbacks and live bindings remain untouched by normal editing. A narrow
+user-approved offline integration candidate separates declarations/labels from Lua
+actions; the app edits only selected TSV metadata, never main Lua. The dedicated bindings workflow below
+does not establish the provenance of any runtime entry.
 
 The editor supports unchanged `legacy-clear` v1 behavior and an existing registered
 canonical v2 pair. **Pair editing/review/Save/continue is implemented and validated.**
 Startup/Save create no registry, initialize no store,
-provision no absent/empty targets, migrate no data, and select no runtime loader.
+provision no absent/empty visual-scope targets, migrate no data, and select no runtime loader.
+Bindings have their own absent/empty target contract, independent of visual scopes.
 [ADR 0001](decisions/0001-shared-local-ownership.md) records ownership and separate
 future migration design. Automatic scoped foreign preservation is deferred and
 nonblocking for canonical editing or canonical-only migration.
@@ -30,6 +36,314 @@ editor routing. Legacy APIs apply only to `legacy-clear`; the M3 sections retain
 supporting contracts, not a requirement to finish every foreign-recovery edge case.
 
 ## API / Interfaces
+
+### Existing source shortcuts
+
+#### Overview
+
+The original key/description workflow has an automated/isolated GTK checkpoint.
+The reversible disable fix is implemented and validated in code through automated
+and isolated GTK checks. Live activation still needs a separately approved companion
+bridge update. Keybindings has
+**Existing shortcuts** (`SourceBindingsPage`) and **Additional bindings**
+(`ManagedBindingsPage`) tabs. The pre-deployment live inventory contained 80 `__lua`
+entries and zero descriptions. A numeric runtime `arg` is a Lua registry reference,
+not source text or a line number. The runtime list prefers supplied descriptions,
+but none were present then. Approved deployment on 2026-11-02 yielded 80 exact
+catalog descriptions, unchanged keys/flags/native contexts and zero config errors
+in read-only inspection. Live shortcut behavior remains user-untested.
+No authored main is evaluated by Attune to infer actions.
+
+The owner-approved refactor remains under `integrations/hyprland/jdawson` as a
+reference main, bridge and stable-ID 80-row TSV. Reviewed copies were separately
+deployed into the actual Stow source, preserving the config-root symlink; the project
+directory is not directly loaded. Callback bodies and definition sites remain unchanged;
+registration now supplies descriptions. Normal app Save never rewrites main Lua or unbinds runtime
+shortcuts. Existing managed Lua formats and visual journals are unchanged.
+
+#### API / Interfaces
+
+| Interface | Role |
+| --- | --- |
+| `SourceBinding` / `SourceConfig` | Frozen rows: `id`, descriptive `context`, native `submap`, sorted `flags`, `key`, `description`; derived `enabled` is absence of `disabled`. Catalog `jdawson.hyprland`, 1-1,000 rows, unique IDs and normalized enabled combos per native submap. |
+| `read_text` / `build_text` | Six-column TSV with exact version/catalog/schema header and final LF, at most 256 KiB; no Lua evaluation. Keys at most 256 characters, descriptions at most 512, no controls. |
+| `SourceBaseline` / `observe` / `run_observe` | Existing explicit lexical/resolved `keybindings.tsv`, exact text/config/hash, selected `PathProof`, actual `config_root`, immutable protected proofs and metadata-only `installed_route: PathProof` for that root's `hypr/keybindings.tsv`; strict JSON transport validates these fields. Observation APIs accept optional keyword `config_root` (XDG/home default), supervised read defaults to 15 seconds. |
+| `SourceReview` / `prepare_review` / `run_prepare_review` | Fresh complete CURRENT -> GOAL diff, exact baseline/proposal and derived review hash; immutable metadata/order comparison, supervised read defaults to 30 seconds. |
+| `SourceSaveResult` / `persist_reviewed` | Direct non-daemon writer: `saved`, `no-op`, `failed`; verified baseline on success, backup path and sticky `may_have_written` flag. No compiler or IPC. |
+| `SourceBindingsPage` | Explicit file selection/prepared shortcut, key/description/enabled drafts, row Disable/Enable and dialog Enabled switch, search, SavedList baselines/undo, review, one-use Save and exact baseline adoption. |
+| `window` / `PendingChangesPage` | Existing/additional tabs, pending source review and explicit Additional bindings row navigation, `source-bindings` writer owner, close veto, monitor-preview gate and independent undo cleanup. |
+
+#### Data Flow
+
+1. Initial observation targets `$XDG_CONFIG_HOME/hypr/keybindings.tsv` with the usual
+   `~/.config` fallback. Open Prepared Source Mappings explicitly selects the checkout
+   TSV; Open Source Mappings selects another existing file. Neither copies, provisions
+   nor installs data. The admitted visual startup gate still applies. The GUI passes
+   actual config-root context explicitly; observe/review worker requests and responses
+   bind source path, state root and config root, including required `--config-root`.
+2. Edit only key/description/enabled state. Preserve catalog, IDs, context, submap,
+   base flags and order against the loaded baseline. Search and Pending Changes use
+   metadata, not callback parsing. Dirty source edits must be discarded before choosing another source.
+   State changes appear as meaningful Disable/removal or Enable/addition pending
+   entries. Undo/Redo, Discard and per-entry Revert include state. No row is deleted.
+3. Review reobserves exact bytes/routes and renders the full diff with lexical/resolved
+   paths and hashes. Further edits invalidate review. Transport is bounded to 16 MiB;
+   diff to twice the 256 KiB input bound plus 65,536 bytes. Oversize refuses.
+   If any proposed row is disabled, review and writer rechecks require the selected
+   TSV's companion `keybindings-bridge.lua` to match a captured protected path proof
+   and start with `-- Attune source bindings capabilities: disabled-v1` plus LF.
+   Only that capability header is read, never authored main Lua. Old/missing helpers
+   refuse with "Update the source keybindings bridge before saving disabled shortcuts;
+   older bridges would restore defaults." No silently dropped disable is permitted.
+   If the selected and installed TSV share a resolved target or device/inode, both
+   selected and actual installed companions must pass the capability/proof checks.
+   A direct Stow/source path beside a new helper cannot bypass an old installed helper.
+4. Save acquires window exclusion and calls the writer directly on a non-daemon worker.
+   The dedicated state is `$XDG_STATE_HOME/attune/source-bindings.lock` and
+   `source-bindings-backups/<sha256-of-prior-bytes>.tsv`. Private directories are
+   `0700`, lock/backups `0600`, outside Git. Source may be in Git. Under the five-second
+   advisory lock wait, recheck route/bytes/state, verify and synchronize prior-byte
+   backup, then replace only the resolved TSV while preserving safe Stow links.
+   Installed TSV route and both required helper proofs are bound and rechecked before
+   state creation, under lock and immediately before replacement, including direct
+   writer calls that bypass GUI review preparation.
+5. Reobserve exact proposed bytes/config and unchanged route dependencies before
+   adopting the baseline. Success clears only source undo. Failures retain drafts;
+   possible publication or failed adoption locks only source. No-op can create lock/
+   state but no backup/output. There is no hard total filesystem deadline.
+   Post-write selected/installed route comparison allows only the writer's selected
+   regular-leaf identity to change, including an aliased installed route; all other
+   path/link/bridge facts stay bound. Unrelated offline TSVs remain independent.
+6. The separately approved installation now supplies the runtime bridge and data.
+   The app never executes authored main. At compositor load, the bridge validates all
+   80 rows against its frozen catalog before any registration, or selects **all**
+   defaults. It forwards original action objects unchanged and adds descriptions and
+   original flags. Missing/unloadable bridge falls back to original source keys,
+   callbacks and flags with descriptions. Trusted-source assertion failures are not
+   a promise of fallback from arbitrary bridge implementation errors.
+   In the updated project bridge, `register` consumes and checks every ID/context
+   but skips `hl.bind` for disabled rows. `finish` still requires all 80 IDs seen.
+   `disabled` is metadata, never a Hyprland option. The installed bridge is still
+   old and does not implement this behavior; a compatible bridge-only update needs
+   explicit approval while preserving user TSV and main Lua.
+
+#### Edge Cases
+
+- The Python codec admits 1-1,000 rows; the trusted bridge requires exactly its 80
+  catalog rows and metadata/order. App validation is not bridge activation proof.
+- TSV has no quoting/escaping or callback column; tabs/newlines cannot be embedded
+  in fields. No Lua evaluation or bridge JSON library is needed. Internal Python
+  worker transport uses standard-library JSON, not an installed Lua JSON dependency.
+- Duplicate normalized keys among enabled rows in the same native submap refuse.
+  Disabled rows free their combination for another enabled source row. Conflicting
+  re-enable (including pending Revert) refuses before mutation. All 80 records retain
+  keys/descriptions and unchanged authored callbacks for restoration. Empty enabled
+  keys are refused with guidance to Disable; an empty disabled key retains the prior key.
+  The v1 header/schema and all-enabled bytes are unchanged. Old data works with old
+  and new bridges, but an old bridge encountering `disabled` rejects the entire
+  catalog and selects all 80 defaults. Capability checking therefore gates Save.
+   This is local metadata checking, not runtime conflict detection or full
+   keysym/hardware alias validation.
+  `manager` is descriptive Lua-state context with empty native submap; Wisp uses
+  native `wisp`. Context alone cannot justify otherwise colliding keys.
+- Row order is catalog presentation, not registration order. Candidate source sites
+  retain registration order, including Wisp's unspecified `pairs` iteration.
+- Missing/empty/foreign/malformed source is not created, imported or repaired. Both
+  basenames must be `keybindings.tsv`, with an existing safe parent and owned,
+  non-executable, single-link readable/writable file. Unsafe links/aliases and stale
+   proofs refuse. Metadata-only protected proofs cover the actual config root's
+  main/generated/registry routes (`hyprland.lua`, `hyprland.conf`, `attune.lua`,
+   `attune-bindings.lua`, both visual scope files and `attune/installation.json`),
+   plus `keybindings-bridge.lua`,
+  independently of the selected source directory, plus equivalent source-sibling
+  routes. Direct aliases and post-review route changes refuse. Authored Lua is never
+  opened through these checks, including when the selected source is a Stow file.
+- The candidate uses only `$HOME/.config/hypr` for bridge/data, not XDG discovery or
+  a dotfiles fallback. Editing another selected TSV does not make that file loadable.
+- Source, additional managed bindings and visuals retain separate Save/dirty/undo
+  units, never atomic Save Everything. Saved metadata does not prove loading.
+  Saving an already-integrated or watched TSV may immediately auto-reload even
+  without IPC; the GUI warning does not assume integration happens only later. Installation and
+  rollback need explicit approval and outside-watched-path backups.
+- Isolated 80-registration equivalence checks symbolic declarations and unchanged
+  callback source/upvalues, not callback execution or live compositor behavior.
+
+#### Example usage
+
+Close/reopen Attune -> Keybindings -> Existing shortcuts to observe the installed
+default TSV (80 rows successfully observed). Edit a key/description, Review Source
+Shortcuts, inspect the complete diff, then Save Reviewed Source Shortcuts only if
+intended: saving watched data may immediately reload it. Additional bindings and
+visuals save separately. Open Prepared Source Mappings instead selects the separate
+reference TSV for preview; it is not needed to open the installed file. See
+[deployment evidence and rollback safeguards](validation.md#source-integration-activation-and-rollback).
+For Super+T removal, first obtain approval for the compatible bridge-only update
+preserving user TSV and main Lua. After the update, restart Attune, confirm the
+installed default TSV (not Prepared), Disable `terminal.t`, Review
+Source Shortcuts, then Save Reviewed Source Shortcuts. Nothing automatically disables
+that row from a bug report. Removal becomes effective on the next configuration
+load; watcher auto-reload is not guaranteed and no IPC is sent.
+
+#### Related files
+
+`core/source_bindings.py`, `pages/source_bindings.py`, `window.py`, `pages/pending.py`,
+`core/ownership.py`, `core/undo.py`, `core/route_approval.py`, `core/persistence.py`,
+`core/health.py`, and the [bundle README](../integrations/hyprland/jdawson/README.md).
+Coverage source: `tests/test_source_bindings.py`, `tests/test_source_bindings_gui.py`,
+`tests/test_source_bindings_equivalence.py`, `tests/fixtures/source-bindings-original.lua`.
+Current disable validation: full pytest **4,332 passed, 367 skipped**; all six
+IPC-disabled Broadway suites **364 passed, 2 skipped**; backend/equivalence **304
+passed**, source GUI **68 passed**. Full-tree Ruff/format, error-level Pyright,
+wheel/candidate syntax/launcher help/diff checks passed; unfiltered GI warnings remain.
+P1 direct-Stow/installed-helper regressions passed and independent source-only review
+found no blockers. No live files/keys changed. See the
+[current validation record](validation.md#source-shortcut-disable-fix-implemented-and-validated)
+for timings, warnings, isolation and unchanged hashes. Code validation is not live
+disable acceptance; helper-only activation still needs explicit approval.
+
+Historical results, predating disable support: full pytest 4,291 passed, 343 skipped; all six IPC-disabled
+Broadway suites 340 passed, 2 skipped; focused equivalence 114 passed and source
+backend 149 passed. Permanent key/description cases cover every one of the 80 IDs,
+including virtual read-error/helper-syntax fallback regressions. Full-tree Ruff/
+format, error-level Pyright, wheel/help/diff checks passed; independent rechecks
+found no blockers. Timings, warnings, temporary-only publisher isolation and live
+limitations are in [validation](validation.md#existing-source-shortcuts-current-evidence-and-limitations).
+Historical managed-binding counts below retain their earlier checkpoint scope.
+
+### Managed keybindings
+
+#### Overview
+
+**Implemented and validated** with automated and isolated GTK checks, not live
+keyboard/loading acceptance. `ManagedBindingsPage` is the focused
+Additional bindings tab of the `binds` page in both admitted legacy and pair editors, not the inherited override
+editor. It owns only `$XDG_CONFIG_HOME/hypr/attune-bindings.lua` with the usual
+`~/.config` fallback. No migration, split registry or new visual scope is required.
+The existing startup admission gate still applies; this is not a bypass of blocked
+visual startup. Profiles and layout pages remain outside supported scope.
+
+#### API / Interfaces
+
+| Interface | Role |
+| --- | --- |
+| `bindings.BindingsConfig(lines=())` | Frozen tuple of canonical directives, at most 1,000, unique normalized keyboard combinations, bounded to 1 MiB. |
+| `validate_line` / `combo` | Exact parser round trip; normalize modifier aliases/order; admit only global keyboard `bind`, `binde`, `bindl`, `bindr`, `bindn` and library-renderable dispatchers/arguments. |
+| `build_text` / `read_text` | Generated header plus distinct `-- Attune bindings data v1: ` base64 JSON record (`version`, `binds`) and exact library-rendered Lua body. Not visual v1/v2. No input Lua execution. |
+| `BindingsBaseline` / `observe` / `run_observe` | Fixed lexical/resolved route, explicit roots, absent/empty/owned status, exact text/config and path proof. Read-only wrapper defaults to 15 seconds. |
+| `BindingsReview` / `prepare_review` / `run_prepare_review` | Fresh baseline check and complete CURRENT -> GOAL diff, counts and fingerprint; read-only wrapper defaults to 30 seconds. |
+| `BindingsSaveResult` / `persist_reviewed` | Direct non-daemon mutator; saved/no-op/failed, fresh adoptable baseline only on success, verified backup path if any, sticky `may_have_written` uncertainty. |
+| `ManagedBindingsPage` | SavedList local drafts, search, pending rows, undo/discard, runtime observation, conservative combination checks, exact verified baseline adoption. |
+| `BindEditDialog(..., draft_only=True)` | Add to Pending / Update Pending, keyboard-only validation, GTK event recording and Manual Edit fallback. No live mutation. |
+| `PendingChangesPage` / `HyprModWindow.save_bindings_reviewed` | One-use exact review request, revision/context checks, direct protected writer lifetime, typed outcome validation and unit-local baseline/undo handling. |
+
+#### Data Flow
+
+1. First Keybindings visit asynchronously observes the dedicated file through the
+   bounded read-only worker and queries `hypr.get_binds()` off GTK. Runtime inventory
+   is a single snapshot, capped at 10,000 exact installed-client `Bind` objects.
+   Offline/failed/empty results are unknown, not an empty verified conflict set.
+2. Search matches shortcut/action/category/origin text. Add/edit/delete changes only
+   owned local lines. `SavedList` and `SavedListSnapshot` retain per-row saved
+   baselines, pending contributions and undo history. Unsupported dialog actions
+   have no Edit button; owned rows can still be deleted. Runtime rows have no mutators.
+   Draft-mode action lists hide submap. When a structured argument control would
+   default or clamp the original value, the dialog falls back to exact plaintext,
+   preserving arguments on shortcut-only edits.
+3. Pending Changes prepares a complete bindings review separately from the visual
+   review. Transport is bounded to 32 MiB, diff to 2 MiB + 65,536 bytes, generated
+   text to 1 MiB. Edits/revision changes invalidate review; exact baseline/proposal
+   and one-use request checks reject stale save delegation.
+4. **Save Reviewed Keybindings** acquires the window's `save-bindings` owner, excludes
+   overlapping writers, blocks editing during commit and vetoes close. Resolve any
+   monitor confirmation first. The writer is called directly on a non-daemon thread,
+   never a timeout-killable publication child. Its dedicated state is
+   `$XDG_STATE_HOME/attune/bindings.lock` and
+   `bindings-backups/<sha256-of-prior-bytes>.lua` (default state root `~/.local/state`).
+   Private state directories are `0700`, lock/backups `0600`, outside Git. Existing
+   empty prior bytes also receive a backup; absent priors do not. No pair journal,
+   scope publication, visual store initialization or registry activation is involved.
+   A `.git` directory or worktree file at the backup root itself is rejected before
+   lock creation and rechecked under lock through final state verification.
+5. Under the five-second advisory lock wait, reobserve exact source/route dependencies,
+   compile-check generated Lua without executing it, verify/sync prior-byte backup,
+   recheck before publication, and publish to the resolved target. Absent creation
+   is exclusive; existing replacement preserves lexical Stow links. Fresh exact
+   output, route and dependency verification must succeed before baseline adoption.
+   No-op still validates/rechecks and may create lock/state, but no backup/output.
+   Ten-second compiler checks do not bound total filesystem time.
+6. Success adopts only the bindings baseline and clears only bindings undo entries.
+   Visual Save skips bindings baseline updates and retains bindings undo history;
+   bindings Save retains visual dirty state/history. There is no atomic Save Everything.
+   Errors retain drafts; post-delegation invalid results, possible publication and
+   failed adoption lock only bindings, not visual scope/journal state. Pre-delegation
+   start failure adds no uncertainty. Owner release precedes fallible UI notification.
+
+#### Edge Cases
+
+- Every runtime row is external/read-only for authority purposes, including `__lua`
+  opaque callbacks. Matching an owned combo does not prove origin or loading. No
+  authored config parsing or `enrich_lua_binds` inference is used. Labels show
+  descriptions, submaps, keycodes and true boolean flags **as reported by the installed
+  client model**. A dedicated Lua flag is not supplied by that model; do not invent
+  support or complete flag reconstruction. Read-only treatment is safe regardless.
+- New/moved combos refuse any observed runtime overlap, even if its submap or flags
+  might make it nonconflicting in practice. Same-combo edits of existing owned rows
+  are allowed locally and warn on unknown-origin overlap. Owned duplicate combos
+  always refuse. Offline inventory permits drafts with explicit uncertainty; neither
+  a successful observation nor Save proves conflict freedom. No runtime refresh or
+  conflict requery occurs during Save.
+- Mouse, keycode/catchall triggers, submap dispatch, combined/other variants and
+  control-bearing directives refuse. Recording sees only events reaching GTK;
+  reserved shortcuts require Manual Edit, never compositor grabs or temporary unbinds.
+- For `exec`/`execr`, validation uses public `dispatch_to_lua` to require an
+  `exec_cmd`/`exec_raw` call whose decoded quoted argument equals the exact original.
+  Library migration rewrites, including `hyprctl` arguments/instance controls, fail
+  closed with guidance to use a direct action or Raw command only if intended.
+  Actual Lua generation remains `keyword_to_lua`, not hand translation. Ordinary
+  `$`, quotes, commas and operators are preserved when literal emission is proven.
+  Tests inspect generated Lua bodies as well as metadata; this is not live execution
+  or proof of compositor semantics.
+- Owned-baseline Revert may restore the original saved combination despite opaque
+  runtime overlap. Owned uniqueness is still checked before mutation; expected
+  `ValueError`s are shown as toasts. No runtime override or unbind is involved.
+- Exact plaintext argument fallback preserves values such as `dpms` argument
+  `off HDMI-A-1`, `cyclenext` argument `prev`, and resize values of `20000` rather
+  than silently defaulting or clamping structured controls.
+- The resolved basename must remain `attune-bindings.lua`; its safe owned writable
+  parent must already exist. Existing safe file/parent Stow links survive; dangling/
+  cyclic links, hardlinks, unsafe files/parents, stale proofs, Git-unsafe state and
+  aliases/collisions with main configs, legacy/scoped outputs, registry or state
+  refuse. Protected routes are inspected as filesystem metadata, not opened as Lua.
+- Foreign/manually changed/unknown-version nonempty output locks managed editing.
+  Preserve and manually remediate it, then reopen. There is no import, auto-repair,
+  bindings recovery browser, or automatic rollback. Failure can leave state/backup
+  files; locks and checks are not protection against hostile filesystem races.
+- No binding live-apply, override, unbind, reload IPC, include insertion or main-Lua
+  read is added. Runtime IPC is observation only. Compile success is not compositor
+  semantic validation. Persistence is not loading, and watched writes may auto-reload.
+
+#### Example usage
+
+Open Keybindings, add a supported unused shortcut to Pending, Ctrl+S, inspect exact
+paths/hashes/diff, and choose **Save Reviewed Keybindings**. Save visual changes
+separately. Only after generated output exists, manually add `dofile` with the actual
+absolute lexical path shown in review to the user's Lua entrypoint. For the default
+location on this checkout's machine, see the [README example](../README.md#first-managed-keybindings-save-then-manual-loading).
+No loader edits or live verification were performed by this documentation pass.
+
+#### Related files
+
+`core/bindings.py`, `core/route_approval.py`, `core/persistence.py`,
+`core/ownership.py`, `core/undo.py`, `pages/managed_bindings.py`, `binds/dialog.py`,
+`binds/live.py`, `window.py`, `pages/pending.py`, `core/focused_ui.py`, `ui/sidebar.py`.
+Present test modules include `tests/test_bindings_persistence.py`,
+`tests/test_managed_bindings.py`, `tests/test_managed_bindings_gui.py`, and
+`tests/test_keybindings_workflow_gui.py`. Backend focus: 88 passed; full suite:
+4,026 passed, 299 skipped; all five isolated Broadway suites: 296 passed, 2 skipped.
+Required Ruff/format, error-level Pyright, wheel/help and diff checks passed.
+See [validation](validation.md#managed-keybindings-implemented-and-validated) for
+warnings, review fixes, isolation and the unexplained empty-file observation. No
+live keyboard semantics or new mutator CLI is claimed.
 
 ### Existing canonical-pair editor
 
@@ -69,7 +383,8 @@ supporting contracts, not a requirement to finish every foreign-recovery edge ca
 5. Exact typed result validation precedes fresh supervised `run_entry` after
    committed/no-op success. Registry/context and route bindings must match, and both
    fresh texts must equal reviewed goals. Only then replace the local pair baseline
-   and call `_perform_save` / `mark_saved`, clearing dirty/undo state and permitting
+   and call `_perform_save` / `mark_saved`, clearing visual dirty/undo state while
+   retaining bindings state/history and permitting
    repeated Saves without restart. This verified success path is distinct from
    recovery's old-editor invalidation.
 
@@ -103,7 +418,7 @@ supporting contracts, not a requirement to finish every foreign-recovery edge ca
 #### Example usage
 
 For an already registered canonical pair and initialized store: launch, edit an
-appearance value, Ctrl+S, inspect both scope diffs, Save Reviewed Changes, then edit
+appearance value, Ctrl+S, inspect both scope diffs, Save Reviewed Appearance / Displays, then edit
 and Save again. Reopen to inspect persisted data. No provisioning/loader handoff
 is part of this sequence; live execution requires separate explicit confirmation.
 
@@ -1089,7 +1404,8 @@ existing-pair flow above does not use the v1 cache or writer.
    ownership/syntax, and back up previous bytes. Recheck before atomic replacement
    via a temporary file in the resolved target's parent.
 5. **UI baseline:** only after persistence succeeds, invalidate the config cache,
-   mark option/section state saved, clear pending library state and undo history,
+    mark visual option/section state saved, clear pending library state and visual
+    undo history, retaining the independent bindings baseline, dirty state and history,
    and refresh indicators. This does not force a compositor reload.
 6. **Integration:** the user explicitly loads the output from their authored Lua
    config after defaults. Attune does not edit the entrypoint or infer its logic.
@@ -1302,7 +1618,9 @@ foreign-file guards remain intact. A compositor may auto-reload watched output.
 
 See [README.md](../README.md#local-source-setup-and-launch) for dependencies and
 local uv setup. In the GUI: edit, keep/revert any monitor preview, press Ctrl+S,
-review Pending Changes, then choose **Save Reviewed Changes**.
+review Pending Changes, then choose **Save Reviewed Appearance / Displays**.
+Keybindings use their separate review/action and manual loader instructions above;
+the legacy visual loading example below does not load bindings.
 
 After the first save, explicitly add this after authored defaults or at the end
 of your own Hyprland Lua entrypoint, only if the config directory is on its module

@@ -46,8 +46,11 @@ class TestFocusedNavigation:
         win = MagicMock()
         win._schema = filter_schema(load_schema())
         win._key_to_group = {}
+        monkeypatch.setattr(window_module, "Adw", MagicMock())
         for name in (
             "MonitorsPage",
+            "ManagedBindingsPage",
+            "SourceBindingsPage",
             "PendingChangesPage",
             "SettingsPage",
             "HealthPage",
@@ -70,6 +73,12 @@ class TestFocusedNavigation:
         )
         backups_page.return_value.ensure_loaded.assert_not_called()
         backups_page.return_value.bind_lifecycle.assert_called_once_with(win)
+        bindings_page = cast(MagicMock, window_module.ManagedBindingsPage)
+        bindings_page.return_value.ensure_loaded.assert_not_called()
+        bindings_page.return_value.bind_lifecycle.assert_called_once_with(win)
+        source_page = cast(MagicMock, window_module.SourceBindingsPage)
+        source_page.return_value.ensure_loaded.assert_not_called()
+        source_page.return_value.bind_lifecycle.assert_called_once_with(win)
 
     def test_health_navigation_ensures_lazy_load(self):
         win = MagicMock()
@@ -93,10 +102,19 @@ class TestFocusedNavigation:
         win._backups_page.ensure_loaded.assert_called_once_with()
         win._page_stack.set_visible_child_name.assert_called_once_with("backups")
 
-    @pytest.mark.parametrize("destination", ["profiles", "binds", "workspaces", "plugins"])
+    def test_keybindings_navigation_loads_page_lazily(self):
+        win = MagicMock()
+        win._page_titles = {"binds": "Keybindings"}
+        win._monitors_page = None
+        HyprModWindow.show_page(win, "binds")
+        win._managed_bindings_page.ensure_loaded.assert_called_once_with()
+        win._page_stack.set_visible_child_name.assert_called_once_with("binds")
+
+    @pytest.mark.parametrize("destination", ["profiles", "layouts", "workspaces", "plugins"])
     def test_navigation_rejects_unsupported_pages(self, destination):
         win = MagicMock()
         win._page_titles = {destination: "Should not be reachable"}
+        win._monitors_page = None
         HyprModWindow.show_page(win, destination)
         win._page_stack.set_visible_child_name.assert_not_called()
 

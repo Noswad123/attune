@@ -1,0 +1,83 @@
+# Attune source bindings v1
+# catalog: jdawson.hyprland
+id	context	submap	flags	key	description
+terminal.return	global			SUPER + Return	Open terminal (Return)
+terminal.t	global			SUPER + T	Open terminal (T)
+launcher.open	global			SUPER + SPACE	Open application launcher
+window.close	global			SUPER + W	Close focused window
+session.lock	global			SUPER + CTRL + Q	Lock session
+session.power-menu	global			SUPER + CTRL + P	Open power menu
+window.fullscreen	global			SUPER + F	Toggle fullscreen
+window.float	global			SUPER + SHIFT + F	Toggle floating window
+notes.scratch	global			SUPER + S	Open scratch notes
+app.next	global			SUPER + Tab	Cycle to next application
+app.previous	global			SUPER + SHIFT + Tab	Cycle to previous application
+app.cancel	global			SUPER + Escape	Cancel application cycling
+workspace.move-monitor	global			ALT + SHIFT + Tab	Move workspace to next monitor
+clipboard.paste	global			SUPER + V	Paste clipboard
+clipboard.history	global			SUPER + SHIFT + V	Open clipboard history
+limbo.focus	global			SUPER + I	Focus Limbo (Super alias)
+limbo.move	global			SUPER + SHIFT + I	Move window to Limbo (Super alias)
+workspace.hide	global			SUPER + SHIFT + H	Hide workspace
+wallpaper.pick	global			SUPER + SHIFT + B	Choose workspace wallpaper
+manager.toggle	manager			ALT + G	Toggle manager mode
+manager.escape	manager		auto_consuming	Escape	Cancel manager operator or exit manager mode
+focus.left	global			SUPER + H	Focus left
+navigate-or-manage.left	global			ALT + H	Navigate or manage left
+move.left	global			ALT + SHIFT + H	Move window left
+manager.direction.left	manager		auto_consuming	h	Manager direction left
+focus.down	global			SUPER + J	Focus down
+navigate-or-manage.down	global			ALT + J	Navigate or manage down
+move.down	global			ALT + SHIFT + J	Move window down
+manager.direction.down	manager		auto_consuming	j	Manager direction down
+focus.up	global			SUPER + K	Focus up
+navigate-or-manage.up	global			ALT + K	Navigate or manage up
+move.up	global			ALT + SHIFT + K	Move window up
+manager.direction.up	manager		auto_consuming	k	Manager direction up
+focus.right	global			SUPER + L	Focus right
+navigate-or-manage.right	global			ALT + L	Navigate or manage right
+move.right	global			ALT + SHIFT + L	Move window right
+manager.direction.right	manager		auto_consuming	l	Manager direction right
+manager.resize	manager		auto_consuming	r	Select manager resize operator
+manager.toggle-split	manager		auto_consuming	t	Toggle split in manager mode
+manager.layout.full	manager		auto_consuming	1	Manager layout full
+manager.layout.columns	manager		auto_consuming	2	Manager layout columns
+manager.layout.two-top	manager		auto_consuming	3	Manager layout two-top
+manager.layout.two-bottom	manager		auto_consuming	SHIFT + 3	Manager layout two-bottom
+activity.code.focus	global			ALT + C	Focus Code activity
+activity.code.move	global			ALT + SHIFT + C	Move window to Code activity
+activity.action.focus	global			ALT + A	Focus Action activity
+activity.action.move	global			ALT + SHIFT + A	Move window to Action activity
+activity.reading.focus	global			ALT + R	Focus Reading activity
+activity.reading.move	global			ALT + SHIFT + R	Move window to Reading activity
+activity.amusement.focus	global			ALT + B	Focus Amusement activity
+activity.amusement.move	global			ALT + SHIFT + B	Move window to Amusement activity
+activity.music.focus	global			ALT + M	Focus Music activity
+activity.music.move	global			ALT + SHIFT + M	Move window to Music activity
+activity.exercise.focus	global			ALT + E	Focus Exercise activity
+activity.exercise.move	global			ALT + SHIFT + E	Move window to Exercise activity
+activity.limbo.focus	global			ALT + I	Focus Limbo activity
+activity.limbo.move	global			ALT + SHIFT + I	Move window to Limbo activity
+desktop.reload	global			ALT + W	Open desktop reload terminal
+bindings.help	global			ALT + SHIFT + slash	Show keybindings
+wisp.escape	wisp	wisp		Escape	Close Wisp
+wisp.consume-space	wisp	wisp		SPACE	Consume Space in Wisp
+wisp.consume-h	wisp	wisp		h	Consume former Wisp hide key
+wisp.action.smiley	wisp	wisp		c	Wisp action smiley
+wisp.action.scratch	wisp	wisp		s	Wisp action scratch
+wisp.action.terminal	wisp	wisp		t	Wisp action terminal
+wisp.action.waystone	wisp	wisp		w	Wisp action waystone
+wisp.action.wyrm	wisp	wisp		r	Wisp action wyrm
+wisp.open	global			ALT + SPACE	Open Wisp hints
+workspace.next	global			SUPER + mouse_down	Focus next workspace
+workspace.previous	global			SUPER + mouse_up	Focus previous workspace
+pointer.move	global		mouse	SUPER + mouse:272	Drag window with pointer
+pointer.resize	global		mouse	SUPER + mouse:273	Resize window with pointer
+hardware.volume.up	global		locked,repeating	XF86AudioRaiseVolume	Raise volume
+hardware.volume.down	global		locked,repeating	XF86AudioLowerVolume	Lower volume
+hardware.volume.mute	global		locked	XF86AudioMute	Toggle mute
+hardware.media.play	global		locked	XF86AudioPlay	Play or pause media
+hardware.media.next	global		locked	XF86AudioNext	Next media track
+hardware.media.previous	global		locked	XF86AudioPrev	Previous media track
+hardware.brightness.up	global		locked,repeating	XF86MonBrightnessUp	Raise brightness
+hardware.brightness.down	global		locked,repeating	XF86MonBrightnessDown	Lower brightness

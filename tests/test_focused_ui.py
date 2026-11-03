@@ -7,6 +7,7 @@ import pytest
 
 from hyprmod.core.focused_ui import GENERAL_OPTIONS, PAGE_IDS, ReviewSnapshot, filter_schema
 from hyprmod.core.schema import get_options_flat, load_schema
+from hyprmod.core.undo import OptionChange, SavedListSnapshot, UndoManager
 
 
 class TestFocusedSchema:
@@ -57,6 +58,7 @@ class TestFocusedSchema:
             "decoration",
             "animations",
             "monitors",
+            "binds",
             "pending",
             "health",
             "backups",
@@ -83,3 +85,33 @@ class TestReviewSnapshot:
         assert ReviewSnapshot(Path("attune.lua"), "old", "new") == ReviewSnapshot(
             Path("attune.lua"), "old", "new"
         )
+
+
+class TestUnitUndoRetirement:
+    @pytest.mark.parametrize("bindings_saved", [True, False])
+    def test_filters_both_stacks_preserving_order_and_capacity(self, bindings_saved):
+        manager = UndoManager(max_size=4)
+        entries = [
+            OptionChange("one", 1, 2),
+            SavedListSnapshot("_managed_bindings_page", [], [], [], []),
+            OptionChange("two", 2, 3),
+            SavedListSnapshot("_managed_bindings_page", [], [], [], []),
+        ]
+        for entry in entries:
+            manager.push(entry, merge=False)
+        for _ in range(2):
+            entry = manager.pop_undo()
+            if entry is not None:
+                manager.confirm_undo(entry)
+        manager.clear_where(
+            lambda entry: (
+                (
+                    isinstance(entry, SavedListSnapshot)
+                    and entry.page_attr == "_managed_bindings_page"
+                )
+                == bindings_saved
+            )
+        )
+        assert manager._undo_stack.maxlen == manager._redo_stack.maxlen == 4
+        assert list(manager._undo_stack) == [entries[0 if bindings_saved else 1]]
+        assert list(manager._redo_stack) == [entries[2 if bindings_saved else 3]]

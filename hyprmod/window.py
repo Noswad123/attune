@@ -11,6 +11,7 @@ from hyprland_socket import HyprlandError
 from hyprland_state import ANIM_LOOKUP, HyprlandState
 
 from hyprmod.core import (
+    bindings,
     config,
     editor_layout,
     persistence,
@@ -26,17 +27,19 @@ from hyprmod.core.scoped_review import GroupReviewPlan
 from hyprmod.core.scopes import Scope
 from hyprmod.core.state import AppState
 from hyprmod.core.transaction_records import route_binding, validate_transaction_id
-from hyprmod.core.undo import OptionChange, PairedOptionChange, UndoManager
+from hyprmod.core.undo import OptionChange, PairedOptionChange, SavedListSnapshot, UndoManager
 from hyprmod.pages.animations import AnimationsPage
 from hyprmod.pages.backups import BackupsPage
 from hyprmod.pages.binds import BindsPage
 from hyprmod.pages.cursor import CursorPage
 from hyprmod.pages.health import HealthPage
+from hyprmod.pages.managed_bindings import ManagedBindingsPage
 from hyprmod.pages.monitors import MonitorsPage
 from hyprmod.pages.pending import PAIR_REVIEW_FAILURE_GUIDANCE, PendingChangesPage
 from hyprmod.pages.scope_recovery import ScopeRecoveryPage
 from hyprmod.pages.section import SectionPage
 from hyprmod.pages.settings import SettingsPage
+from hyprmod.pages.source_bindings import SourceBindingsPage
 from hyprmod.ui import (
     KeyboardLayoutsOptionRow,
     OptionRow,
@@ -100,6 +103,9 @@ class HyprModWindow(Adw.ApplicationWindow):
         self._anim_details_box: Gtk.Box | None = None
         self._animations_page: AnimationsPage | None = None
         self._monitors_page: MonitorsPage | None = None
+        self._managed_bindings_page: ManagedBindingsPage | None = None
+        self._source_bindings_page: SourceBindingsPage | None = None
+        self._bindings_tabs: Adw.ViewStack | None = None
         # Dormant undo entry types still reference these optional pages.
         self._binds_page: BindsPage | None = None
         self._cursor_page: CursorPage | None = None
@@ -218,7 +224,7 @@ class HyprModWindow(Adw.ApplicationWindow):
 
     def finish_restore(self, invalidate: bool) -> None:
         # Backups calls finish even after a refused begin; it cannot release another writer.
-        if self._restore_owner in {"scope", "save"}:
+        if self._restore_owner in {"scope", "save", "save-bindings", "source-bindings"}:
             return
         self._editor_invalidated |= invalidate
         self._restore_owner = None
@@ -361,6 +367,8 @@ class HyprModWindow(Adw.ApplicationWindow):
             for p in (
                 self._animations_page,
                 self._monitors_page,
+                self._managed_bindings_page,
+                self._source_bindings_page,
             )
             if p is not None
         ]
@@ -429,6 +437,30 @@ class HyprModWindow(Adw.ApplicationWindow):
             self._page_titles[slug] = title
             if cls is MonitorsPage:
                 self._search_page_builder.add_entries(page.get_search_entries())
+
+        self._managed_bindings_page = ManagedBindingsPage(
+            self, on_dirty_changed=self._on_section_dirty, push_undo=self._undo.push
+        )
+        self._source_bindings_page = SourceBindingsPage(
+            self, on_dirty_changed=self._on_section_dirty, push_undo=self._undo.push
+        )
+        self._bindings_tabs = Adw.ViewStack()
+        self._bindings_tabs.add_titled(
+            self._source_bindings_page.build(), "existing", "Existing shortcuts"
+        )
+        self._bindings_tabs.add_titled(
+            self._managed_bindings_page.build(), "additional", "Additional bindings"
+        )
+        switcher = Adw.ViewSwitcher(stack=self._bindings_tabs)
+        bindings_header = self._make_page_header("Keybindings")
+        bindings_header.set_title_widget(switcher)
+        bindings_view = Adw.ToolbarView()
+        bindings_view.add_top_bar(bindings_header)
+        bindings_view.set_content(self._bindings_tabs)
+        self._page_stack.add_named(bindings_view, "binds")
+        self._page_titles["binds"] = "Keybindings"
+        self._managed_bindings_page.bind_lifecycle(self)
+        self._source_bindings_page.bind_lifecycle(self)
 
         # Standalone pages have no separate dirty/undo state.
         self._health_page = HealthPage(config.managed_path())
@@ -726,6 +758,10 @@ class HyprModWindow(Adw.ApplicationWindow):
             counts["animations"] += n
         if self._monitors_page and self._monitors_page.is_dirty():
             counts["monitors"] += self._monitors_page.dirty_count()
+        if self._managed_bindings_page is not None:
+            counts["binds"] += sum(1 for _ in self._managed_bindings_page.iter_pending_changes())
+        if self._source_bindings_page is not None:
+            counts["binds"] += sum(1 for _ in self._source_bindings_page.iter_pending_changes())
 
         # The pending-changes chip totals everything else
         counts["pending"] = sum(counts.values())
@@ -913,6 +949,10 @@ class HyprModWindow(Adw.ApplicationWindow):
                 self._health_page.ensure_loaded()
             if gid == "backups" and self._backups_page is not None:
                 self._backups_page.ensure_loaded()
+            if gid == "binds" and self._managed_bindings_page is not None:
+                self._managed_bindings_page.ensure_loaded()
+                if self._source_bindings_page is not None:
+                    self._source_bindings_page.ensure_loaded()
             if gid == "scope-recovery" and self._scope_recovery_page is not None:
                 self._scope_recovery_page.ensure_loaded()
             self._page_stack.set_visible_child_name(gid)
@@ -922,6 +962,19 @@ class HyprModWindow(Adw.ApplicationWindow):
         self.show_page("pending")
         if self._page_stack.get_visible_child_name() == "pending":
             self._sidebar.select_row("pending")
+
+    def show_source_bindings_review(self):
+        self.navigate("binds")
+        if self._page_stack.get_visible_child_name() != "binds":
+            return
+        if self._bindings_tabs is not None and self._source_bindings_page is not None:
+            self._bindings_tabs.set_visible_child_name("existing")
+            self._source_bindings_page.review_changes()
+
+    def show_additional_bindings(self):
+        self.navigate("binds")
+        if self._page_stack.get_visible_child_name() == "binds" and self._bindings_tabs is not None:
+            self._bindings_tabs.set_visible_child_name("additional")
 
     def navigate(self, group_id: str, *, option_key: str | None = None) -> None:
         """Navigate from search or pending changes, preserving their shared API."""
@@ -1085,10 +1138,170 @@ class HyprModWindow(Adw.ApplicationWindow):
         entry = self._undo.pop_undo() if undo else self._undo.pop_redo()
         if entry is None:
             return
-        if entry.apply(self, undo=undo):
-            (self._undo.confirm_undo if undo else self._undo.confirm_redo)(entry)
+        if (
+            isinstance(entry, SavedListSnapshot)
+            and entry.page_attr in {"_managed_bindings_page", "_source_bindings_page"}
+            and (page := getattr(self, entry.page_attr)) is not None
+            and page.locked
+        ):
+            (self._undo.confirm_redo if undo else self._undo.confirm_undo)(entry)
+            self.show_toast(
+                "Keybindings are locked; draft and undo history retained. Reopen Attune.", 5
+            )
+            return
+        try:
+            if entry.apply(self, undo=undo):
+                (self._undo.confirm_undo if undo else self._undo.confirm_redo)(entry)
+        except ValueError as exc:
+            (self._undo.confirm_redo if undo else self._undo.confirm_undo)(entry)
+            self.show_toast(str(exc), 5)
 
     # -- Save with animation --
+
+    def clear_source_bindings_undo(self):
+        self._undo.clear_where(
+            lambda entry: (
+                isinstance(entry, SavedListSnapshot) and entry.page_attr == "_source_bindings_page"
+            )
+        )
+
+    def begin_source_bindings_save(self) -> bool:
+        if not self.editor_edit_allowed():
+            return False
+        if self._monitors_page and self._monitors_page.is_confirm_pending():
+            self.show_toast("Keep or revert the monitor preview before saving source shortcuts.", 5)
+            return False
+        self._restore_owner = "source-bindings"
+        self._restore_in_progress = True
+        return True
+
+    def finish_source_bindings_save(self):
+        if self._restore_owner != "source-bindings":
+            return
+        self._restore_owner = None
+        self._restore_in_progress = False
+
+    def save_bindings_reviewed(
+        self, review: bindings.BindingsReview, proposed: bindings.BindingsConfig
+    ) -> None:
+        pending = self._pending_page
+        if pending is None or not pending.take_bindings_save_request(review, proposed):
+            return
+        page = self._managed_bindings_page
+        if not self.editor_edit_allowed():
+            return
+        if (
+            page is None
+            or page.locked
+            or page.baseline is None
+            or type(review) is not bindings.BindingsReview
+            or review.baseline != page.baseline
+            or review.proposed != proposed
+            or proposed != page.get_config()
+            or self._page_stack.get_visible_child_name() != "pending"
+        ):
+            self._schedule_pending_refresh()
+            return
+        if self._monitors_page and self._monitors_page.is_confirm_pending():
+            self.show_toast("Keep or revert the monitor preview before saving keybindings.", 5)
+            return
+        self._restore_in_progress = True
+        self._restore_owner = "save-bindings"
+        completed = False
+
+        def finish(result, error, delegated):
+            nonlocal completed
+            if completed:
+                return GLib.SOURCE_REMOVE
+            completed = True
+            if self._restore_owner != "save-bindings":
+                return GLib.SOURCE_REMOVE
+            uncertain = delegated and (
+                error is not None or result is None or result.may_have_written
+            )
+            # Release authority before any fallible widget/cache notification.
+            self._restore_owner = None
+            self._restore_in_progress = False
+            try:
+                if result is not None and error is None and result.outcome in {"saved", "no-op"}:
+                    try:
+                        page.adopt_saved(result.baseline)
+                    except Exception as exc:
+                        page.invalidate(
+                            f"Saved keybindings could not be adopted: {exc}. Reopen Attune."
+                        )
+                        raise
+                    self._undo.clear_where(
+                        lambda entry: (
+                            isinstance(entry, SavedListSnapshot)
+                            and entry.page_attr == "_managed_bindings_page"
+                        )
+                    )
+                    self.show_toast(
+                        f"Saved reviewed keybindings: {review.baseline.lexical_path}. "
+                        "Load this exact file manually with dofile. No reload IPC sent.",
+                        5,
+                    )
+                else:
+                    reason = error or (result.error if result is not None else "setup failed")
+                    message = f"Keybindings not saved: {reason}. Draft retained."
+                    if uncertain:
+                        page.invalidate(message + " Disk may have changed; reopen Attune.")
+                    self.show_toast(message, 0)
+            finally:
+                try:
+                    self._set_editor_sensitive(not self._editor_invalidated)
+                finally:
+                    self._update_banner()
+                    self._update_sidebar_badges()
+                    self._schedule_pending_refresh()
+            return GLib.SOURCE_REMOVE
+
+        def work():
+            result = None
+            error = None
+            try:
+                candidate = bindings.persist_reviewed(review, proposed)
+                if type(candidate) is not bindings.BindingsSaveResult:
+                    raise ValueError("Unexpected keybindings save result")
+                if type(candidate.outcome) is not str:
+                    raise ValueError("Unexpected keybindings save outcome")
+                candidate.__post_init__()
+                fresh = candidate.baseline
+                if candidate.outcome in {"saved", "no-op"}:
+                    if type(fresh) is not bindings.BindingsBaseline:
+                        raise ValueError("Missing verified keybindings baseline")
+                    fresh.__post_init__()
+                    prior = review.baseline
+                    if (
+                        fresh.config != proposed
+                        or fresh.text != review.proposed_text
+                        or fresh.status != "owned"
+                        or (
+                            fresh.config_root,
+                            fresh.state_root,
+                            fresh.lexical_path,
+                            fresh.resolved_path,
+                        )
+                        != (
+                            prior.config_root,
+                            prior.state_root,
+                            prior.lexical_path,
+                            prior.resolved_path,
+                        )
+                    ):
+                        raise ValueError("Saved keybindings differ from reviewed output/context")
+                result = candidate
+            except Exception as exc:
+                error = str(exc)
+            GLib.idle_add(finish, result, error, True)
+
+        try:
+            pending.schedule_refresh()
+            self._set_editor_sensitive(False)
+            threading.Thread(target=work, daemon=False).start()
+        except Exception as exc:
+            finish(None, str(exc), False)
 
     def pair_proposals(self) -> dict[Scope, ScopedConfig]:
         pair = self.pair_layout
@@ -1177,6 +1390,8 @@ class HyprModWindow(Adw.ApplicationWindow):
                     self.pair_layout = fresh
                     self._perform_save()
                     self._banner.show_saved()
+                    if self.has_dirty():
+                        self._banner.show_dirty()
                     self.show_toast(
                         "Saved reviewed canonical pair. "
                         f"Transaction: {result.transaction_id or 'none (no-op)'}. "
@@ -1392,6 +1607,8 @@ class HyprModWindow(Adw.ApplicationWindow):
             self.show_toast(f"Could not save reviewed changes: {exc}", timeout=5, copy=True)
             return
         self._banner.show_saved()
+        if self.has_dirty():
+            self._banner.show_dirty()
         if backup is not None:
             self.show_toast(f"Saved. Backup: {config.display_path(backup)}", timeout=5, copy=True)
 
@@ -1402,8 +1619,16 @@ class HyprModWindow(Adw.ApplicationWindow):
 
         self.hypr.clear_pending()
         for section in self._section_pages:
-            section.mark_saved()
-        self._undo.clear()
+            if section not in (self._managed_bindings_page, self._source_bindings_page):
+                section.mark_saved()
+        self._undo.clear_where(
+            lambda entry: (
+                not (
+                    isinstance(entry, SavedListSnapshot)
+                    and entry.page_attr in {"_managed_bindings_page", "_source_bindings_page"}
+                )
+            )
+        )
         self._refresh_all_modified_indicators()
         self._schedule_pending_refresh()
         self._update_banner()
@@ -1467,6 +1692,16 @@ class HyprModWindow(Adw.ApplicationWindow):
         for section in self._section_pages:
             section.discard()
         self._banner.hide()
-        self._undo.clear()
+        self._undo.clear_where(
+            lambda entry: (
+                not (
+                    isinstance(entry, SavedListSnapshot)
+                    and entry.page_attr == "_source_bindings_page"
+                    and self._source_bindings_page is not None
+                    and self._source_bindings_page.locked
+                )
+            )
+        )
         self._refresh_all_modified_indicators()
         self._schedule_pending_refresh()
+        self._update_banner()

@@ -25,6 +25,7 @@ from hyprmod.binds.gdk_modifiers import (
     keysym_name,
     keysyms_to_mods,
 )
+from hyprmod.core.bindings import validate_line
 from hyprmod.core.desktop_apps import DesktopApp
 from hyprmod.ui import clear_children, confirm
 from hyprmod.ui.app_picker import AppPickerDialog
@@ -328,8 +329,10 @@ class BindEditDialog(Adw.Dialog):
         initial_category: str = "",
         on_apply=None,
         conflict_finder=None,
+        draft_only: bool = False,
     ):
         super().__init__()
+        self._draft_only = draft_only
         self._is_new = bind is None
         self._initial_category = initial_category
         self._bind = bind or BindData()
@@ -356,6 +359,8 @@ class BindEditDialog(Adw.Dialog):
             self._is_mouse_mode = True
         else:
             self._is_mouse_mode = False
+        if draft_only:
+            self._is_mouse_mode = False
 
         self.connect("closed", self._on_dialog_closed)
 
@@ -373,6 +378,8 @@ class BindEditDialog(Adw.Dialog):
         header.pack_start(cancel_btn)
 
         self._apply_btn = Gtk.Button(label="Apply")
+        if draft_only:
+            self._apply_btn.set_label("Add to Pending" if self._is_new else "Update Pending")
         self._apply_btn.add_css_class("suggested-action")
         self._apply_btn.connect("clicked", self._on_apply)
         header.pack_end(self._apply_btn)
@@ -392,6 +399,14 @@ class BindEditDialog(Adw.Dialog):
         trigger_group = Adw.PreferencesGroup(title="Trigger")
         self._build_trigger_section(trigger_group)
         content.append(trigger_group)
+        if draft_only:
+            hint = Gtk.Label(
+                label="Draft only. Reserved compositor shortcuts may not reach GTK. "
+                "Use Manual Edit if recording cannot capture your shortcut.",
+                wrap=True,
+                xalign=0,
+            )
+            content.append(hint)
 
         self._key_group = Adw.PreferencesGroup()
         self._build_key_section(self._key_group)
@@ -436,6 +451,8 @@ class BindEditDialog(Adw.Dialog):
 
         self._trigger_key_btn = Gtk.ToggleButton(label="Key combination")
         self._trigger_mouse_btn = Gtk.ToggleButton(label="Mouse button")
+        self._trigger_mouse_btn.set_visible(not self._draft_only)
+        self._trigger_mouse_btn.set_sensitive(not self._draft_only)
         self._trigger_mouse_btn.set_group(self._trigger_key_btn)
         if self._is_mouse_mode:
             self._trigger_mouse_btn.set_active(True)
@@ -450,6 +467,8 @@ class BindEditDialog(Adw.Dialog):
         group.add(row)
 
     def _on_trigger_toggled(self, btn):
+        if self._draft_only:
+            return
         # Both buttons share a group, so each toggle fires twice; only act on
         # the activation, not the deactivation, to avoid flicker.
         if not btn.get_active():
@@ -610,8 +629,9 @@ class BindEditDialog(Adw.Dialog):
         self._capture_btn.remove_css_class("suggested-action")
 
         try:
-            self._register_capture_submap()
-            self._window.hypr.dispatch("submap", "hyprmod_capture")
+            if not self._draft_only:
+                self._register_capture_submap()
+                self._window.hypr.dispatch("submap", "hyprmod_capture")
         except HyprlandError as e:
             log.warning("entering capture submap failed; aborting capture: %s", e)
             self._window.show_bug_toast(f"Couldn't start capture — {e}", detail=str(e), timeout=5)
@@ -655,7 +675,8 @@ class BindEditDialog(Adw.Dialog):
         # landed; if it raises we leave the flag set so the dialog-close
         # handler retries the reset rather than leaving Hyprland stuck.
         try:
-            self._window.hypr.dispatch("submap", "reset")
+            if not self._draft_only:
+                self._window.hypr.dispatch("submap", "reset")
         except HyprlandError as e:
             log.warning("submap reset failed; will retry on dialog close: %s", e)
             # Surface visibly: without a toast the user sees the capture
@@ -698,6 +719,10 @@ class BindEditDialog(Adw.Dialog):
         )
 
     def _on_dialog_closed(self, _dialog):
+        if self._draft_only:
+            if self._capturing:
+                self._stop_capture()
+            return
         if self._capturing:
             try:
                 self._window.hypr.dispatch("submap", "reset")
@@ -751,6 +776,8 @@ class BindEditDialog(Adw.Dialog):
         the number row is ``ecaron``, ``scaron``, … even while typing in us.
         Only ``resolve_binds_by_sym`` follows the active group.
         """
+        if self._draft_only:
+            return controller.get_group()
         if self._window.hypr.get("input:resolve_binds_by_sym", False):
             return controller.get_group()
         return 0
@@ -903,6 +930,8 @@ class BindEditDialog(Adw.Dialog):
         self._action_combo.handler_block(self._sig_action)
         cat = CATEGORY_BY_ID.get(category_id, CATEGORY_BY_ID["advanced"])
         dispatcher_items = list(cat["dispatchers"].items())
+        if self._draft_only:
+            dispatcher_items = [item for item in dispatcher_items if item[0] != "submap"]
         self._current_dispatcher_keys = [d[0] for d in dispatcher_items]
         labels = [d[1]["label"] for d in dispatcher_items]
         max_chars = max((len(lbl) for lbl in labels), default=10)
@@ -958,6 +987,11 @@ class BindEditDialog(Adw.Dialog):
         arg_type = info.get("arg_type", "text")
         current_arg = self._bind.arg if dispatcher == self._bind.dispatcher else ""
         widget, getter = _build_arg_widget(arg_type, current_arg)
+        if self._draft_only and dispatcher == self._bind.dispatcher and getter() != current_arg:
+            # Curated controls do not cover every backend-supported argument shape.
+            widget = Adw.EntryRow(title="Argument")
+            widget.set_text(current_arg)
+            getter = widget.get_text
         self._arg_getter = getter
         if widget is not None:
             if isinstance(widget, Adw.PreferencesGroup):
@@ -996,6 +1030,16 @@ class BindEditDialog(Adw.Dialog):
 
     def _on_apply(self, _btn):
         bind = self.get_bind()
+        if self._draft_only:
+            try:
+                bind = validate_line(bind.to_line())
+                if self._on_apply_callback and self._on_apply_callback(bind) is False:
+                    return
+            except ValueError as exc:
+                self._window.show_toast(str(exc), 5)
+                return
+            self.close()
+            return
         if not bind.key or not bind.dispatcher:
             return
         if self._conflict_finder:

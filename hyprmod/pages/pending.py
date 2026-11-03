@@ -6,6 +6,7 @@ on-disk config and the next-save serialization so users can verify
 what's about to land in Attune's managed config.
 """
 
+import hashlib
 import logging
 import threading
 from html import escape as html_escape
@@ -14,7 +15,7 @@ from typing import TYPE_CHECKING
 from gi.repository import Adw, GLib, Gtk
 from hyprland_config import ParseError, value_to_conf
 
-from hyprmod.core import editor_layout, schema
+from hyprmod.core import bindings, editor_layout, schema
 from hyprmod.core.focused_ui import ReviewSnapshot
 from hyprmod.core.pending import ChangeKind, PendingChange
 from hyprmod.core.scoped_review import GroupReviewPlan
@@ -41,6 +42,8 @@ _CATEGORY_ORDER = (
     "Options",
     "Animations",
     "Monitors",
+    "Source Shortcuts",
+    "Keybindings",
 )
 
 # Visual label and CSS class for each kind of change.
@@ -72,6 +75,20 @@ class PendingChangesPage:
         self._read_cancel: threading.Event | None = None
         self._pair_box: Gtk.Box | None = None
         self._closed = False
+        self._bindings_review: bindings.BindingsReview | None = None
+        self._bindings_source: bindings.BindingsBaseline | None = None
+        self._bindings_read_cancel: threading.Event | None = None
+        self._bindings_save_request: (
+            tuple[
+                bindings.BindingsReview,
+                bindings.BindingsConfig,
+                bindings.BindingsBaseline | None,
+                int,
+            ]
+            | None
+        ) = None
+        self._bindings_box: Gtk.Box | None = None
+        self._bindings_save_button: Gtk.Button | None = None
         # Coalesce many quick "dirty" pings (e.g. typing in a spinbutton) into
         # a single rebuild. Without this the page rebuilds at signal speed
         # which is wasteful and can fight scroll position recovery.
@@ -92,6 +109,15 @@ class PendingChangesPage:
         toolbar, _, content_box, _ = make_page_layout(header=header)
         self._toolbar = toolbar
         self._content_box = content_box
+        content_box.append(
+            Gtk.Label(
+                label="Appearance / displays, source shortcuts and additional bindings are three "
+                "independent save units. "
+                "Review and save each separately; there is no atomic Save Everything.",
+                xalign=0,
+                wrap=True,
+            )
+        )
 
         # Summary banner-style label at the top
         self._summary_label = Gtk.Label(xalign=0)
@@ -109,6 +135,9 @@ class PendingChangesPage:
 
         self._groups_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
         content_box.append(self._groups_box)
+        source_review = Gtk.Button(label="Review Source Shortcuts...")
+        source_review.connect("clicked", lambda _b: self._window.show_source_bindings_review())
+        content_box.append(source_review)
 
         # Diff section — hidden when there are no changes (saved file already
         # matches what the next save would write).
@@ -135,12 +164,21 @@ class PendingChangesPage:
         self._review_error.add_css_class("error")
         self._review_error.set_visible(False)
         content_box.append(self._review_error)
-        self._save_button = Gtk.Button(label="Save Reviewed Changes")
+        self._save_button = Gtk.Button(label="Save Reviewed Appearance / Displays")
         self._save_button.add_css_class("suggested-action")
         self._save_button.set_halign(Gtk.Align.END)
         self._save_button.set_sensitive(False)
         self._save_button.connect("clicked", self._on_save_reviewed)
         content_box.append(self._save_button)
+
+        self._bindings_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        content_box.append(self._bindings_box)
+        self._bindings_save_button = Gtk.Button(label="Save Reviewed Keybindings")
+        self._bindings_save_button.add_css_class("suggested-action")
+        self._bindings_save_button.set_halign(Gtk.Align.END)
+        self._bindings_save_button.set_sensitive(False)
+        self._bindings_save_button.connect("clicked", self._on_save_bindings)
+        content_box.append(self._bindings_save_button)
 
         self.refresh()
         return toolbar
@@ -152,6 +190,12 @@ class PendingChangesPage:
         self._reviewed = None
         self._pair_review = None
         self._revision += 1
+        self._bindings_review = None
+        self._bindings_save_request = None
+        if self._bindings_read_cancel is not None:
+            self._bindings_read_cancel.set()
+        if self._bindings_save_button is not None:
+            self._bindings_save_button.set_sensitive(False)
         if self._read_cancel is not None:
             self._read_cancel.set()
         if self._save_button is not None:
@@ -163,6 +207,12 @@ class PendingChangesPage:
 
     def cancel_review(self) -> None:
         self._closed = True
+        self._bindings_review = None
+        self._bindings_save_request = None
+        if self._bindings_read_cancel is not None:
+            self._bindings_read_cancel.set()
+        if self._bindings_save_button is not None:
+            self._bindings_save_button.set_sensitive(False)
         self._pair_review = None
         self._revision += 1
         if self._read_cancel is not None:
@@ -177,6 +227,8 @@ class PendingChangesPage:
 
     def refresh(self) -> None:
         """Rebuild the change list and the diff preview from current state."""
+        if self._closed:
+            return
         # All widgets are populated together by build(); guarding on any one
         # of them is enough to skip pre-build refreshes safely.
         groups_box = self._groups_box
@@ -188,6 +240,143 @@ class PendingChangesPage:
         changes = self.collect_changes()
         self._render_changes(changes, groups_box, summary_label, empty_state)
         self._render_diff()
+        self._render_bindings_review()
+
+    def _render_bindings_review(self) -> None:
+        box = self._bindings_box
+        button = self._bindings_save_button
+        if box is None or button is None:
+            return
+        self._bindings_review = None
+        button.set_sensitive(False)
+        clear_children(box)
+        page = self._window._managed_bindings_page
+        if page is None or not page.is_dirty():
+            button.set_visible(False)
+            return
+        button.set_visible(True)
+        box.append(Gtk.Label(label="Keybindings: independent save unit", xalign=0))
+        baseline = page.baseline
+        if baseline is None or page.locked:
+            box.append(
+                Gtk.Label(
+                    label=page.load_error
+                    or "Keybindings locked. Manually correct the file and reopen Attune.",
+                    xalign=0,
+                    wrap=True,
+                )
+            )
+            return
+        if self._closed or self._window.editor_locked or self._bindings_read_cancel is not None:
+            return
+        proposed = page.get_config()
+        revision = self._revision
+        cancel = threading.Event()
+        self._bindings_read_cancel = cancel
+        box.append(Gtk.Label(label="Preparing complete keybindings review...", xalign=0))
+
+        def complete(review, error):
+            if self._bindings_read_cancel is not cancel:
+                return GLib.SOURCE_REMOVE
+            self._bindings_read_cancel = None
+            if self._closed:
+                return GLib.SOURCE_REMOVE
+            if (
+                cancel.is_set()
+                or revision != self._revision
+                or page.baseline is not baseline
+                or page.get_config() != proposed
+            ):
+                self.refresh()
+                return GLib.SOURCE_REMOVE
+            if self._window.editor_locked or page.locked:
+                return GLib.SOURCE_REMOVE
+            clear_children(box)
+            if (
+                error is not None
+                or type(review) is not bindings.BindingsReview
+                or review.baseline != baseline
+                or review.proposed != proposed
+            ):
+                box.append(
+                    Gtk.Label(
+                        label=f"Cannot review keybindings: {error or 'unexpected result'}. "
+                        "Draft retained. Manually correct changed file/routes and reopen Attune.",
+                        xalign=0,
+                        wrap=True,
+                    )
+                )
+                return GLib.SOURCE_REMOVE
+            box.append(
+                Gtk.Label(
+                    label=f"Keybindings only. Fixed output: {baseline.lexical_path}\n"
+                    f"Resolved: {baseline.resolved_path}\nPrior status: {baseline.status}\n"
+                    f"SHA256: {baseline.sha256} -> "
+                    f"{hashlib.sha256(review.proposed_text.encode('utf-8')).hexdigest()}\n"
+                    f"Review: {review.review_hash}\n"
+                    "Appearance/displays are saved separately. First load: manually add dofile "
+                    "with this exact absolute path to your own Lua entrypoint: "
+                    f"{baseline.lexical_path}. "
+                    "Attune does not insert includes, unbind, apply, execute commands or reload. "
+                    "Disk state is not runtime-loading proof; watchers may reload automatically.",
+                    xalign=0,
+                    wrap=True,
+                    selectable=True,
+                )
+            )
+            diff = ConfigDiffWidget()
+            diff.set_precomputed_diff(
+                review.diff,
+                added_lines=review.added_lines,
+                removed_lines=review.removed_lines,
+                title="Keybindings",
+            )
+            box.append(diff)
+            self._bindings_source = baseline
+            self._bindings_review = review
+            button.set_sensitive(True)
+            return GLib.SOURCE_REMOVE
+
+        def work():
+            try:
+                review = bindings.run_prepare_review(baseline, proposed, cancel_event=cancel)
+            except Exception as exc:
+                GLib.idle_add(complete, None, str(exc))
+            else:
+                GLib.idle_add(complete, review, None)
+
+        try:
+            threading.Thread(target=work, daemon=False).start()
+        except Exception as exc:
+            complete(None, str(exc))
+
+    def _on_save_bindings(self, _button: Gtk.Button) -> None:
+        review = self._bindings_review
+        source = self._bindings_source
+        self._bindings_review = None
+        if self._bindings_save_button is not None:
+            self._bindings_save_button.set_sensitive(False)
+        if review is None:
+            return
+        proposed = review.proposed
+        self._bindings_save_request = (review, proposed, source, self._revision)
+        self._window.save_bindings_reviewed(review, proposed)
+
+    def take_bindings_save_request(
+        self, review: bindings.BindingsReview, proposed: bindings.BindingsConfig
+    ) -> bool:
+        request = self._bindings_save_request
+        self._bindings_save_request = None
+        page = self._window._managed_bindings_page
+        return (
+            request is not None
+            and request[0] is review
+            and request[1] == proposed
+            and page is not None
+            and request[2] is page.baseline
+            and request[3] == self._revision
+            and not self._closed
+        )
 
     # ── Render: change list ──
 
@@ -256,6 +445,8 @@ class PendingChangesPage:
         def _on_discard(_btn: Gtk.Button, ch: PendingChange = change) -> None:
             try:
                 ch.revert()
+            except ValueError as exc:
+                self._window.show_toast(str(exc), 5)
             finally:
                 self.schedule_refresh()
 
@@ -276,7 +467,12 @@ class PendingChangesPage:
             return
         # Pass the target key so navigate() can flip ViewSwitcher sub-tabs
         # (e.g. Layouts → Dwindle) before we try to focus the option row.
-        self._window.navigate(change.navigate_to, option_key=change.target_key)
+        if change.category == "Source Shortcuts":
+            self._window.show_source_bindings_review()
+        elif change.category == "Keybindings":
+            self._window.show_additional_bindings()
+        else:
+            self._window.navigate(change.navigate_to, option_key=change.target_key)
 
         # Highlight + focus the source option once the target page has had a
         # chance to render — same pattern the search-result navigation uses.

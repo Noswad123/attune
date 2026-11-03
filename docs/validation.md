@@ -5,12 +5,382 @@ M0 checks in [ROADMAP.md](../ROADMAP.md) remain pending explicit manual acceptan
 
 ## Current status
 
+Source editing, including reversible disable, is **implemented and validated in
+code** through automated and isolated GTK checks. Results below record the supplied
+validation run; this documentation pass did not rerun it. Live disable activation
+is still pending explicit approval for a compatible helper-only update.
+The user-approved three-file source integration was **deployed on 2026-11-02**;
+read-only runtime inspection observed all 80 expected descriptions with unchanged
+keys, flags and native contexts and zero config errors. Live shortcut **behavior
+remains user-untested**; M0 is not blanket complete. Useful existing bindings acceptance
+remains the priority before Device/Input. Additional managed bindings retain their
+earlier automated/isolated GTK checkpoint, not new live loading/capture acceptance.
+Profiles/layout pages remain out of scope.
+
+### Source shortcut disable fix: implemented and validated
+
+The reported inability to remove Super+T exposed the original key/description-only
+scope. Source inspection now shows reversible row **Disable/Enable** and a dialog
+**Enabled** switch. `SourceBinding.enabled` derives from metadata-only `disabled`
+in the existing flags column. V1/schema and all-enabled bytes remain unchanged.
+Catalog/IDs/context/submap/base flags/order and all 80 records remain intact, with
+key/description and authored callback retained for restoration. Pending entries
+distinguish disable/removal and enable/addition; Undo/Redo/Discard/Revert include
+state. Disabled combos are available to another enabled source row; conflicting
+re-enable refuses before mutation. The updated project bridge checks all 80 IDs
+seen but skips `hl.bind` for disabled rows, never passing `disabled` as an option.
+
+#### Automated results
+
+- Full-tree Ruff `check --fix` and format: **passed, 210 files unchanged**.
+- Full-tree Pyright `--level error`: **zero errors**. Unfiltered GI warnings remain;
+  this is not an all-warnings-clear claim.
+- Full pytest: **4,332 passed, 367 skipped, 13 dependency warnings**, **753.75 seconds**.
+- All six isolated Broadway GUI suites: **364 passed, 2 skipped, 5,939 dependency
+  warnings**, **111.22 seconds**. IPC disabled, writers mocked by default; explicitly
+  real source, managed-bindings and pair publishers used temporary fixtures only.
+  The Broadway daemon was stopped.
+- Focused backend/equivalence: **304 passed**. Source GUI: **68 passed**, including
+  Super+T disable in the source view, flags and complete review, temporary Save/reopen,
+  re-enable, reuse of a disabled combo and atomic conflicting re-enable refusal.
+- Wheel build at `/tmp/opencode/attune-source-disable-dist`, updated candidate bridge
+  `luac -p`, installed launcher `--help` and diff check: **passed**.
+- Process HOME/XDG isolation was set before Python started; the sentinel stayed
+  unchanged. No watched files/user keys changed, no live Super+T disable, live bridge
+  installation, reload, staging or commits occurred. Final read-only hashes are below.
+
+These results validate code and isolated widgets, **not live disable behavior**.
+The earlier key/description-only counts below remain historical.
+This documentation pass ran no shell/tests/app/IPC and changed no code/tests/live
+files, staged nothing and committed nothing.
+
+#### Compatibility and resolved P1 finding
+
+**Compatibility gate:** old all-enabled TSV is readable by old/new bridges. The
+old installed bridge would reject `disabled` and restore **all 80 defaults**.
+Review and commit therefore require the companion's first-line
+`-- Attune source bindings capabilities: disabled-v1` and captured bridge path
+proof whenever the proposal contains disabled rows. Missing/old helpers explicitly
+block Save with "Update the source keybindings bridge before saving disabled
+shortcuts; older bridges would restore defaults." Disable is not silently dropped.
+
+**P1, direct-Stow bypass resolved:** a selected direct source TSV beside a new helper
+could alias the actual installed TSV whose helper was still old. Checking only the
+selected companion was insufficient. `SourceBaseline.installed_route` now captures
+a metadata-only `PathProof` for the actual config root's `hypr/keybindings.tsv`,
+including strict JSON transport validation. A shared resolved target or device/inode
+requires **both selected and actual installed companions'** capability headers and
+protected proofs. The installed TSV route and helper proofs are bound to the review
+and rechecked before state creation, under lock and immediately before replacement.
+Post-write verification permits only the writer's own selected regular-leaf identity
+change, including the aliased installed route; all other route/bridge facts remain
+bound. Unrelated offline TSV editing stays independent. No main Lua is read/evaluated.
+
+Regression tests passed for old/missing actual helpers refusing direct writer calls
+before state/data writes, both-new success, unrelated offline editing, symlink
+retargeting and changed helpers invalidating stale evidence. Independent source-only
+review confirmed P1 resolved with **no blockers**. This is a protective compatibility
+guard, not a claim that old loaders understand new tokens or future formats.
+
+#### Unchanged live state and activation limit
+
+**Live state and next approval:** the installed bridge remains old and untouched;
+only the project candidate helper is updated. Final read-only inspection reported
+these unchanged live SHA-256 values:
+
+| File | SHA-256 |
+| --- | --- |
+| `hyprland.lua` | `c20f1af019703ff92b2451de9f0443ea1e1dee37943f85d675d40724df8c5840` |
+| `keybindings-bridge.lua` | `33d7ced25ec1c403d1c0b59c5c60bace17eac324cf7ebfa0bace5507afe78504` |
+| `keybindings.tsv` | `7a6d5d6145ccb5c1a39be965541306b46da6b821b0a0f44d2fa58796f79db3d7` |
+
+All 80 rows remain enabled. We have not disabled Super+T. Explicit next approval is
+required for a backward-compatible **companion-bridge-only update preserving the user's TSV and main Lua**,
+with fresh route/byte checks and outside-watched-path backups. Do not replace main
+Lua, auto-migrate data or disable a key automatically from the bug report. The
+earlier three-file deployment plan below is history, not the next activation plan.
+
+After that approved update, restart Attune and confirm the **installed default TSV**,
+not Open Prepared Source Mappings. Find `terminal.t`
+(Open terminal (T)), choose Disable, Review Source Shortcuts, then Save Reviewed
+Source Shortcuts. The key is omitted at the next Hyprland configuration load;
+watchers may or may not auto-reload. Attune sends no IPC. Neither this instruction
+nor the prior all-80 description observation proves live disable behavior.
+
+### Existing source shortcuts: current evidence and limitations
+
+The pre-deployment runtime observation was **80 bindings, all `__lua`, zero descriptions**.
+It is an input observation, not a fresh query made by this docs pass. Numeric `arg`
+values are Lua registry references, not callback text or source line numbers.
+Runtime descriptions are preferred when supplied, but opaque references alone do
+not make a useful editor for this inventory.
+
+Source inspection confirms Existing shortcuts -> Open Prepared Source Mappings
+selects the repository's offline `keybindings.tsv`. The UI can draft key/description
+edits and independently review/save this explicitly selected metadata now, without
+installing main/bridge/data. Enabled-state edits additionally require the compatible
+companion described above. IDs, context, native submap, base flags, order and authored
+callbacks remain fixed. Additional managed bindings and visuals save separately.
+The final isolated source-widget coverage below validates that workflow, not live
+loading or compositor behavior.
+
+The reference refactor remains in `integrations/hyprland/jdawson`; installed copies
+are now live through the existing Stow route, as recorded below.
+The bundle README retains its earlier focused checkpoint separately from current
+disable validation. `tests/test_source_bindings_equivalence.py` captures 80
+registrations under isolated Lua stubs, compares original/default keys, flags,
+native contexts and symbolic actions, checks callback source/upvalues and startup
+snapshots, and checks reverse-mechanical restoration of the frozen original.
+It does not invoke registered callbacks, real startup IO or compositor behavior.
+Neither that sandbox nor compile-only checks prove live acceptance. The app never
+executes authored main Lua.
+
+#### Historical key/description-only automated results
+
+- Full-tree Ruff `check --fix` and format: **passed, 210 files unchanged**.
+- Full-tree Pyright `--level error`: **zero errors**. Unfiltered baseline GI warnings
+  remain; this is not an all-warnings-clear claim.
+- Full pytest: **4,291 passed, 343 skipped, 12 dependency warnings**, in
+  **744.17 seconds**.
+- All **six** isolated Broadway suites: **340 passed, 2 skipped, 5,498 dependency
+  warnings**, in **91.35 seconds**: `tests/test_gui_smoke.py`,
+  `tests/test_scope_recovery_gui.py`, `tests/test_pair_editor_gui.py`,
+  `tests/test_managed_bindings_gui.py`, `tests/test_keybindings_workflow_gui.py`,
+  and `tests/test_source_bindings_gui.py`. Compositor IPC was disabled; writers were
+  mocked by default. Explicit real source, managed-bindings and pair publishers used
+  **temporary files/state/store only**. The Broadway daemon was stopped.
+- Focused equivalence: **114 passed**. Permanent custom key/description tests now
+  parameterize **every one of the 80 IDs**, not only four examples. Coverage includes
+  virtual mapping-read exceptions and helper syntax failure selecting defaults,
+  the all-80 default symbolic registration trace and byte-for-byte reverse restoration
+  of the original, including callback bodies. These are not live behavior proofs.
+- Source-backend focus: **149 passed**.
+- Wheel build passed at `/tmp/opencode/attune-source-bindings-dist`. Installed
+  launcher help, internal `source_bindings` read-only observe/review CLI help and
+  diff check passed. No mutator CLI or installation is implied by help/build checks.
+
+#### Resolved review findings
+
+- **P2, actual-config-root aliases:** `SourceBaseline.config_root` and immutable
+  protected proofs now bind the actual seven main/generated/registry routes
+  independently of selected/Stow source location, plus protected source-sibling
+  routes. `observe` / `run_observe` accept optional keyword `config_root` with
+  XDG/home default; the GUI and workers pass and check explicit context. Protected
+  paths are metadata-only, never authored-Lua reads. Direct-alias and post-review
+  race checks cover this protection.
+- **P2, reload warning:** source UI/review now warns that saving an **already-integrated
+  or watched TSV may trigger an immediate reload**, not only after some later
+  integration. No reload IPC does not guarantee no runtime effect.
+- **P2, pending navigation:** managed-binding Pending rows explicitly select the
+  **Additional bindings** tab rather than landing on Existing shortcuts.
+
+Independent rechecks found **no blockers**. These fixes preserve independent source,
+managed-binding and visual save units, not a new main-Lua writer or unbinding path.
+
+#### Final isolation and effects report
+
+Process HOME/XDG paths were isolated **before Python started**, with per-test
+temporary fixtures retained. The sentinel
+`/tmp/opencode/attune-bindings-validation-home/.config/hypr/attune.lua` stayed
+unchanged. Dotfiles were unchanged apart from the **preexisting** untracked empty
+`/home/jdawson/.dotfiles/stow/linux/hyprland/.config/hypr/attune.lua` observation from
+the prior run, left untouched; its origin remains unattributed. Do not describe
+that tree as clean or attribute the file to this run. The historical observation
+and isolation correction below remain part of the record.
+
+During that historical automated validation, no live keymaps or authored main were written, no integration installed/reloaded,
+no runtime callbacks invoked, and no activation, staging or commits performed.
+Those effects describe the automated checkpoint, not the later approved deployment
+below. Offline equivalence remains distinct from live shortcut behavior acceptance.
+Device/Input waits until the user's keybinding integration is accepted.
+
+This docs-only pass ran no shell, tests, app or compositor commands and changed no
+source/tests. The results above record supplied validation, not new
+execution by the documentation updater. Earlier counts below remain historical.
+
+#### Source integration activation and rollback
+
+**User-approved deployment completed on 2026-11-02.** The following is the supplied
+actual deployment record, not execution by this documentation updater:
+
+- Preflight: `HOME=/home/jdawson`, config root `/home/jdawson/.config`;
+  `hypr` directory symlink `../.dotfiles/stow/linux/hyprland/.config/hypr`
+  was preserved. Prior main SHA-256
+  `f25db9b117b560a8e9ed8542be9a993be28f6990f45cdd59b9815101728c6fc4`
+  matched the frozen fixture. Prior presence: main **present**, bridge **absent**,
+  data **absent**.
+- Private evidence: `/home/jdawson/.local/state/attune-installations/source-bindings-20261102T155506Z`
+  (`0700` directories, `0600` files) contains `hyprland.lua.before`, reviewed
+  candidate copies, `manifest.json` and `activation.json`. Retain the prior-absence
+  fields for rollback; absent helpers have no prior bytes to restore.
+- With watcher/reload risk explicitly accepted by the user before writing, installed
+  bridge -> data -> **main last**, using individual atomic renames into actual Stow
+  source files, mode `0644`. Installed SHA-256 values match the validated candidates:
+
+  | File | SHA-256 |
+  | --- | --- |
+  | `hyprland.lua` | `c20f1af019703ff92b2451de9f0443ea1e1dee37943f85d675d40724df8c5840` |
+  | `keybindings-bridge.lua` | `33d7ced25ec1c403d1c0b59c5c60bace17eac324cf7ebfa0bace5507afe78504` |
+  | `keybindings.tsv` | `7a6d5d6145ccb5c1a39be965541306b46da6b821b0a0f44d2fa58796f79db3d7` |
+
+  Config-root symlink routing stayed unchanged; unrelated `attune.lua` was untouched.
+- Read-only `hyprctl binds` / `configerrors`: before **80 bindings, 0 descriptions,
+  0 errors**; after **80 bindings, 80 descriptions, 0 errors**. All 80 descriptions
+  exactly match the source catalog, with no missing/extra rows. Keys, flags and native
+  contexts match exactly. Unchanged metadata hash:
+  `1824fe84035e77f206ed9c8ee05047ba86c836a91bf3181700e381e972f6873c`,
+  excluding `arg`, `description`, `has_description`; description-related Lua registry
+  reference changes in `arg` are allowed. No explicit reload IPC, shortcut callback
+  invocation or model-triggered key sequences were sent.
+- App source-binding `observe` on the installed path succeeded with **80 rows**.
+  Close/reopen Attune -> Keybindings -> Existing shortcuts to use the installed
+  default `/home/jdawson/.config/hypr/keybindings.tsv`. Open Prepared Source Mappings
+  is only for the separate reference/preview copy, not required for installed editing.
+- User keys did not change: installed TSV exactly matches defaults. Callback bodies
+  remain unchanged by the prior offline proof (**114 tests**), not by live action
+  execution. Deployment validation used Lua syntax checks, hashes and read-only
+  metadata. The full suite was **not rerun** because app code was unchanged; the
+  4,291/343 and other automated counts above remain the last historical checkpoint,
+  not fresh deployment CI. No staging, commits or automatic installer were added.
+
+**Ordering and rollback safeguards remain applicable.** No rollback is recorded.
+Any future live-path write needs explicit approval and a fresh check for intervening
+changes. No reload IPC does not prevent watcher-driven reload. The retained manual
+procedure is:
+
+1. Obtain approval for the three-file manual installation and maintenance/session
+   boundary, including watcher risk and recovery access. Review the offline main,
+   bridge and complete TSV against the final validated checkpoint before proceeding.
+   Recheck the live main against the frozen baseline; reconcile intervening user
+   changes rather than overwriting them with a stale candidate.
+2. Inspect lexical/resolved Stow routes for all three destinations. The candidate
+   specifically expects `$HOME/.config/hypr/keybindings-bridge.lua` and that directory's
+   `keybindings.tsv`; it does not discover arbitrary selected files or XDG overrides.
+   Record existing/absent status, bytes, permissions and link routing for the main,
+   bridge and data. Verify backups **outside all watched configuration/dotfiles
+   paths** before any replacement; retain an accessible recovery session.
+3. Manually install the reviewed trusted bridge first, reviewed TSV second, and
+   candidate **main `hyprland.lua` last**, preserving intended Stow routing. Recheck
+   the reviewed files before replacement. Main-last limits incomplete dependencies;
+   it is not an atomic installation or guarantee against automatic reload.
+4. With the approved activation method, inspect config errors, all 80 registrations,
+   expected descriptions/keys/flags/native submaps, and actual shortcut behavior.
+   Include terminal aliases, manager Lua-state gating, Wisp reset/actions,
+   hardware keys and pointer bindings. Record dated pass/fail/untested results and
+   Hyprland version. Missing/bad data should select all bridge defaults, not a mix;
+   missing/unloadable bridge retains source defaults. Do not deliberately corrupt
+   live files merely to exercise fallback tests.
+5. If rollback is needed under the approved recovery plan, restore the prior **main
+   first** to remove dependency on new helpers. Then restore prior bridge/data from
+   backups, or remove only newly introduced files whose prior absence was recorded.
+    Verify current routes/hashes against the deployment evidence before any rollback;
+    do not overwrite or delete unknown later changes. Preserve original Stow routing.
+    Re-establish loading through the approved session/
+   reload method and verify errors and prior shortcuts. Keep backups until acceptance.
+   Both rollback and installation may trigger watchers; neither is automatic app work.
+
+**Next user decision:** approve the compatible bridge-only update described above,
+preserving live TSV and main Lua. The original three-file deployment is not to be
+repeated. After that update, the user can explicitly disable/review/save `terminal.t`.
+Testing terminal aliases, Wisp and volume keys remains pending. Manager gating, other hardware/pointer
+actions and remaining M0 checks still require explicit user acceptance. The project
+bundle remains a reference, not a directory directly loaded by the live config.
+
+### Managed keybindings: implemented and validated
+
+#### Final automated results
+
+- Full-tree Ruff `check --fix` and formatting: passed; **205 files unchanged**.
+- Full-tree Pyright `--level error`: **zero errors**. Baseline unfiltered GI warnings
+  remain; this is not an all-warnings-clear claim.
+- Final full pytest: **4,026 passed, 299 skipped, 13 dependency warnings**, in
+  **737.65 seconds**. Backend-focused run: **88 passed**.
+- All five isolated Broadway suites: **296 passed, 2 skipped, 4,707 dependency
+  warnings**, in **64.37 seconds**: `tests/test_gui_smoke.py`,
+  `tests/test_scope_recovery_gui.py`, `tests/test_pair_editor_gui.py`,
+  `tests/test_managed_bindings_gui.py`, `tests/test_keybindings_workflow_gui.py`.
+  IPC was disabled. Writers were mocked by default; explicitly real publishers,
+  including bindings and pair Save, ran only against temporary fixtures. The
+  Broadway daemon was stopped.
+- Wheel build passed: `/tmp/opencode/attune-keybindings-dist`. Installed launcher
+  `--help`, internal read-only bindings worker help (observe/review modes), and diff
+  check passed. No new mutator CLI or live keybinding application was added.
+- The initial full run had one stale navigation-mock failure. `test_focused_window`
+  was corrected to mock `ManagedBindingsPage`, positively check lazy bindings
+  navigation, and check the actual unsupported profiles/layout condition. The final
+  full suite above passed after that correction.
+
+#### Validated coverage and review corrections
+
+Automated/isolated coverage includes managed search/add/edit/delete, GTK-only draft
+capture/manual fallback, read-only runtime/opaque rows and unknown origins, unknown
+offline inventory, new/moved conflicts and same-combo local edits. It exercises
+review invalidation, dirty baselines, Undo/Redo/Discard, deletion restoration,
+repeated Save/reopen, and independent visual/bindings save units without false Saved
+state or cross-unit undo loss. Temporary filesystem cases cover dedicated-format
+absent/empty/owned targets, foreign/unknown refusal, protected aliases, existing
+parents, Stow preservation, lock/private backups, failures and unit-local uncertainty.
+First-save guidance requires manual `dofile` with the actual absolute path only
+after output exists. These checks do not establish live capture or loading behavior.
+
+- **P1, command emission:** the library migration emitter could rewrite `exec`
+  `hyprctl` arguments and instance controls. Validation now rejects public
+  `dispatch_to_lua` output unless its `exec_cmd`/`exec_raw` quoted argument decodes
+  exactly to the original command. Actual generation still uses `keyword_to_lua`.
+  Ordinary `$`, quotes, commas and operators remain supported when literal emission
+  is proven. Rejected rewrites give actionable direct-action guidance; Raw command
+  is suggested only if intended, not as a hand-translation workaround. Tests inspect
+  actual emitted Lua bodies, not just metadata.
+- **P2, backup root:** `.git` directories and worktree files at the backup root are
+  checked before lock creation, under lock and through final verification.
+- **P2, dialog arguments:** structured defaults/clamps now fall back to exact
+  plaintext. Regressions preserve `dpms` argument `off HDMI-A-1`, `cyclenext` argument
+  `prev`, resize values of `20000`, and arguments during shortcut-only edits.
+  Draft-mode action lists hide submap.
+- **P2, Revert:** owned-baseline Revert can restore the original saved combination
+  despite opaque runtime overlap. Owned uniqueness is checked before mutation;
+  expected `ValueError`s produce toast feedback.
+
+Source-only independent rechecks confirmed all four original findings resolved.
+This is not independent live semantic verification.
+
+#### Validation isolation and unexplained file observation
+
+During the initial full run, a new untracked empty legacy visual-v1 target was
+noticed at `/home/jdawson/.dotfiles/stow/linux/hyprland/.config/hypr/attune.lua`.
+Its origin is **not established**: static review could not attribute it to pytest
+versus concurrent user activity. It was left **untouched**, without deletion or
+repair. This record does not claim a clean user tree or that no file appeared.
+
+Subsequent full-suite and GUI validation set process HOME/XDG paths **before Python
+startup** under `/tmp/opencode/attune-bindings-validation-home`, in addition to
+per-test fixtures. The sandbox `attune.lua` sentinel and the observed live file's
+content remained unchanged. One test's broad `monkeypatch.undo()` was replaced with
+a scoped context to avoid restoring global HOME isolation patches. Future full/GUI
+runs must preserve both process-level and per-test isolation; see CONTRIBUTING.
+
+No live app or compositor IPC tests were run. No loader lines were installed, no
+user-configuration mutator was intentionally invoked, and nothing was staged or
+committed. These limits do not establish the unexplained file's cause. This
+documentation update ran no commands and changed no source/tests or live state.
+
+#### Remaining manual acceptance
+
+- [ ] With separate explicit permission, verify live shortcut behavior and GTK
+  capture/manual fallback, without claiming reserved shortcuts reach GTK.
+- [ ] Only after generated output exists, deliberately arrange manual `dofile`
+  loading with its actual absolute path and inspect behavior/errors. Attune inserts
+  no includes and sends no reload. Saved does not mean loaded; watcher behavior is
+  still unverified.
+
+### Earlier canonical-pair checkpoint
+
 Existing registered canonical-pair normal edit/review/Save/continue is **implemented
 and validated**. M0 and live pair/loader/watch acceptance remain pending separate
 user confirmation. Automated and isolated widget results do not establish live
 workstation integration.
 
-### Final automated results
+### Historical pair-editor automated results
 
 - Required `ruff check --fix` and formatting: passed; **199 files unchanged**.
 - Full-tree Pyright with `--level error`: **zero errors**. Unfiltered baseline GI

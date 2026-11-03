@@ -17,6 +17,7 @@ from hyprland_socket import HyprlandError
 from hyprmod import main as main_module
 from hyprmod.core import (
     backups,
+    bindings,
     config,
     editor_layout,
     health,
@@ -24,6 +25,7 @@ from hyprmod.core import (
     restoration,
     scoped_recovery,
     scoped_restore,
+    source_bindings,
     transaction_publication,
 )
 from hyprmod.core import recovery as recovery_module
@@ -41,6 +43,19 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture(autouse=True)
 def startup_assessment(monkeypatch, isolated_user_paths):
+    monkeypatch.setattr(
+        source_bindings,
+        "persist_reviewed",
+        MagicMock(side_effect=AssertionError("Explicit temporary source publisher required")),
+    )
+    monkeypatch.setattr(
+        bindings, "run_observe", MagicMock(side_effect=ValueError("Mock bindings read explicitly"))
+    )
+    monkeypatch.setattr(
+        bindings,
+        "persist_reviewed",
+        MagicMock(side_effect=AssertionError("Explicit temporary bindings publisher required")),
+    )
     monkeypatch.setattr(
         editor_layout,
         "run_prepare_review",

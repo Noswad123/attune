@@ -16,6 +16,7 @@ from hyprland_socket import HyprlandError
 
 from hyprmod import main as main_module
 from hyprmod.core import (
+    bindings,
     config,
     editor_layout,
     installation,
@@ -25,6 +26,7 @@ from hyprmod.core import (
     scoped_config,
     scoped_recovery,
     scoped_restore,
+    source_bindings,
     transaction_publication,
 )
 from hyprmod.core.scopes import Scope
@@ -53,7 +55,12 @@ def wait_for(predicate):
 
 @pytest.fixture(autouse=True)
 def forbid_writes(monkeypatch):
+    monkeypatch.setattr(
+        bindings, "run_observe", MagicMock(side_effect=ValueError("Mock bindings read explicitly"))
+    )
     for module, name in (
+        (bindings, "persist_reviewed"),
+        (source_bindings, "persist_reviewed"),
         (scoped_recovery, "commit_action"),
         (scoped_restore, "commit_restore"),
         (restoration, "commit_restore"),

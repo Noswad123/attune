@@ -46,6 +46,15 @@ uv run pyright hyprmod/ tests/
 uv run pytest tests/ -v
 ```
 
+For full-suite and GTK validation, set process `HOME`, `XDG_CONFIG_HOME`,
+`XDG_STATE_HOME`, and `XDG_CACHE_HOME` to prepared temporary directories **before
+Python starts**, in addition to per-test fixtures. Import-time path defaults can
+otherwise retain real-user paths. Use the checkout's absolute `.venv/bin/python`
+with `-m pytest` if changing HOME affects tool discovery. See
+[validation isolation](docs/validation.md#validation-isolation-and-unexplained-file-observation)
+for the recorded run and qualification. Do not broadly call `monkeypatch.undo()`
+inside a test: use a scoped context so global HOME/XDG safety patches stay active.
+
 All four should pass before a push or reporting a code task complete. Don't lean
 on CI to catch formatting, lint, or type errors after the fact. CI uses
 `ruff check` and `ruff format --check` without modifying files, and runs pytest
@@ -71,10 +80,12 @@ Stop the Broadway daemon when finished. These tests cover page construction,
 review/save/reopen, and foreign-file recovery, not live monitor/HDR correctness.
 The suite isolates HOME and XDG paths; never remove those test safety fixtures.
 For M3.6a's separate opt-in recovery widgets, use the same Broadway environment
-with `tests/test_scope_recovery_gui.py` and `tests/test_pair_editor_gui.py`.
-Mutators are mocked by default; explicit pair-Save end-to-end cases use the real
-publisher exclusively against temporary output/store fixtures with IPC disabled.
-All three suites' results are in `docs/validation.md`. Focused service/wiring coverage is in
+with `tests/test_scope_recovery_gui.py` and `tests/test_pair_editor_gui.py`. Also run
+`tests/test_managed_bindings_gui.py`, `tests/test_keybindings_workflow_gui.py`
+and `tests/test_source_bindings_gui.py` for bindings. All six suites use IPC-disabled
+isolation. Mutators are mocked by default; explicitly real source, managed-bindings
+and pair publishers are allowed only against temporary output/state/store fixtures.
+All six suites' results are in `docs/validation.md`. Focused service/wiring coverage is in
 `tests/test_scoped_recovery.py`, `tests/test_layout_guard.py`, and
 `tests/test_startup_layout.py`; run these alongside legacy persistence, restoration,
 and recovery regressions. Coverage is not a claim that final validation passed.
@@ -131,11 +142,79 @@ Things to avoid:
 
 ## Scope
 
-- Product priority is the existing canonical-pair edit/review/Save/continue workflow,
-  implemented and validated, followed by practical manual
-  acceptance and canonical-only opt-in migration. Automatic scoped foreign
-  preservation is deferred and is not a prerequisite for either feature. Do not
-  expand recovery-foundation b6 work at the expense of these main features.
+- Product priority is useful existing Keybindings through approved activation and
+  validation, then Device/Input, with cursor, rules, startup, and environment later.
+  Additional managed bindings have a validated checkpoint; source-aware editing is
+  implemented and validated offline; activation/live acceptance remain pending. Profiles/layout
+  pages remain out of scope. Existing-pair validation is an earlier checkpoint,
+  not validation of the new bindings work. Migration and automatic foreign repair
+  are deferred, nonblocking work, not feature-breadth prerequisites.
+- Managed bindings use only `core/bindings.py` and the dedicated fixed
+  `attune-bindings.lua` format. Do not add them to visual v1/v2 payloads or pair
+  journals. Retain read-only runtime/opaque rows and unknown provenance, conservative
+  new/moved-combo conflicts, same-combo local edits, and unknown offline inventory.
+  No main-Lua read, automatic import, override, unbind, live apply or reload.
+  Capture stays GTK-only with manual fallback for reserved shortcuts.
+- Source shortcuts are a separate `core/source_bindings.py` TSV workflow, not an
+  extension to generated managed Lua. Write metadata only to the explicitly selected
+  existing `keybindings.tsv`; preserve catalog, IDs, context, native submap, base
+  flags and order. Permit key/description/enabled edits only, deriving enabled from
+  the metadata-only `disabled` flag. Keep all 80 catalog rows and restoration keys/
+  descriptions/callbacks; no row deletion or forwarding `disabled` as a Hyprland
+  option. Keep v1/all-enabled bytes unchanged. Review/commit of any disabled row
+  requires the companion's first-line `-- Attune source bindings capabilities: disabled-v1`
+  and captured bridge path proof; old/missing helpers must explicitly block Save,
+  since the old bridge would select all defaults. Validate state-aware pending,
+  Undo/Redo/Discard/Revert and active-only combo uniqueness, including atomic refusal
+  on conflicting re-enable. The disable fix is implemented and validated through
+  automated and isolated GTK checks; see the current validation record for results.
+  Bind `SourceBaseline.installed_route` to the actual config-root TSV as a metadata
+  `PathProof` with strict JSON validation. If selected and installed TSV share a
+  resolved target or device/inode, require both companions' capability headers and
+  protected proofs, even when selecting a direct Stow source. Recheck installed
+  route and both proofs before state creation, under lock and immediately before
+  replacement. Post-save verification may ignore only the writer's own selected
+  regular-leaf identity change, including an aliased installed route; never relax
+  other route/bridge facts. Unrelated offline TSVs remain independent. No main Lua
+  reads/evaluation. Live bridge activation requires fresh explicit
+  approval for a compatible helper-only update preserving user TSV and main Lua, not
+  main/data replacement or automatic Super+T disabling. Keep complete reviewed Save, dedicated
+  lock/private backups, fresh route/byte checks, direct non-daemon lifetime and
+  source-local dirty/undo/uncertainty. Source, additional bindings and visual Save
+  remain independent. Test with temporary files and process HOME/XDG isolation.
+  Preserve `SourceBaseline.config_root` and immutable protected proofs for the
+  actual config tree independently of selected/Stow source paths. `observe` and
+  `run_observe` accept optional keyword `config_root` (XDG/home default); GUI and
+  read workers pass/check explicit context. Recheck metadata-only main/generated/
+  registry aliases, including post-review races, without opening authored Lua.
+  Warn that saving an already-integrated/watched TSV may immediately reload it,
+  even without reload IPC. Pending additional-binding rows must select that tab.
+- The owner explicitly approved a **narrow exception** to the no-main-changes rule:
+  an offline authored integration candidate under `integrations/hyprland/jdawson`
+  may mechanically separate key declarations/labels from unchanged Lua callbacks.
+  This is not authority to edit watched dotfiles, install, reload, execute authored
+  main Lua in the app, or rewrite it during normal Save. Normal Attune never rewrites
+  main Lua, inserts a loader, unbinds or overrides existing runtime shortcuts.
+  Preserve callback bodies/definition sites and source registration order; manager
+  context is Lua state, not a native submap. Whole-catalog validation selects all
+  defaults on bad data; missing bridge retains original source defaults. TSV is
+  never executable Lua and the trusted bridge needs no JSON dependency.
+  Installation/rollback requires separate approval and the ordered plan in
+  `docs/validation.md`; watcher auto-reload means no reload IPC is not no live effect.
+- Keep reviewed keybindings and appearance/displays as independent save units,
+  including dirty baselines and undo history. Bindings commit uses its own lock,
+  private hash-named backups, route/source rechecks, direct non-daemon lifetime and
+  close veto. Uncertain bindings results lock only that unit. First-save guidance
+  must explain manual `dofile` with the actual absolute path only after output exists;
+  persistence never proves loading. See the architecture bindings contract and
+  validation record for automated results and still-unverified live acceptance.
+- Command validation must reject library `exec`/`execr` rewrites unless the public
+  `dispatch_to_lua` result proves an `exec_cmd`/`exec_raw` quoted argument decoding
+  exactly to the original command. Actual generation still uses `keyword_to_lua`.
+  Test the emitted Lua body, not just metadata. Do not hand-translate rejected
+  commands; offer a direct action or Raw command only when intended. Preserve exact
+  dialog arguments with plaintext fallback, and keep owned-baseline Revert subject
+  to owned uniqueness before mutation. Expected `ValueError`s need toast feedback.
 - Normal pair Save is allowed **only** for an existing explicitly registered,
   correctly scoped canonical v2 pair with a safe initialized store and a complete
   terminal-only journal scan. Use the mature `publish_reviewed` writer, not a new
@@ -155,8 +234,10 @@ Things to avoid:
   and failed post-save verification lock editing. Never mark an unverified baseline
   saved. Recovery/historical restore still invalidate old editors rather than using
   this normal-Save success path.
-- Follow the [current scope](README.md#current-scope). Keep hand-authored
-  bindings, workspaces, rules, autostart, environment, and other behavior outside
+- Follow the [current scope](README.md#current-scope). Additional managed bindings
+   and explicitly selected source keys/descriptions/enabled state are editable; authored callbacks
+  and live bindings remain untouched by normal editing, and runtime origins
+  are unproven. Keep workspaces, rules, autostart, environment, and other behavior outside
   the focused GUI. Inherited modules/tests do not imply supported GUI features.
 - Legacy Save emits one v1 `attune.lua` only when legacy layout exclusion is clear.
   Existing canonical-pair Save uses the journaled v2 writer described above.

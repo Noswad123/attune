@@ -3,7 +3,7 @@
 
 ## Overview
 
-Attune is a personal, focused GTK4/libadwaita appearance editor for
+Attune is a personal, focused GTK4/libadwaita appearance and managed-keybindings editor for
 [Hyprland](https://hyprland.org), forked from
 [BlueManCZ/hyprmod](https://github.com/BlueManCZ/hyprmod) at `b475087`.
 It previews supported changes through compositor IPC and writes compositor
@@ -20,6 +20,16 @@ Historical upstream releases remain in [CHANGELOG.md](CHANGELOG.md).
 - General visual options: inner/outer gaps, border size, active/inactive border colors.
 - Decoration, animations, and bezier curves.
 - Monitor configuration with live preview confirmation.
+- Attune-owned global keyboard bindings: search, add, edit, and delete local drafts,
+  with separately reviewed disk persistence. Implemented and validated with automated
+  and isolated GTK checks; live keyboard/loading acceptance remains unverified.
+- Existing source shortcuts: edit keys and descriptions in explicitly selected TSV
+  data, including the 80-shortcut catalog. User-approved three-file deployment is
+  complete; all 80 runtime descriptions were observed. Live shortcut behavior still
+  needs user testing. The project bundle remains a separate reference copy.
+  Disable/Enable support is implemented and validated in code through automated and
+  isolated GTK checks. Live activation still needs a separately approved companion
+  bridge update; it is not fixed live yet.
 - Pending Changes with an exact output diff and a separate reviewed-save action.
 - Read-only output and integration information in Settings.
 - Read-only Health with compositor/errors/displays, managed-output ownership,
@@ -34,8 +44,13 @@ Historical upstream releases remain in [CHANGELOG.md](CHANGELOG.md).
 - Explicit historical source browsing, complete both-scope reviews, and a separate
   **Commit Reviewed Historical Restore** action in Scope Recovery.
 
-Bindings, workspaces, layouts, rules, autostart, environment, plugins, and other
-hand-authored behavior stay outside the GUI. There are no profiles or profile CLI,
+Authored Lua callbacks and live keymaps remain untouched. The narrow user-approved
+exception is the authored integration and its separately user-approved deployment, not an application main-Lua
+writer. Explicitly selected source metadata is editable as described below.
+Runtime bindings are read-only observations,
+not evidence of their source or of Attune output being loaded. Workspaces, layouts,
+rules, autostart, environment, plugins, and other hand-authored behavior stay outside
+the editor. There are no profiles or profile CLI,
 automatic saves, startup reloads, main Lua parsing, configuration migrations, or
 automatic include insertion in the focused application. Launching does not silently
 register a desktop entry.
@@ -44,21 +59,175 @@ register a desktop entry.
 The normal editor can read, edit, review, Save, and continue editing
 an already registered v2 appearance/display pair through the mature journaled
 writer. The `legacy-clear` v1 `attune.lua` workflow remains unchanged.
-This is not installation or migration: the app creates no registry, initializes no
-store, provisions no missing/empty scope target, and edits no loader lines.
+This visual-pair workflow is not installation or migration: it creates no registry,
+initializes no transaction store, provisions no missing/empty scope target, and edits
+no loader lines. The independent bindings writer can create its own private state.
 See [ADR 0001](docs/decisions/0001-shared-local-ownership.md).
 
 ### Roadmap
 
-Next priorities are practical manual acceptance of the current app/pair workflow
-and a reviewed, canonical-only opt-in migration. Automatic scoped foreign-file
-preservation is **deferred and nonblocking**, not a prerequisite for either feature.
+Additional managed bindings have an automated validated checkpoint, but useful
+editing of existing bindings remains the priority until live behavior is accepted.
+The source-aware integration is deployed with runtime metadata verified. Device/Input follows, with cursor, rules,
+startup, and environment later. Profiles
+and layout pages remain out of scope. Manual acceptance remains necessary, but
+migration and automatic scoped foreign-file preservation are deferred and nonblocking,
+not prerequisites for managed bindings or Device/Input.
 Diagnostics, explicit transaction recovery, and canonical historical restore are
 already implemented; they are support features, not an open-ended recovery-foundation
 milestone. M0 live acceptance remains pending, requiring separate user confirmation.
 See [ROADMAP.md](ROADMAP.md) and the short [manual checklist](docs/validation.md#manual-acceptance-checklist).
 
 ## API / Interfaces
+
+### Existing source shortcuts
+
+The pre-deployment live inventory had **80 `__lua` bindings and zero descriptions**.
+Its numeric `arg` is a Lua registry reference, not source code or a source line.
+Read-only opaque rows alone therefore do not provide a useful existing-shortcut
+editor. Runtime descriptions are preferred when provided, but none were available
+in that observation. After the approved 2026-11-02 deployment, read-only inspection
+found **80 bindings with 80 exact catalog descriptions and zero config errors**, with
+unchanged keys/flags/native contexts. This is metadata activation, not live action
+acceptance. Attune does not execute authored main Lua to recover actions.
+
+Close/reopen Attune, then **Keybindings -> Existing shortcuts** uses the installed
+default `/home/jdawson/.config/hypr/keybindings.tsv`; installed-path observation
+succeeded with 80 rows. **Open Prepared Source Mappings** is only needed for preview:
+it opens
+`integrations/hyprland/jdawson/keybindings.tsv` in this checkout now. It does not
+copy/install files or require live activation. **Open Source Mappings...** selects
+another existing file named `keybindings.tsv`; the initial declared path is
+`$XDG_CONFIG_HOME/hypr/keybindings.tsv` (`~/.config` fallback).
+
+`key`, `description` and enabled state can change. `SourceBinding.enabled` is derived
+from the metadata-only `disabled` token in the existing `flags` column. The v1
+marker and all-enabled bytes stay unchanged. Stable IDs, descriptive context, native
+submap, base flags and catalog order remain fixed; callbacks are not data or editable.
+All 80 records remain present: Disable retains the key, description and authored
+callback for restoration, rather than deleting a row. Rows offer **Disable/Enable**;
+the edit dialog offers **Enabled**. Pending Changes labels disable as a removal and
+enable as an addition; Undo/Redo, Discard and per-entry Revert include state.
+Disabled combinations are free for another enabled source shortcut in the same
+native submap. Re-enabling a conflicting combination refuses before changing the draft.
+Search covers descriptions, keys, IDs and context. **Review Source Shortcuts...**
+shows the complete TSV diff, lexical/resolved paths and hashes; the separate
+**Save Reviewed Source Shortcuts** writes only that selected metadata file.
+Source, **Additional bindings** (`attune-bindings.lua`), and appearance/displays
+are three independent save units with separate dirty baselines and undo retention.
+There is no atomic Save Everything. Source uncertainty locks only source editing.
+The actual config root's main/generated/registry routes are protected by metadata-only
+alias checks independently of the selected TSV's location, including Stow sources.
+Saving an **already-integrated or watched TSV may trigger an immediate reload**;
+Attune sends no reload IPC and does not install a loader.
+
+The reference bundle contains `hyprland.lua`, trusted bridge, and 80-row TSV.
+Reviewed copies are now installed through the preserved Stow route; the project
+directory is not directly loaded. Callback bodies and definition sites remain
+unchanged, with description options added to registrations. The bridge validates the whole
+catalog before registration or uses **all** embedded defaults; a missing/unloadable
+bridge uses original source keys/actions/flags with descriptions. TSV is data, not
+evaluated Lua, and the bridge needs no JSON library. Existing generated managed
+formats remain unchanged.
+
+**Compatibility and activation limit:** old all-enabled data is readable by old and
+new bridges. The installed live bridge is still old: it cannot honor `disabled`
+and would fall back to **all 80 defaults**. Review and commit therefore block any
+proposal containing disabled rows unless the selected TSV's companion bridge has
+the first-line capability `-- Attune source bindings capabilities: disabled-v1`
+and matches its captured path proof. Selecting a direct Stow/source path cannot
+bypass the installed helper: if the selected TSV and actual config-root TSV share
+a resolved target or device/inode, **both** selected and installed companions must
+pass. `SourceBaseline.installed_route` binds that installed TSV route through strict
+JSON transport and writer rechecks. Unrelated offline TSVs remain independent.
+Old/missing helpers report:
+"Update the source keybindings bridge before saving disabled shortcuts; older
+bridges would restore defaults." Disable is never silently dropped.
+Only the project candidate helper is updated. The live TSV remains all enabled;
+we have not disabled Super+T. The next approval is for a backward-compatible
+**bridge-only update preserving the user's TSV**, not main replacement or data migration.
+
+See [the source contract](docs/architecture.md#existing-source-shortcuts) for limits
+and backups, and [activation/rollback instructions](docs/validation.md#source-integration-activation-and-rollback).
+All-80 runtime descriptions are observed; shortcut behavior remains user-untested.
+Isolated registration equivalence is not callback/live behavior proof.
+
+**Code validation passed:** full pytest **4,332 passed, 367 skipped**; all six
+isolated Broadway suites **364 passed, 2 skipped**, IPC disabled. Full-tree Ruff
+check/fix and format passed (**210 files unchanged**); full-tree Pyright `--level error`
+found zero errors, with unfiltered GI warnings remaining. Focused backend/equivalence:
+**304 passed**; source GUI: **68 passed**, including Super+T disable, exact flags/diff,
+temporary Save/reopen, re-enable, combo reuse and atomic conflicting re-enable refusal.
+The direct-Stow installed-helper guard passed regression coverage and independent
+source-only review with no blockers. Wheel, candidate bridge syntax, installed launcher
+help and diff checks passed. These checks changed no live keys or watched files.
+See [validation](docs/validation.md#source-shortcut-disable-fix-implemented-and-validated)
+for timings, warnings, isolation, unchanged live hashes and activation limits. Earlier
+key/description-only results remain historical there.
+
+### Managed keybindings
+
+**Keybindings -> Additional bindings** edits only `$XDG_CONFIG_HOME/hypr/attune-bindings.lua` (default
+`~/.config/hypr/attune-bindings.lua`). It is available in both admitted legacy and
+existing-pair editors, without migration, registry creation, or a new visual scope.
+Its `-- Attune bindings data v1: ` record is a distinct bindings format, not visual
+v1 `attune.lua` or scoped visual v2. Nonempty content must regenerate byte-exactly;
+foreign, manually edited, or unknown-format output blocks editing and requires
+manual remediation. There is no automatic import or overwrite exception.
+
+- Search covers shortcuts, actions, categories, and origin labels. Add/edit uses a
+  draft-only dialog; delete removes only an owned generated directive. Supported
+  global keyboard types are `bind`, `binde`, `bindl`, `bindr`, and `bindn`.
+  Mouse/keycode/catchall triggers, submaps, and other variants are not managed.
+  An owned action the dialog cannot represent has no Edit button, but can be deleted.
+- All reported runtime entries, including opaque Lua callbacks, are read-only.
+  Matching a saved shortcut proves neither origin nor loading. Flags shown are
+  those exposed by the installed client model, not a complete Lua-flag inventory.
+- New or moved combinations are blocked when they overlap the observed runtime
+  inventory; duplicate owned combinations are rejected. Editing an existing owned
+  row without changing its combination remains local and is allowed with an
+  unknown-origin overlap warning. Offline, failed, or empty runtime inventories
+  are **unknown**, never a claim of conflict freedom. The inventory is a snapshot,
+  not continuous conflict monitoring or a save-time runtime recheck.
+- Shortcut recording receives GTK events only. Reserved compositor shortcuts may
+  never reach it; use **Manual Edit** instead. No grab, unbind, override, live apply,
+  reload, or main-Lua read is performed by this workflow. Runtime queries are read-only.
+- Command actions must be proven to emit the exact original command literally.
+  Library rewrites of `exec`/`execr` are rejected with actionable guidance, not
+  silently translated. Raw command is an option only if that behavior is intended.
+  Literal-proven `$`, quotes, commas and shell operators remain supported.
+- Shortcut-only edits preserve exact arguments, using plain text when a structured
+  control would default or clamp them. Revert can restore the owned saved combination
+  despite runtime overlap, but cannot introduce a duplicate owned combination.
+
+Ctrl+S opens Pending Changes. **Save Reviewed Keybindings**, **Save Reviewed Source
+Shortcuts** and **Save Reviewed Appearance / Displays** are independent save units,
+not an atomic Save Everything.
+Each successful save adopts only its verified baseline and clears only its own
+undo history; the other unit's dirty state and undo history remain. Changed drafts
+invalidate review. Appearance/display save behavior below is otherwise unchanged.
+
+Bindings review shows exact prior/proposed bytes, paths and hashes. Save rechecks
+the fixed route, protected paths and source under its dedicated
+`$XDG_STATE_HOME/attune/bindings.lock`, compile-checks Lua without executing it,
+backs up existing prior bytes to private
+`$XDG_STATE_HOME/attune/bindings-backups/<sha256>.lua`, then publishes and verifies
+the result. No pair journal is used. Safe existing file/parent Stow links are
+preserved; the resolved basename must also be `attune-bindings.lua` and its safe
+owned writable parent must already exist. Absent or empty targets are supported;
+dangling links, hardlinks, unsafe paths and protected-path collisions are refused.
+State/backups must be outside Git; output may be in dotfiles. Save runs directly on
+a non-daemon worker with writer exclusion and close veto. Uncertain publication or
+failed baseline adoption retains the draft and locks the bindings unit, not the
+visual unit. Inspect disk and reopen; no automatic recovery is offered.
+
+Earlier additional-bindings checkpoint: full pytest **4,026 passed, 299 skipped**; all five isolated Broadway
+suites **296 passed, 2 skipped**, with IPC disabled. Required Ruff/format and
+error-level Pyright checks, build and help checks passed. These are not live
+keyboard or loader semantics checks. See [the validation record](docs/validation.md#managed-keybindings-implemented-and-validated)
+for warnings, review fixes, and the unexplained empty-file observation during the
+initial run. These counts do not validate the new source-aware feature.
+Earlier pair-editor counts remain historical.
 
 ### Existing canonical-pair editor
 
@@ -76,7 +245,7 @@ saved records and omitted sibling bytes remain intact. Ctrl+S prepares a bounded
 asynchronous **CURRENT -> GOAL** review for both scopes, including paths, hashes,
 content IDs, and precomputed diffs. Further edits invalidate that review.
 
-**Save Reviewed Changes** publishes exactly that review on a direct non-daemon
+**Save Reviewed Appearance / Displays** publishes exactly that review on a direct non-daemon
 worker with writer exclusion and close veto. Changed saves use a new transaction.
 Success re-reads a fresh safe pair and checks exact reviewed goals and route bindings
 before marking UI state saved, so a second Save works without restarting. Failures
@@ -441,21 +610,27 @@ to `~/.config/hypr/attune.lua`. Settings does not offer path editing.
 1. Startup inspects editor entry off GTK: `legacy-clear` reads v1 managed data;
    `pair-ready` supplies canonical pair models; blocked/error results open recovery.
    No main Lua parsing, provisioning, or compositor reload occurs.
-2. Interactive edits can immediately change compositor state via IPC, without
+2. Appearance/display interactive edits can immediately change compositor state via IPC, without
    writing any config file. Undo/discard operate on captured session baselines.
 3. **Ctrl+S opens Pending Changes**, not a disk write. Review the exact diff,
    including previously managed values that will be emitted.
-4. Choose **Save Reviewed Changes**. Legacy save rechecks the draft, saved bytes,
+4. Choose **Save Reviewed Appearance / Displays**. Legacy save rechecks the draft, saved bytes,
    and resolved destination, validates ownership and Lua syntax, backs up previous
    nonempty content, and atomically replaces the resolved file.
 5. Pair Save uses journaled group publication and fresh exact post-save verification
    before updating baselines. Only verified success enables continued editing.
-   Persistent loading remains
-   an explicit configuration decision described below.
+   Persistent loading remains an explicit configuration decision described below.
+6. Keybindings remain local drafts throughout editing. Their independent review
+    and **Save Reviewed Keybindings** action write only the dedicated bindings file.
+    Persistence does not prove runtime loading; watchers may auto-reload watched files.
+7. Existing source shortcuts use explicitly selected TSV metadata, not that generated
+   bindings file. **Save Reviewed Source Shortcuts** has its own complete review,
+   backup and verified baseline; it preserves the other units' dirty/undo state and
+   does not activate the offline main/bridge/data candidate.
 
 ## Edge Cases
 
-- **Live preview is not persistence.** Unsaved edits can still alter the desktop.
+- **Live preview is not persistence.** Unsaved appearance/display edits can still alter the desktop.
   Saving does not itself force a compositor reload; do not equate the saved file
   with the current runtime state.
 - **Removing an override:** the preview uses the schema default, not your
@@ -486,11 +661,56 @@ to `~/.config/hypr/attune.lua`. Settings does not offer path editing.
 
 ## Example usage
 
+### Inspect installed existing shortcuts or preview prepared mappings
+
+1. Close/reopen Attune and open Keybindings -> Existing shortcuts. Confirm the
+   installed default path. To preview the separate checkout TSV instead, choose
+   **Open Prepared Source Mappings** and confirm the reference path.
+2. Search for an ID such as `terminal.return`, edit its key or description, and
+   choose Update Pending. The authored action is unchanged.
+3. Choose **Review Source Shortcuts...** here or from Pending Changes, inspect the
+   complete diff and paths, then **Save Reviewed Source Shortcuts** if desired.
+   Save additional bindings and visual changes separately. This is source metadata
+   persistence, not installation or proof of runtime loading.
+4. To remove Super+T, first obtain explicit approval for the compatible companion
+   bridge update described above. After that update, restart Attune and confirm the
+   **installed default TSV**, not Open Prepared Source Mappings. Find
+   `terminal.t` (Open terminal (T)), choose **Disable**, **Review Source Shortcuts...**,
+   then **Save Reviewed Source Shortcuts**. The old live bridge blocks this Save.
+   This is an instruction, not an executed disable or permission to update live files.
+   The key is omitted on the next Hyprland configuration load; watchers may or may
+   not reload automatically. Attune sends no IPC. Other shortcut behavior and M0
+   acceptance remain pending.
+
+### First managed-keybindings save, then manual loading
+
+1. Open Keybindings in an admitted legacy or pair editor. Add an unused supported
+   shortcut, using Manual Edit if GTK recording cannot receive it. Inspect runtime
+   overlap warnings or the unknown-inventory notice. This changes only the draft.
+2. Press Ctrl+S, inspect the complete keybindings diff and actual absolute output
+   path, then choose **Save Reviewed Keybindings**. Appearance/displays save separately.
+3. **Only after the generated file exists**, manually add `dofile` for the exact
+   absolute lexical path shown in review to your own Lua entrypoint. For this user's
+   default XDG location, the example is:
+
+   ```lua
+   dofile("/home/jdawson/.config/hypr/attune-bindings.lua")
+   ```
+
+   If XDG_CONFIG_HOME differs, use the actual absolute path from review, not this
+   example or a literal `$XDG_CONFIG_HOME` expression. Attune inserts no includes
+   and requests no reload. Any deliberate live loading requires separate permission;
+   saved does not mean loaded, and watcher behavior is not established here.
+4. Reopen to inspect persisted owned rows. Deleting one removes its generated
+   directive on the next bindings Save; it does not unbind a runtime shortcut.
+
+These are instructions, not a report of executed or live-validated behavior.
+
 ### Edit an existing registered pair
 
 Launch with the existing registry, canonical scopes, and safe initialized store.
 Change an appearance value, press Ctrl+S, inspect **both** scope reviews (displays
-should be unchanged), then choose **Save Reviewed Changes**. After verified success,
+should be unchanged), then choose **Save Reviewed Appearance / Displays**. After verified success,
 make another edit and repeat Save, then reopen to inspect persisted values. This is
 the implemented and validated workflow, not authorization to run it on live state.
 No provisioning or loader change is part of this example.
@@ -498,7 +718,7 @@ No provisioning or loader change is part of this example.
 ### Legacy first reviewed save, then manual integration
 
 1. Launch from the checkout, adjust a supported visual option, press Ctrl+S,
-   inspect the diff, and select **Save Reviewed Changes**.
+   inspect the diff, and select **Save Reviewed Appearance / Displays**.
 2. Only after the file exists, explicitly add the following to your own Hyprland
    Lua entrypoint, at the end or after the appearance/monitor defaults it should
    override:
@@ -516,8 +736,9 @@ No provisioning or loader change is part of this example.
    are loaded by your chosen reload setup; atomic writes and module loading are
    not a promise of automatic reload.
 
-These are instructions only. No entrypoint/include edits or live UI verification
-against the desktop were performed. Isolated GTK smoke tests cover startup, page
+These legacy-loading instructions are not an execution report. The separate source
+integration deployment above does not establish live visual UI acceptance.
+Isolated GTK smoke tests cover startup, page
 navigation, edit/review/save/reopen, and foreign-file recovery with compositor
 IPC disabled. Live monitor/HDR and animation preview still need manual acceptance.
 
@@ -533,6 +754,13 @@ line are separate user opt-ins, never automatic Attune setup steps.
 
 ## Related files
 
+- `hyprmod/core/source_bindings.py`, `hyprmod/pages/source_bindings.py`: explicit
+  source metadata observation, drafting, complete review and independent Save.
+- [Offline integration bundle](integrations/hyprland/jdawson/README.md): candidate
+  main, trusted bridge, stable-ID TSV and isolated registration-equivalence contract.
+- `hyprmod/core/bindings.py`, `hyprmod/pages/managed_bindings.py`,
+  `hyprmod/binds/dialog.py`: dedicated bindings codec/writer, local draft page,
+  and GTK-only recording/dialog. See the [bindings contract](docs/architecture.md#managed-keybindings).
 - [ADR 0001](docs/decisions/0001-shared-local-ownership.md): ownership and transaction
   decisions, existing-pair editing, and separate future migration design.
 - `hyprmod/core/editor_layout.py`, `tests/test_editor_layout.py`,

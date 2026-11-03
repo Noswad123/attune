@@ -9,11 +9,112 @@
 
 Deliver normal edit, review, Save, and continued editing for an **existing explicitly
 registered canonical pair**, using the mature journaled writer. Do not make automatic
-scoped foreign preservation or migration a prerequisite for that path. Next user
-value is practical manual acceptance and canonical-only opt-in migration. Automatic
+scoped foreign preservation or migration a prerequisite for that path. Current user
+priority is useful existing Keybindings through approved activation and validation,
+then Device/Input, with cursor, rules, startup and environment later. Additional
+managed bindings and source-aware editing are implemented and validated offline;
+source integration deployment is complete with all-80 runtime metadata verified,
+while live shortcut behavior acceptance remains pending. Profiles/layout
+pages remain off scope. Migration is deferred, not the next feature gate. Automatic
 foreign preservation is **deferred, nonblocking** work, not a b6 recovery-foundation
 shipping gate. The detailed recovery checkpoints below document support capabilities,
 not an obligation to complete every edge case before shipping main features.
+
+### Independent managed-bindings addition
+
+This ADR continues to govern the two visual scopes, not a third scope or a new
+all-files transaction. The new `core/bindings.py` workflow is implemented and
+validated and uses fixed `$XDG_CONFIG_HOME/hypr/attune-bindings.lua` in admitted
+legacy/pair editors, without migration or registry dependency of its own. Its
+`-- Attune bindings data v1: ` record is distinct from visual v1/v2. Authored Lua
+callbacks remain untouched; every runtime/opaque entry stays read-only with unproven
+origin and only installed-client-reported flags. No main-Lua reading or inferred
+ownership is authorized.
+
+**Save Reviewed Keybindings** and **Save Reviewed Appearance / Displays** are
+independent units with separate dirty baselines and undo retention, not atomic Save
+Everything. Bindings use a dedicated `bindings.lock` and private hash-named
+`bindings-backups`, never visual pair journals. Fixed/protected routes, existing
+safe parent, Stow preservation, foreign/unknown refusal, compile-only checks, fresh
+post-save verification, direct non-daemon lifetime and close veto apply. Bindings
+uncertainty locks only bindings, not visual scope/journal state. No foreign import,
+repair, override, unbind, live apply or reload is added. First-save guidance requires
+manual `dofile` with the actual absolute path only after generated output exists;
+Attune edits no include lines. Persistence does not prove loading; watchers may
+auto-reload. Full interfaces/flow/edge cases are in
+[architecture.md](../architecture.md#managed-keybindings), with automated and isolated
+GTK evidence in [validation.md](../validation.md#managed-keybindings-implemented-and-validated).
+Full pytest passed (4,026 passed, 299 skipped); all five Broadway suites passed
+(296 passed, 2 skipped). Live keyboard/loading acceptance remains unverified.
+Validation also records the unexplained empty-file observation, without claiming
+its origin. Literal command emission, backup-root Git checks, exact argument
+fallback and owned-baseline Revert were corrected and independently rechecked;
+these reinforce the existing boundary rather than adding a new scope or protocol.
+
+The owner-approved narrow exception to the no-main-changes contract is an **offline
+authored integration candidate** under `integrations/hyprland/jdawson`, not normal
+application authority over main Lua. It separates 80 stable-ID key declarations
+and descriptions from unchanged callbacks. Existing shortcuts can explicitly open
+the prepared TSV now and edit keys/descriptions/enabled state, preserving base metadata/order.
+Its complete review/Save is a third independent unit, not a visual scope or pair
+journal participant; generated managed formats remain unchanged. Normal Attune
+never executes/rewrites authored main or unbinds runtime shortcuts. On 2026-11-02,
+the user-approved three-file deployment installed reviewed copies through the
+preserved Stow route, with watcher risk explicitly accepted before writing.
+Read-only inspection observed all 80 catalog descriptions, unchanged keys/flags/native
+contexts and zero errors; no explicit reload IPC or callback execution was sent.
+Live behavior and M0 acceptance remain pending. Any future write/rollback needs fresh
+approval and intervening-change checks because watchers may auto-reload. See the
+[source contract](../architecture.md#existing-source-shortcuts) and
+[ordered manual plan](../validation.md#source-integration-activation-and-rollback).
+Isolated registration equivalence is not live behavior proof. Historical key/description checks
+passed: full pytest 4,291 passed, 343 skipped; six Broadway suites 340 passed,
+2 skipped with IPC disabled and explicit real publishers temporary only; equivalence
+114 passed and source backend 149 passed. Ruff/format, error-level Pyright and
+build/help/diff checks passed; baseline GI warnings remain. Independent rechecks
+found no blockers. Actual-config-root metadata-only alias protection and immediate
+watched-TSV reload warnings reinforce this boundary. Earlier counts above remain
+historical; see the validation record for full qualifications.
+
+The reversible source-disable fix is **implemented and validated in code** through
+automated and isolated GTK checks, separately from those historical counts.
+Current results: full pytest **4,332 passed, 367 skipped**; six Broadway suites
+**364 passed, 2 skipped**, IPC disabled, explicit real publishers temporary only;
+backend/equivalence **304 passed**, source GUI **68 passed**. Ruff/format, full-tree
+error-level Pyright, wheel/candidate syntax/launcher help/diff checks passed;
+unfiltered GI warnings remain. Timings, warnings and unchanged live hashes are in
+[validation](../validation.md#source-shortcut-disable-fix-implemented-and-validated).
+`SourceBinding.enabled` derives
+from metadata-only `disabled` in the existing flags column, retaining the v1 marker
+and all-enabled bytes. Catalog, all 80 IDs/records, contexts, submaps, base flags,
+order and callbacks remain immutable; keys/descriptions remain available for restore.
+Disable/Enable and the Enabled switch participate in Pending Changes, Undo/Redo,
+Discard and Revert. Disabled combos are reusable by enabled source rows; conflicting
+re-enable refuses atomically. The updated project bridge accounts for all IDs but
+skips `hl.bind` on disabled rows, never forwarding `disabled` as an option.
+
+Old all-enabled data works with both bridges. An old bridge cannot honor the new
+token and would fall back to all 80 defaults, so review/commit of disabled proposals
+require the companion's first-line `-- Attune source bindings capabilities: disabled-v1`
+and captured bridge proof; old/missing helpers explicitly block Save. The resolved
+P1 direct-Stow bypass additionally binds `SourceBaseline.installed_route`, a strict
+JSON-validated metadata `PathProof` for the actual config-root TSV. Shared resolved
+target or device/inode requires both selected and installed companion headers and
+protected proofs. Recheck installed route/helpers before state creation, under lock
+and before replacement; post-write verification allows only the selected regular
+leaf's own identity change, including the aliased installed route. Unrelated offline
+editing remains independent; no main Lua reads/evaluation. Direct-writer refusal,
+both-new success and stale-route/helper regressions passed. Independent source-only
+review confirmed P1 resolved with no blockers. This protects against old-loader
+fallback, not a general future-format compatibility guarantee. The live
+bridge is still old and the live TSV remains all enabled. No Super+T disable has
+been performed. Next approval must explicitly authorize a compatible **bridge-only
+update preserving user TSV**, not main replacement, automatic data migration or
+automatic disabling from the bug report. After that update, restart Attune, confirm
+the installed default TSV (not Prepared), Disable `terminal.t`, Review Source
+Shortcuts and Save Source. The removal takes
+effect on the next configuration load; watchers may or may not reload and Attune
+sends no IPC. This adds no visual scope, foreign repair, profiles or layouts.
 
 Startup now uses `editor_layout.EditorEntry`: `legacy-clear` retains unchanged v1;
 `pair-ready` requires a valid registered canonical v2 pair, safe initialized store,
@@ -525,7 +626,7 @@ not an in-place concatenation of potentially divergent outputs.
   unknown bytes never enter canonical priors.
 - Existing canonical-pair normal editing/review/Save/continue: implemented and
   validated. Reuse the mature writer and verify exact fresh baselines.
-- M3.5: next canonical-only reviewed migration/handoff, separate from initial
+- M3.5: deferred canonical-only reviewed migration/handoff, separate from initial
   provisioning support and subject to explicit manual acceptance. Foreign preservation
   is not a prerequisite.
 

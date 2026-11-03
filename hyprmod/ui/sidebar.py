@@ -33,7 +33,7 @@ class SidebarRow(Adw.ActionRow):
 class Sidebar:
     """Builds and manages the sidebar navigation pane.
 
-    Appearance, motion, and displays are the only editor categories.
+    Appearance, motion, displays, and managed keybindings are editor categories.
     Pending Changes, Health, Backups, and read-only Settings are pinned at the bottom.
 
     The search entry hides by default and slides in below the header when
@@ -198,6 +198,9 @@ class Sidebar:
 
         display = new_category("Displays")
         add_row(display, "monitors", "Monitors", MONITORS_ICON)
+
+        bindings = new_category("Keybindings")
+        add_row(bindings, "binds", "Keybindings", "input-keyboard-symbolic")
 
         # Pinned list goes last so select_first() picks schema rows
         self._lists.append(self._pinned_list)

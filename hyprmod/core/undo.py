@@ -7,6 +7,7 @@ dispatch table, no per-entry isinstance branches.
 
 from abc import ABC, abstractmethod
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -255,6 +256,17 @@ class UndoManager:
         """Clear both stacks."""
         self._undo_stack.clear()
         self._redo_stack.clear()
+
+    def clear_where(self, predicate: Callable[[UndoEntry], bool]) -> None:
+        """Retire one saved unit without losing the other unit's history."""
+        self._undo_stack = deque(
+            (entry for entry in self._undo_stack if not predicate(entry)),
+            maxlen=self._undo_stack.maxlen,
+        )
+        self._redo_stack = deque(
+            (entry for entry in self._redo_stack if not predicate(entry)),
+            maxlen=self._redo_stack.maxlen,
+        )
 
     def peek(self) -> UndoEntry | None:
         """Return the most recent undo entry without removing it."""

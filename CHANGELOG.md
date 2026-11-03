@@ -8,7 +8,126 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Source shortcut disable fix: implemented and validated in code
+
+- Address the key/description-only editor's inability to remove Super+T with
+  reversible Disable/Enable and an Enabled switch. Enabled state uses a metadata-only
+  `disabled` token in the existing v1 flags column; all-enabled bytes stay unchanged.
+  Preserve all 80 records, keys/descriptions for restoration, authored callbacks,
+  catalog/IDs/context/submap/base flags/order. Pending removal/addition entries,
+  Undo/Redo/Discard/Revert include state. Disabled combos are reusable by enabled
+  source rows; conflicting re-enable refuses atomically. The project bridge consumes
+  all 80 IDs but skips `hl.bind` for disabled rows and never forwards that token.
+- Review/commit require the companion's `disabled-v1` capability header and captured
+  bridge proof for disabled proposals. Old/missing helpers explicitly block Save:
+  the old bridge would reject the token and restore all 80 defaults. Old all-enabled
+  data stays readable by both bridges. Only the project candidate helper is updated;
+  installed live bridge/TSV remain untouched and all 80 rows enabled. No Super+T
+  disable was performed. Next activation requires explicit approval for a compatible
+  bridge-only update preserving user TSV, not main replacement or auto-migration.
+  The saved removal takes effect on the next configuration load, with watcher reload
+  unproven and no IPC sent. No commands/tests/live changes/staging/commits
+  were performed by this documentation pass. Foreign/profiles/layout scope is unchanged.
+- Fix the P1 direct-Stow compatibility bypass: `SourceBaseline.installed_route`
+  captures the actual config-root TSV's metadata proof with strict JSON validation.
+  A shared resolved target or device/inode requires both selected and installed
+  companions' capability headers/protected proofs. Installed route and helpers are
+  rechecked before state creation, under lock and before replacement. Post-save
+  verification allows only the selected regular leaf's own identity change, including
+  its aliased installed route; unrelated offline TSVs stay independent. No main Lua
+  read/evaluation. Regressions cover old/missing actual helper refusing direct writer
+  calls before state/data writes, both-new success, offline independence and stale
+  symlink/helper changes. Independent source-only review confirmed P1 resolved,
+  with no blockers.
+- Validation passed: full-tree Ruff `--fix`/format (210 files unchanged); full-tree
+  Pyright `--level error` zero errors, with unfiltered GI warnings remaining. Full
+  pytest **4,332 passed, 367 skipped, 13 dependency warnings**, **753.75 seconds**;
+  all six Broadway suites **364 passed, 2 skipped, 5,939 dependency warnings**,
+  **111.22 seconds**. Focused backend/equivalence **304 passed**; source GUI **68 passed**,
+  including disable Super+T, source view/flags/review, temporary Save/reopen, re-enable,
+  combo reuse and atomic conflict refusal. IPC disabled, writers mocked by default;
+  explicit real source/managed/pair publishers temporary only; daemon stopped.
+  Wheel `/tmp/opencode/attune-source-disable-dist`, updated candidate bridge `luac -p`,
+  installed launcher `--help` and diff check passed. Process HOME/XDG isolated;
+  sentinel and final read-only live hashes unchanged. No live writes, user-key
+  changes, Super+T disable, bridge installation, reload, staging or commits occurred.
+  See `docs/validation.md` for hashes and the separate helper-only approval gate.
+
 ### Added
+
+The source-editor entry below retains the original key/description-only checkpoint
+and its then-offline effects report. The later approved deployment is recorded in
+`docs/validation.md`; the disable fix above is not covered by these historical counts.
+
+- Source-aware **Existing shortcuts** tab, **implemented and validated** through
+  automated and isolated GTK checks. Open Prepared Source Mappings opens the offline 80-row TSV now;
+  explicit file selection also supports existing `keybindings.tsv`. Only keys and
+  descriptions are editable; IDs/context/native submap/flags/order and authored Lua
+  actions stay fixed. Complete source review and **Save Reviewed Source Shortcuts**
+  form a third independent save unit beside additional bindings and visuals, with
+  dedicated lock/private TSV backups, route/byte rechecks and source-local uncertainty.
+  Existing generated managed formats are unchanged. The user-approved offline
+  main/bridge/data candidate in `integrations/hyprland/jdawson` separates declarations
+  and labels from unchanged callback definition sites. Whole-catalog bridge validation
+  falls back to all defaults; a missing/unloadable bridge retains source defaults.
+  Data is TSV, never Lua evaluation, with no bridge JSON dependency. Reported runtime
+  inventory was all 80 `__lua`, zero descriptions; numeric arguments are registry
+  references, not source lines/code. Runtime descriptions are preferred when present.
+  No app authored-main execution, live keymap change, watched-dotfiles write,
+  installation or reload occurred. Isolated registration-equivalence evidence is
+  not live behavior proof. Activation needs separate manual approval due to watcher
+  auto-reload risk. Useful existing bindings remain the priority before Device/Input.
+  Historical validation: full-tree Ruff check/fix and format passed (210 files
+  unchanged); Pyright `--level error` zero errors, with baseline unfiltered GI
+  warnings remaining. Full pytest: **4,291 passed, 343 skipped, 12 dependency
+  warnings**, **744.17 seconds**. All six Broadway suites: **340 passed, 2 skipped,
+  5,498 dependency warnings**, **91.35 seconds**, IPC disabled; writers mocked by
+  default, explicit real source/managed/pair publishers temporary only; daemon stopped.
+  Focused equivalence **114 passed**, with permanent custom key/description coverage
+  for all 80 IDs, virtual mapping read-error/helper-syntax fallback and original
+  callback byte-for-byte reverse restoration/default symbolic trace. Source backend
+  focus **149 passed**. Wheel `/tmp/opencode/attune-source-bindings-dist`, installed
+  launcher help, read-only source worker observe/review help and diff check passed.
+  Resolved P2 actual-config-root alias protection with baseline config context and
+  protected proofs, honest immediate watched-TSV reload warning, and explicit
+  Additional bindings pending-row routing. Independent rechecks found no blockers.
+  Process HOME/XDG isolation preceded Python; sentinel and dotfiles stayed unchanged
+  except the preexisting untracked empty `attune.lua`, left untouched with no
+  attributed origin. See `docs/validation.md` for evidence and safety qualifications.
+
+- Dedicated managed Keybindings workflow, **implemented and validated**:
+  searchable owned saved/draft rows, draft-only add/edit/delete for global keyboard
+  `bind`/`binde`/`bindl`/`bindr`/`bindn`, GTK-only recording with manual fallback,
+  and read-only runtime/opaque inventory with unproven origins. New/moved shortcuts
+  refuse observed overlaps; same-combo owned edits remain local with warnings.
+  Offline inventory is unknown, not conflict-free. Distinct bindings-format v1 at
+  `$XDG_CONFIG_HOME/hypr/attune-bindings.lua` works with admitted legacy/pair editors
+  without migration or a new visual scope. Separate **Save Reviewed Keybindings**
+  and **Save Reviewed Appearance / Displays** preserve the other unit's dirty/undo
+  state; there is no atomic Save Everything. Dedicated lock/private hash backups,
+  protected fixed-path/Stow checks, compile-only validation, direct non-daemon commit,
+  close veto and fresh verified baseline protect publication; uncertain results lock
+  only bindings. Foreign/unknown output requires manual remediation, never import.
+  First save requires manual `dofile` integration using the actual absolute path
+  only after output exists. No main-Lua read, include insertion, override, unbind,
+  live application or reload IPC; watchers may auto-reload, and saved is not loaded.
+  Validation: full-tree Ruff `--fix` and format passed (205 files unchanged);
+  full-tree Pyright `--level error` found zero errors, with baseline unfiltered GI
+  warnings remaining. Full pytest: **4,026 passed, 299 skipped, 13 dependency warnings**
+  in **737.65 seconds**. All five isolated Broadway suites: **296 passed, 2 skipped,
+  4,707 dependency warnings** in **64.37 seconds**, IPC disabled, mutators mocked by
+  default except explicitly real temporary publishers; daemon stopped. Backend focus:
+  **88 passed**. Wheel build (`/tmp/opencode/attune-keybindings-dist`), installed
+  launcher `--help`, internal read-only bindings worker help and diff check passed.
+  Review fixes cover literal command emission, backup-root Git checks, exact dialog
+  argument preservation and owned-baseline Revert. Source-only independent rechecks
+  confirmed all four findings resolved. See `docs/validation.md` for the corrected
+  initial navigation-test failure and unexplained empty live-file observation;
+  its origin is not established and the file was left untouched. No live keyboard
+  semantics, manual loading or watcher behavior is verified; no new mutator CLI.
+  These are the earlier additional-bindings checkpoint, not source-editor results.
+  Useful existing shortcuts now precede Device/Input; migration/foreign repair remain
+  deferred and nonblocking.
 
 - Existing explicitly registered canonical-pair normal edit/review/Save/continue,
   **implemented and validated**. Startup requires both canonical

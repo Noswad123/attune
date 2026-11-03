@@ -1,6 +1,6 @@
 # Attune roadmap
 
-Updated: 2026-10-31
+Updated: 2026-11-02
 
 ## Direction
 
@@ -14,15 +14,35 @@ Ideas here are not existing commands, compatibility guarantees, or release dates
 
 ## Current baseline
 
-**Current delivery:** existing registered canonical-pair normal editing, review,
-Save, and continued editing are implemented and validated. Automated checks and
-all three isolated Broadway suites passed; live acceptance remains pending. Next user value is
-practical acceptance of this workflow and canonical-only opt-in migration, not
-another recovery-foundation b6 slice. Automatic scoped foreign preservation is
-parked, nonblocking work.
+**Current delivery:** additional managed bindings have an automated/isolated GTK
+validated checkpoint, not live keyboard/loading acceptance. Source-aware existing
+shortcuts have an earlier automated/isolated GTK checkpoint. The approved 80-row
+integration was deployed on 2026-11-02 with all runtime descriptions observed.
+The reversible disable fix is implemented and validated in code through automated
+and isolated GTK checks. Live activation still needs explicit approval for a
+compatible companion-bridge-only update preserving user TSV and main Lua.
+The installed bridge is still old; live TSV remains all 80 enabled, with no Super+T
+disable performed. Live shortcut behavior acceptance remains pending.
+Current priority is useful **existing bindings**, through approved activation and
+validation, before **Device/Input**, with cursor, rules, startup and environment
+later. Profiles and layout pages remain off scope. Canonical-pair editing has an
+earlier validated checkpoint; its results do not validate the new bindings feature.
+Live acceptance remains pending. Migration and automatic scoped foreign preservation
+are parked, nonblocking work, not prerequisites for feature breadth.
 
 Implemented in the development checkout:
 
+- Existing shortcuts tab with Open Prepared Source Mappings, key/description/enabled
+  TSV edits, complete source review and independent Save. IDs/context/submap/base flags/
+  order and authored actions remain unchanged. Candidate main/bridge/80 stable IDs
+  are in `integrations/hyprland/jdawson`, outside watched dotfiles. No app main-Lua
+  evaluation, installer or runtime unbinding is added. Disable code validation passed;
+  compatible bridge activation and live behavior acceptance remain pending. The original
+  three-file installation is complete, not to be repeated for this fix.
+- Dedicated Attune-owned global keyboard bindings, implemented and validated:
+  searchable local drafts and read-only runtime/opaque inventory, separate reviewed
+  Save to `attune-bindings.lua`, independent of visual v1/v2 and migration. No live
+  apply/unbind/override, main-Lua read, auto-import, include insertion or reload.
 - Attune identity, editable development environment, and Makefile installation.
 - Focused appearance, display, animation, and Bezier controls.
 - Pending Changes review with a separate explicit save action.
@@ -61,12 +81,109 @@ Persistent loading, Stow provisioning, and desktop registration remain opt-in.
 
 ## Milestones and order
 
+Product order now takes precedence over the historical M-number sequence:
+
+1. Useful existing bindings: code validation passed; obtain explicit approval
+   for the compatible companion-bridge-only update preserving user TSV, then activate and
+   validate. Earlier additional-binding checks do not establish this acceptance.
+2. Device/Input feature slice after that checkpoint, designed from actual supported APIs.
+3. Cursor, rules, startup and environment, each a separately scoped future slice.
+
+Do not add profiles/layout pages or require more migration/foreign-repair machinery
+before these features. Existing mutating live checks still require explicit permission.
+
+### Additional bindings: earlier validated checkpoint
+
+- [x] Record actual lint/type/full-suite and focused/isolated GTK results in
+  `docs/validation.md`: full suite 4,026 passed, 299 skipped; five Broadway suites
+  296 passed, 2 skipped; backend focus 88 passed. Ruff/format, error-level Pyright,
+  wheel/help and diff checks passed. Warning and isolation qualifications are recorded.
+- [x] Verify in automated/isolated checks search/add/edit/delete for owned global `bind`/`binde`/`bindl`/`bindr`/`bindn`,
+  GTK-only recording/manual fallback, runtime/opaque read-only rows with unknown
+  origins, conservative new/moved conflicts, same-combo local edits and unknown offline
+  inventory. Claim only flags supplied by the installed client, not complete Lua flags.
+- [x] Verify in temporary fixtures fixed-path protected/Stow publication, existing-parent requirement,
+  foreign/unknown manual remediation, dedicated lock/private backups, non-daemon close
+  veto, uncertainty locking only bindings, and independent visual/bindings dirty/undo.
+- [x] Verify first-save guidance: manual `dofile` with actual absolute path only after
+  output exists; no loader insertion/reload and no persisted-equals-loaded claim.
+- [x] Resolve review findings: exact literal command emission, backup-root Git guards,
+  exact dialog argument fallback and owned-baseline Revert with uniqueness checks.
+  Source-only independent rechecks confirmed all four original findings resolved.
+- [ ] Live keyboard/capture semantics, manual loading and watcher behavior remain
+  unverified and require separate explicit permission.
+
+### Existing shortcuts: disable code validated, helper activation pending
+
+- [x] Prepare the user-approved offline declarations/labels refactor, separate from
+  unchanged Lua callbacks. Reported runtime inventory was 80 `__lua` rows with zero
+  descriptions; numeric registry references cannot supply an action editor.
+- [x] Implement source metadata selection/edit/review/Save, independently of additional
+  managed bindings and visuals. Opening prepared data needs no live installation.
+- [x] Record original key/description-only results: full-tree Ruff check/fix and format passed (210
+  files unchanged), error-level Pyright zero errors with baseline GI warnings;
+  full pytest 4,291 passed, 343 skipped; all six Broadway suites 340 passed, 2 skipped.
+  IPC disabled; writers mocked by default, explicit real publishers temporary only.
+  Wheel/help/diff checks passed. Timings/warnings/isolation: `docs/validation.md`.
+- [x] Validate focused equivalence (114 passed), including permanent custom key/
+  description cases for all 80 IDs, read-error/helper-syntax fallbacks, default
+  symbolic trace and byte-for-byte reverse restoration; source backend 149 passed.
+- [x] Resolve actual-config-root alias protection, immediate watched-TSV reload
+  warning and explicit Additional bindings pending-row navigation. Independent
+  rechecks found no blockers. These checks are not live behavior proof.
+- [x] Complete the separately approved three-file deployment and observe all 80
+  descriptions, unchanged keys/flags/native contexts and zero config errors.
+- [x] Validate reversible Disable/Enable, dialog Enabled switch,
+  state-aware Pending/Undo/Redo/Discard/Revert, active-only combo conflicts and atomic
+  re-enable refusal. Retain all 80 records, restoration keys/descriptions and callbacks;
+  derive state from metadata-only `disabled`, preserving v1/all-enabled bytes and
+  catalog/IDs/context/submap/base flags/order. Earlier counts do not validate this fix.
+- [x] Record disable validation: full pytest 4,332 passed, 367 skipped; six Broadway
+  suites 364 passed, 2 skipped; backend/equivalence 304 passed; source GUI 68 passed.
+  Full-tree Ruff/format, error-level Pyright, wheel/candidate syntax/launcher help/diff
+  checks passed. Warning, timing and isolation details are in `docs/validation.md`.
+- [x] Resolve the P1 direct-Stow bypass: capture/transport/recheck the actual installed
+  TSV route; a shared target or device/inode requires both selected and installed
+  companions' capability headers and protected proofs. Old/missing actual helpers
+  refuse direct writer calls before state/data writes. Both-new success, unrelated
+  offline editing, stale retarget/helper refusal and own-leaf post-write verification
+  are covered. Independent source-only review found P1 resolved and no blockers.
+- [ ] Approve a compatible **bridge-only update preserving user TSV**, with fresh
+  checks/backups outside watched paths. No main replacement, auto-migration or automatic
+  Super+T disable. Old/missing helpers must explicitly block disabled Save: old bridge
+  rejects the token and restores all 80 defaults. Review/commit require the companion's
+  `-- Attune source bindings capabilities: disabled-v1` header and captured proof.
+- [ ] After that update, user restarts Attune, confirms the installed default TSV
+  (not Prepared), Disables `terminal.t`, reviews source and Saves source.
+  The bridge must consume all 80 IDs but skip `hl.bind` for disabled rows, never pass
+  `disabled` as a Hyprland option. Removal takes effect on the next configuration
+  load; watcher auto-reload is not guaranteed and no IPC is sent.
+- [ ] Validate actual shortcut behavior,
+  including manager Lua-state gating, Wisp native submap and hardware/pointer flags.
+  Isolated 80-registration equivalence is not live callback behavior proof.
+
+The next single user decision is explicit approval of the compatible companion
+update in the [activation record](docs/validation.md#source-integration-activation-and-rollback),
+not main replacement, TSV migration or more Device/Input breadth. Only the project
+candidate helper has been updated for disable support; no live update or rollback
+for this fix has been executed.
+
+### Device/Input: after existing-shortcut activation and validation
+
+Design the next useful device/input controls from inspected supported APIs, with
+explicit ownership and review boundaries. This is planned, not an available page,
+command, format or live behavior guarantee. Keep authored behavior untouched; do
+not assume bindings persistence automatically supplies device persistence. Cursor,
+rules, startup and environment follow later. No profiles or layout-page expansion.
+
+### Historical milestone inventory
+
 | Milestone | Status | Dependency | Outcome |
 | --- | --- | --- | --- |
 | M0: Validate the foundation | Pending manual acceptance | Existing baseline | Confidence in live previews and recovery |
 | M1: Workstation diagnostics | Implemented: M1.1-M1.7 delivered | Existing baseline; may proceed alongside M0 | Read-only visibility into effective state and integration |
 | M2: Recovery interface | Disk workflows delivered; M2.5 waits for M0 | M1 | Inspect and restore known Attune output through review |
-| M3: Shared/local ownership split | Existing-pair editor implemented and validated; canonical-only migration next | Existing explicit registry/canonical pair/safe initialized store; live acceptance requires M0 permission | Edit, review, Save, and continue with portable appearance and local displays |
+| M3: Shared/local ownership split | Existing-pair editor validated at earlier checkpoint; migration deferred | Existing explicit registry/canonical pair/safe initialized store; live acceptance requires M0 permission | Edit, review, Save, and continue with portable appearance and local displays |
 | M4: Constrained presets | Planned | M0 and M3 | Safe, deliberate visual and display modes |
 | M5: Wisp integration | Planned | M1; preset entry points require M4 | Fast access without a second settings implementation |
 | M6: CARAMEL appearance overview | Later | Existing helper contracts; M3 for saving appearance | Activity-aware presentation using existing tools |
@@ -77,8 +194,9 @@ page navigation and status do not need to wait for presets.
 
 ## M0: Validate the foundation
 
-Goal: prove the existing behavior on the actual workstation before broadening
-the write surface. Run state-changing checks only with explicit permission.
+Goal: prove applicable behavior on the actual workstation before claiming live
+acceptance. Offline feature development may proceed. Run state-changing checks only
+with explicit permission.
 
 - [ ] M0.1 Record the running Hyprland version and the tested hardware/topology.
 - [ ] M0.2 Exercise scalar preview, undo, discard, reviewed save, and reopening.
@@ -194,7 +312,7 @@ Goal: keep appearance portable without exporting a machine's display topology.
 - [ ] **Next manual acceptance:** only after separate user confirmation, exercise
   the short [manual acceptance checklist](docs/validation.md#manual-acceptance-checklist).
   M0 remains explicitly pending, especially monitor/HDR and loader/watch behavior.
-- [ ] **Next implementation:** M3.5 reviewed canonical-only opt-in migration with rollback
+- [ ] **Deferred implementation:** M3.5 reviewed canonical-only opt-in migration with rollback
   material and manual loader handoff. Define absent/empty provisioning states
   separately; the ordinary present-owned writer does not support them today.
 - **Deferred, nonblocking:** automatic scoped foreign preservation/replacement.
@@ -351,5 +469,6 @@ keybinding rewrites. Missing helpers leave the rest of Attune usable.
   here rather than documenting them as available features.
 - No automatic commits, pushes, loader edits, service installation, startup
   repair, or privileged operations. Preserve upstream attribution and licensing.
-- Wi-Fi, Bluetooth, printing, package management, general keybinding editing, and
+- Wi-Fi, Bluetooth, printing, package management, arbitrary authored-keybinding editing,
+  profiles/layout pages, and
   a replacement desktop shell remain outside this roadmap.

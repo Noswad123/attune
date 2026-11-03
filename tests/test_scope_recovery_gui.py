@@ -13,7 +13,15 @@ import pytest
 from gi.repository import Adw, GLib, Gtk
 from hyprland_socket import HyprlandError
 
-from hyprmod.core import config, scoped_backups, scoped_recovery, scoped_restore, scoped_review
+from hyprmod.core import (
+    bindings,
+    config,
+    scoped_backups,
+    scoped_recovery,
+    scoped_restore,
+    scoped_review,
+    source_bindings,
+)
 from hyprmod.core.scopes import Scope
 from hyprmod.core.transaction_publication import PublicationResult
 from hyprmod.core.transaction_records import GroupSnapshot, Phase
@@ -50,6 +58,20 @@ def widgets(widget):
 
 @pytest.fixture(autouse=True)
 def no_live_effects(monkeypatch):
+    monkeypatch.setattr(
+        source_bindings,
+        "persist_reviewed",
+        MagicMock(side_effect=AssertionError("Explicit temporary source publisher required")),
+    )
+    monkeypatch.setattr(
+        bindings, "run_observe", MagicMock(side_effect=ValueError("Mock bindings read explicitly"))
+    )
+    monkeypatch.setattr(
+        bindings,
+        "persist_reviewed",
+        MagicMock(side_effect=AssertionError("Explicit temporary bindings publisher required")),
+    )
+
     def offline():
         raise HyprlandError("IPC disabled in isolated recovery tests")
 
