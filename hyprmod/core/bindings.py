@@ -4,7 +4,6 @@ import argparse
 import base64
 import binascii
 import difflib
-import fcntl
 import hashlib
 import json
 import math
@@ -13,26 +12,25 @@ import re
 import stat
 import sys
 import threading
-import time
 import unicodedata
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from hyprland_config import BindData, dispatch_to_lua, keyword_to_lua, parse_bind_line
 
-from hyprmod.core import health, persistence, route_approval
-from hyprmod.core.scopes import SCOPE_BASENAMES
+from hyprmod.core import health, owned_output, persistence, route_approval
+from hyprmod.core.owned_output import fcntl as fcntl
 
 BASENAME = "attune-bindings.lua"
 RECORD = "-- Attune bindings data v1: "
 MAX_BINDS = 1000
-MAX_INPUT_BYTES = 1024 * 1024
+MAX_INPUT_BYTES = owned_output.MAX_INPUT_BYTES
 MAX_LINE_BYTES = MAX_INPUT_BYTES
 MAX_DIFF_BYTES = 2 * MAX_INPUT_BYTES + 65536
 MAX_TRANSPORT_BYTES = 32 * MAX_INPUT_BYTES
 MAX_JSON_DEPTH = 24
 MAX_JSON_TOKENS = 262144
-LOCK_TIMEOUT = 5.0
+LOCK_TIMEOUT = owned_output.LOCK_TIMEOUT
 _MODS = {
     "SHIFT": "SHIFT",
     "CAPS": "CAPS",
@@ -215,6 +213,7 @@ class BindingsBaseline:
     text: str
     config: BindingsConfig
     proof: route_approval.PathProof
+    protected: tuple[route_approval.PathProof, ...]
 
     def __post_init__(self):
         if any(
@@ -243,6 +242,9 @@ class BindingsBaseline:
             self.resolved_path,
         ):
             raise ValueError("Invalid bindings path proof")
+        owned_output.validate_protected(
+            self.protected, owned_output._protected_paths("bindings", config), self.proof
+        )
         if self.status not in {"absent", "empty", "owned"} or type(self.text) is not str:
             raise ValueError("Invalid bindings baseline")
         if self.status == "owned":
@@ -284,6 +286,7 @@ class BindingsBaseline:
                 **data,
                 "config": _config_from(data["config"]),
                 "proof": route_approval._proof_from(data["proof"]),
+                "protected": owned_output._protected_from(data["protected"]),
             }
         )
 
@@ -394,76 +397,28 @@ class BindingsSaveResult:
             raise ValueError("No-op must not create backups")
 
 
-def _safe_parent(target: Path) -> None:
-    parent = target.parent.lstat()
-    if (
-        not stat.S_ISDIR(parent.st_mode)
-        or parent.st_uid != os.getuid()
-        or parent.st_mode & 0o300 != 0o300
-        or parent.st_mode & 0o7022
-    ):
-        raise ValueError("Bindings require an existing safe owned writable parent")
-
-
 def observe(config_root: Path, state_root: Path) -> BindingsBaseline:
-    config = route_approval._path(config_root)
-    state = route_approval._path(state_root)
-    lexical = config / "hypr" / BASENAME
-    proof = route_approval._resolve(lexical, absent=True)
-    target = Path(proof.resolved_path)
-    if target.name != BASENAME:
-        raise ValueError("Resolved bindings basename must be attune-bindings.lua")
-    _safe_parent(target)
-    protected = tuple(
-        route_approval._resolve(path, absent=True)
-        for path in (
-            *(
-                config / "hypr" / name
-                for name in (
-                    "hyprland.lua",
-                    "hyprland.conf",
-                    "attune.lua",
-                    *SCOPE_BASENAMES.values(),
-                )
-            ),
-            config / "attune/installation.json",
-            state / "attune",
-        )
-    )
-    route_approval._collisions((proof,), protected)
-    git = route_approval._git_context(proof, outside=False)
-    leaf = route_approval._fact(target)
-    raw = b""
-    status = "absent"
-    if leaf.identity:
-        if leaf.identity[6]:
-            evidence, raw = route_approval._read_file(lexical, registry=False, outside=False)
-            if evidence.path != proof:
-                raise ValueError("Bindings route changed during read")
-            status = "owned"
-        else:
-            _private_file(target, private=False)
-            raw = persistence.read_stable(target, limit=MAX_INPUT_BYTES)
-            if raw:
-                raise ValueError("Empty bindings changed during read")
-            status = "empty"
-    text = raw.decode("utf-8")
-    parsed = read_text(text) if status == "owned" else BindingsConfig()
-    # Protected paths are checked for collisions, not opened or interpreted.
-    dependencies = (*proof.facts, *git, *(f for p in protected[:-1] for f in p.facts))
-    if any(route_approval._fact(Path(f.path)) != f for f in dependencies):
-        raise ValueError("Bindings dependencies changed during observation")
-    if route_approval._resolve(lexical, absent=True) != proof:
-        raise ValueError("Bindings route changed during observation")
+    baseline = owned_output.observe("bindings", config_root, state_root, read_text=read_text)
     return BindingsBaseline(
-        str(config),
-        str(state),
-        str(lexical),
-        str(target),
-        status,
-        text,
-        parsed,
-        route_approval.PathProof(str(lexical), str(target), tuple(dependencies)),
+        **{
+            name: getattr(baseline, name)
+            for name in owned_output.OwnedBaseline.__dataclass_fields__
+        },
+        config=read_text(baseline.text) if baseline.status == "owned" else BindingsConfig(),
+    )
+
+
+def same_source(original: BindingsBaseline, current: BindingsBaseline) -> bool:
+    """Match own source exactly, allowing freshly observed safe sibling leaf changes only."""
+    return (
+        type(original) is BindingsBaseline
+        and type(current) is BindingsBaseline
+        and all(
+            getattr(original, name) == getattr(current, name)
+            for name in BindingsBaseline.__dataclass_fields__
+            if name != "protected"
+        )
+        and owned_output.same_protection(original.protected, current.protected)
     )
 
 
@@ -472,23 +427,9 @@ def prepare_review(baseline: BindingsBaseline, proposed: BindingsConfig) -> Bind
         raise ValueError("Expected exact bindings baseline")
     checked = BindingsBaseline.from_json(baseline.to_json())
     current = observe(Path(checked.config_root), Path(checked.state_root))
-    if checked != baseline or current != checked:
+    if checked != baseline or not same_source(checked, current):
         raise ValueError("Bindings changed since observation; review again")
-    return BindingsReview(checked, _config(proposed), *_review_fields(checked, proposed))
-
-
-def _private_file(path: Path, *, private: bool = True) -> None:
-    info = path.lstat()
-    if (
-        not stat.S_ISREG(info.st_mode)
-        or info.st_uid != os.getuid()
-        or info.st_nlink != 1
-        or info.st_mode & 0o7111
-        or info.st_mode & 0o022
-        or info.st_mode & 0o600 != 0o600
-        or (private and stat.S_IMODE(info.st_mode) != 0o600)
-    ):
-        raise ValueError("Expected owned single-link safe file" + (" 0600" if private else ""))
+    return BindingsReview(current, _config(proposed), *_review_fields(current, proposed))
 
 
 def persist_reviewed(
@@ -497,9 +438,6 @@ def persist_reviewed(
     *,
     cancel_event: threading.Event | None = None,
 ) -> BindingsSaveResult:
-    attempted = False
-    backup = None
-    backup_verified = False
     try:
         if threading.current_thread().daemon:
             raise ValueError("Bindings Save requires a direct non-daemon worker")
@@ -510,171 +448,54 @@ def persist_reviewed(
             raise ValueError("Draft changed since review")
         baseline = checked.baseline
         config_root, state_root = Path(baseline.config_root), Path(baseline.state_root)
-        target = Path(baseline.resolved_path)
+    except (OSError, ValueError, RuntimeError) as exc:
+        return BindingsSaveResult("failed", None, None, False, str(exc) or type(exc).__name__)
 
-        def check_source():
-            if cancel_event is not None and cancel_event.is_set():
-                raise InterruptedError("Bindings Save cancelled before publication")
-            if observe(config_root, state_root) != baseline:
-                raise ValueError("Bindings source or route changed; review again")
-
-        check_source()
-        state = state_root / "attune"
-        backups = state / "bindings-backups"
-        lock_path = state / "bindings.lock"
-        state_proof = route_approval._resolve(state_root, absent=True)
-        if any(f.link_target is not None for f in state_proof.facts):
-            raise ValueError("State ancestors must not be symlinks")
-        route_approval._git_context(state_proof, outside=True)
-        if not state_root.exists():
-            _safe_parent(state_root)
-        for directory in (state_root, state, backups):
-            if directory.exists() or directory.is_symlink():
-                if directory == state_root:
-                    _safe_parent(directory / "placeholder")
-                else:
-                    persistence._private_directory(directory, create=False)
-        if lock_path.exists() or lock_path.is_symlink():
-            _private_file(lock_path)
-        if route_approval._fact(backups / ".git").identity:
-            raise ValueError("Bindings backups must be outside Git working trees")
-        route_approval._git_context(route_approval._resolve(backups, absent=True), outside=True)
-        if baseline.status != "absent":
-            candidate = backups / (baseline.sha256 + ".lua")
-            if candidate.exists() or candidate.is_symlink():
-                _private_file(candidate)
-                if persistence.read_stable(candidate) != baseline.text.encode("utf-8"):
-                    raise ValueError("Bindings backup collision")
-        # Validate every known path before creating even the lock.
-        route_approval._collisions(
-            (route_approval._resolve(target, absent=True),),
-            (route_approval._resolve(state, absent=True),),
+    def current() -> owned_output.OwnedBaseline:
+        observed = observe(config_root, state_root)
+        return owned_output.OwnedBaseline(
+            **{
+                name: getattr(observed, name)
+                for name in owned_output.OwnedBaseline.__dataclass_fields__
+            }
         )
-        for fact in state_proof.facts:
-            if route_approval._fact(Path(fact.path)) != fact:
-                raise ValueError("State route changed before creation")
-        if not state_root.exists():
-            state_root.mkdir(mode=0o700)
-        persistence._private_directory(state, create=True)
-        fd = os.open(lock_path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
-        with os.fdopen(fd, "r+b") as lock:
-            _private_file(lock_path)
-            if route_approval._stat_identity(os.fstat(lock.fileno())) != (
-                route_approval._fact(lock_path).identity
-            ):
-                raise ValueError("Lock changed before acquisition")
-            deadline = time.monotonic() + LOCK_TIMEOUT
-            while True:
-                check_source()
-                try:
-                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    break
-                except BlockingIOError:
-                    if time.monotonic() >= deadline:
-                        raise TimeoutError("Bindings lock timed out") from None
-                    time.sleep(0.05)
-            lock_fact = route_approval._fact(lock_path)
-            state_facts = route_approval._resolve(state).facts
 
-            def check_state():
-                if route_approval._fact(backups / ".git").identity:
-                    raise ValueError("Bindings backups must be outside Git working trees")
-                route_approval._git_context(
-                    route_approval._resolve(backups, absent=True), outside=True
-                )
-                for fact in (*state_facts, lock_fact):
-                    if route_approval._fact(Path(fact.path)) != fact:
-                        raise ValueError("Bindings state or lock changed")
-                _private_file(lock_path)
-                persistence._private_directory(state, create=False)
-
-            check_source()
-            check_state()
-            persistence.validate_lua(checked.proposed_text)
-            check_source()
-            check_state()
-            if baseline.text == checked.proposed_text:
-                fresh = observe(config_root, state_root)
-                check_state()
-                if fresh != baseline:
-                    raise ValueError("Bindings changed before no-op completion")
-                return BindingsSaveResult("no-op", fresh, None, False, None)
-            if baseline.status != "absent":
-                persistence._private_directory(backups, create=True)
-                backup_directory = route_approval._resolve(backups)
-                backup = backups / (baseline.sha256 + ".lua")
-                if not backup.exists() and not backup.is_symlink():
-                    persistence._atomic_write(
-                        backup,
-                        baseline.text.encode("utf-8"),
-                        exclusive=True,
-                        before_replace=check_state,
-                    )
-                backup_fact = route_approval._fact(backup)
-
-                def verify_backup():
-                    check_state()
-                    for fact in (*backup_directory.facts, backup_fact):
-                        if route_approval._fact(Path(fact.path)) != fact:
-                            raise ValueError("Bindings backup route or identity changed")
-                    persistence._private_directory(backups, create=False)
-                    _private_file(backup)
-                    if persistence.read_stable(backup) != baseline.text.encode("utf-8"):
-                        raise ValueError("Bindings backup differs from reviewed prior")
-
-                verify_backup()
-                backup_fd = os.open(backup, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-                try:
-                    if route_approval._stat_identity(os.fstat(backup_fd)) != backup_fact.identity:
-                        raise ValueError("Bindings backup changed before sync")
-                    os.fsync(backup_fd)
-                finally:
-                    os.close(backup_fd)
-                for directory in (backups, state, state_root, state_root.parent):
-                    directory_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-                    try:
-                        os.fsync(directory_fd)
-                    finally:
-                        os.close(directory_fd)
-                verify_backup()
-                backup_verified = True
-
-            def before_replace():
-                nonlocal attempted
-                check_state()
-                if backup is not None:
-                    verify_backup()
-                check_source()
-                if cancel_event is not None and cancel_event.is_set():
-                    raise InterruptedError("Bindings Save cancelled before publication")
-                # Sticky before link/rename: exclusive link can succeed before fsync fails.
-                attempted = True
-
-            persistence._atomic_write(
-                target,
-                checked.proposed_text.encode("utf-8"),
-                exclusive=baseline.status == "absent",
-                before_replace=before_replace,
+    result = owned_output.persist_reviewed(
+        "bindings",
+        owned_output.OwnedBaseline(
+            **{
+                name: getattr(baseline, name)
+                for name in owned_output.OwnedBaseline.__dataclass_fields__
+            }
+        ),
+        checked.proposed_text,
+        read_text=read_text,
+        observe_current=current,
+        cancel_event=cancel_event,
+    )
+    fresh = result.baseline
+    try:
+        return BindingsSaveResult(
+            result.outcome,
+            BindingsBaseline(
+                **{
+                    name: getattr(fresh, name)
+                    for name in owned_output.OwnedBaseline.__dataclass_fields__
+                },
+                config=read_text(fresh.text),
             )
-            fresh = observe(config_root, state_root)
-            check_state()
-            old_dependencies = tuple(f for f in baseline.proof.facts if f.path != str(target))
-            new_dependencies = tuple(f for f in fresh.proof.facts if f.path != str(target))
-            if (
-                fresh.status != "owned"
-                or fresh.text != checked.proposed_text
-                or fresh.config != proposed
-                or fresh.resolved_path != str(target)
-                or old_dependencies != new_dependencies
-            ):
-                raise ValueError("Post-save bindings verification failed")
-            return BindingsSaveResult("saved", fresh, str(backup) if backup else None, True, None)
+            if fresh
+            else None,
+            result.backup_path,
+            result.may_have_written,
+            result.error,
+        )
     except (OSError, ValueError, RuntimeError) as exc:
         return BindingsSaveResult(
             "failed",
             None,
-            str(backup) if backup_verified else None,
-            attempted,
+            result.backup_path,
+            result.may_have_written,
             str(exc) or type(exc).__name__,
         )
 
@@ -710,7 +531,7 @@ def run_prepare_review(
     request = route_approval._json({"baseline": asdict(checked), "proposed": asdict(proposed)})
     roots = (baseline.config_root, baseline.state_root)
     review = BindingsReview.from_json(_run_worker("review", roots, request, cancel_event, timeout))
-    if review.baseline != baseline or review.proposed != proposed:
+    if not same_source(baseline, review.baseline) or review.proposed != proposed:
         raise ValueError("Bindings worker returned a different review request")
     return review
 

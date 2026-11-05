@@ -10,6 +10,7 @@ import pytest
 from gi.repository import Adw, Gtk
 
 from hyprmod.core import bindings, persistence, transaction_publication
+from hyprmod.core import input as input_config
 from hyprmod.core import source_bindings as source
 from hyprmod.core.undo import SavedListSnapshot
 from hyprmod.pages.source_bindings import SourceBindingsPage
@@ -62,6 +63,11 @@ def copy_source(path, *, disabled=False, bridge="new"):
 
 @pytest.fixture
 def loaded(window, tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        input_config,
+        "persist_reviewed",
+        MagicMock(side_effect=AssertionError("Explicit temporary input publisher required")),
+    )
     path = tmp_path / source.BASENAME
     copy_source(path)
     page = window._source_bindings_page

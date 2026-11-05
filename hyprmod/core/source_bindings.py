@@ -21,8 +21,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Literal
 
-from hyprmod.core import health, persistence, route_approval
-from hyprmod.core.bindings import _private_file, _safe_parent
+from hyprmod.core import health, owned_output, persistence, route_approval
+from hyprmod.core.owned_output import _private_file, _safe_parent
 from hyprmod.core.scopes import SCOPE_BASENAMES
 
 BASENAME = "keybindings.tsv"
@@ -256,6 +256,7 @@ def _protected_paths(lexical: Path, config_root: Path) -> tuple[Path, ...]:
         "hyprland.conf",
         "attune.lua",
         "attune-bindings.lua",
+        "attune-input.lua",
         BRIDGE_BASENAME,
         *SCOPE_BASENAMES.values(),
     )
@@ -595,23 +596,34 @@ def _check_bridge(baseline: SourceBaseline, proposal: SourceConfig) -> None:
         raise ValueError(message) from exc
 
 
+def same_source(original: SourceBaseline, current: SourceBaseline) -> bool:
+    """Match source, installed route and critical protection; refresh only sibling leaves."""
+    return (
+        type(original) is SourceBaseline
+        and type(current) is SourceBaseline
+        and all(
+            getattr(original, name) == getattr(current, name)
+            for name in SourceBaseline.__dataclass_fields__
+            if name != "protected"
+        )
+        and owned_output.same_protection(original.protected, current.protected)
+    )
+
+
 def prepare_review(baseline: SourceBaseline, proposal: SourceConfig) -> SourceReview:
     if type(baseline) is not SourceBaseline:
         raise ValueError("Expected exact source baseline")
     checked = SourceBaseline.from_json(baseline.to_json())
-    if (
-        checked != baseline
-        or observe(
-            Path(checked.lexical_path),
-            Path(checked.state_root),
-            config_root=Path(checked.config_root),
-        )
-        != checked
-    ):
+    current = observe(
+        Path(checked.lexical_path),
+        Path(checked.state_root),
+        config_root=Path(checked.config_root),
+    )
+    if checked != baseline or not same_source(checked, current):
         raise ValueError("Source changed since observation; review again")
-    fields = _review_fields(checked, proposal)
-    _check_bridge(checked, proposal)
-    return SourceReview(checked, proposal, *fields)
+    fields = _review_fields(current, proposal)
+    _check_bridge(current, proposal)
+    return SourceReview(current, proposal, *fields)
 
 
 def _proof_binding(proof: route_approval.PathProof, replaced: str) -> tuple:
@@ -888,7 +900,7 @@ def run_prepare_review(
             timeout,
         )
     )
-    if review.baseline != baseline or review.proposed != proposal:
+    if not same_source(baseline, review.baseline) or review.proposed != proposal:
         raise ValueError("Source worker returned a different review request")
     return review
 

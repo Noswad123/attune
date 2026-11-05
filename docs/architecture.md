@@ -2,14 +2,14 @@
 
 ## Overview
 
-Attune is the focused appearance/monitor and managed-keybindings fork of
+Attune is the focused appearance/monitor, input and managed-keybindings fork of
 BlueManCZ/hyprmod at `b475087`.
 The public executable is `attune`; the Python package remains `hyprmod`.
 Upstream attribution and GPL-3.0-or-later licensing are retained in [LICENSE](../LICENSE).
 
 The supported GUI is constrained before page construction, state registration,
 and search indexing. It exposes general visual options (gaps, border size/colors),
-decoration, animations/beziers, monitors, managed Keybindings, Pending Changes,
+decoration, animations/beziers, monitors, Devices, managed Keybindings, Pending Changes,
 and read-only Settings.
 Health is an independent read-only utility, also available from startup recovery.
 Backup inspection is another independent read-only utility. Its separate disk
@@ -26,7 +26,7 @@ The editor supports unchanged `legacy-clear` v1 behavior and an existing registe
 canonical v2 pair. **Pair editing/review/Save/continue is implemented and validated.**
 Startup/Save create no registry, initialize no store,
 provision no absent/empty visual-scope targets, migrate no data, and select no runtime loader.
-Bindings have their own absent/empty target contract, independent of visual scopes.
+Bindings and Input have their own absent/empty target contracts, independent of visual scopes.
 [ADR 0001](decisions/0001-shared-local-ownership.md) records ownership and separate
 future migration design. Automatic scoped foreign preservation is deferred and
 nonblocking for canonical editing or canonical-only migration.
@@ -84,7 +84,7 @@ shortcuts. Existing managed Lua formats and visual journals are unchanged.
 | `SourceBinding` / `SourceConfig` | Frozen rows: `id`, descriptive `context`, native `submap`, sorted `flags`, `key`, `description`; `assigned` means nonempty key, `enabled` means assigned and not `disabled`. Exactly empty key without `disabled` is unassigned; empty plus `disabled` is invalid. Catalog `jdawson.hyprland`, 1-1,000 rows, unique IDs and normalized enabled combos per native submap. |
 | `read_text` / `build_text` | Six-column TSV with exact version/catalog/schema header and final LF, at most 256 KiB; no Lua evaluation. Keys at most 256 characters, descriptions at most 512, no controls. |
 | `SourceBaseline` / `observe` / `run_observe` | Existing explicit lexical/resolved `keybindings.tsv`, exact text/config/hash, selected `PathProof`, actual `config_root`, immutable protected proofs and metadata-only `installed_route: PathProof` for that root's `hypr/keybindings.tsv`; strict JSON transport validates these fields. Observation APIs accept optional keyword `config_root` (XDG/home default), supervised read defaults to 15 seconds. |
-| `SourceReview` / `prepare_review` / `run_prepare_review` | Fresh complete CURRENT -> GOAL diff, exact baseline/proposal and derived review hash; immutable metadata/order comparison, supervised read defaults to 30 seconds. |
+| `SourceReview` / `prepare_review` / `run_prepare_review` | Fresh complete CURRENT -> GOAL diff, exact reviewed baseline/proposal and derived review hash; narrow `same_source` permits only safe sibling-leaf refresh for a new review, keeping own source/Git and installed route strict. Immutable metadata/order comparison; supervised read defaults to 30 seconds. |
 | `SourceSaveResult` / `persist_reviewed` | Direct non-daemon writer: `saved`, `no-op`, `failed`; verified baseline on success, backup path and sticky `may_have_written` flag. No compiler or IPC. |
 | `SourceBindingsPage` | Explicit file selection/prepared shortcut, key/description/assignment/enabled drafts, blank-field clearing, separate Disable/Enable and dialog Enabled switch, unified stable Keybindings list with a pencil for every row, search, SavedList baselines/undo, review, one-use Save and exact baseline adoption. |
 | `window` / `PendingChangesPage` | Existing/additional tabs, pending source review and explicit Additional bindings row navigation, `source-bindings` writer owner, close veto, monitor-preview gate and independent undo cleanup. |
@@ -199,14 +199,14 @@ the same pencil opens an empty field, never an automatically restored old/defaul
   non-executable, single-link readable/writable file. Unsafe links/aliases and stale
    proofs refuse. Metadata-only protected proofs cover the actual config root's
   main/generated/registry routes (`hyprland.lua`, `hyprland.conf`, `attune.lua`,
-   `attune-bindings.lua`, both visual scope files and `attune/installation.json`),
+    `attune-bindings.lua`, `attune-input.lua`, both visual scope files and `attune/installation.json`),
    plus `keybindings-bridge.lua`,
   independently of the selected source directory, plus equivalent source-sibling
   routes. Direct aliases and post-review route changes refuse. Authored Lua is never
   opened through these checks, including when the selected source is a Stow file.
 - The candidate uses only `$HOME/.config/hypr` for bridge/data, not XDG discovery or
   a dotfiles fallback. Editing another selected TSV does not make that file loadable.
-- Source, additional managed bindings and visuals retain separate Save/dirty/undo
+- Source, Input, additional managed bindings and visuals retain separate Save/dirty/undo
   units, never atomic Save Everything. Saved metadata does not prove loading.
   Saving an already-integrated or watched TSV may immediately auto-reload even
   without IPC; the GUI warning does not assume integration happens only later. Installation and
@@ -294,7 +294,7 @@ visual startup. Profiles and layout pages remain outside supported scope.
 | `bindings.BindingsConfig(lines=())` | Frozen tuple of canonical directives, at most 1,000, unique normalized keyboard combinations, bounded to 1 MiB. |
 | `validate_line` / `combo` | Exact parser round trip; normalize modifier aliases/order; admit only global keyboard `bind`, `binde`, `bindl`, `bindr`, `bindn` and library-renderable dispatchers/arguments. |
 | `build_text` / `read_text` | Generated header plus distinct `-- Attune bindings data v1: ` base64 JSON record (`version`, `binds`) and exact library-rendered Lua body. Not visual v1/v2. No input Lua execution. |
-| `BindingsBaseline` / `observe` / `run_observe` | Fixed lexical/resolved route, explicit roots, absent/empty/owned status, exact text/config and path proof. Read-only wrapper defaults to 15 seconds. |
+| `BindingsBaseline` / `observe` / `run_observe` | Fixed lexical/resolved route, explicit roots, absent/empty/owned status, exact text/config and own/Git path proof, with separate explicit `protected` proofs. Read-only wrapper defaults to 15 seconds. |
 | `BindingsReview` / `prepare_review` / `run_prepare_review` | Fresh baseline check and complete CURRENT -> GOAL diff, counts and fingerprint; read-only wrapper defaults to 30 seconds. |
 | `BindingsSaveResult` / `persist_reviewed` | Direct non-daemon mutator; saved/no-op/failed, fresh adoptable baseline only on success, verified backup path if any, sticky `may_have_written` uncertainty. |
 | `ManagedBindingsPage` | SavedList local drafts, search, pending rows, undo/discard, runtime observation, conservative combination checks, exact verified baseline adoption. |
@@ -398,7 +398,7 @@ No loader edits or live verification were performed by this documentation pass.
 
 #### Related files
 
-`core/bindings.py`, `core/route_approval.py`, `core/persistence.py`,
+`core/bindings.py`, `core/owned_output.py`, `core/route_approval.py`, `core/persistence.py`,
 `core/ownership.py`, `core/undo.py`, `pages/managed_bindings.py`, `binds/dialog.py`,
 `binds/live.py`, `window.py`, `pages/pending.py`, `core/focused_ui.py`, `ui/sidebar.py`.
 Present test modules include `tests/test_bindings_persistence.py`,
@@ -409,6 +409,177 @@ Required Ruff/format, error-level Pyright, wheel/help and diff checks passed.
 See [validation](validation.md#managed-keybindings-implemented-and-validated) for
 warnings, review fixes, isolation and the unexplained empty-file observation. No
 live keyboard semantics or new mutator CLI is claimed.
+
+### Devices / Input
+
+#### Overview
+
+**Implemented and validated offline; user/live UI and Input acceptance remain unverified.**
+Final parent full pytest: **4,632 passed, 483 skipped**; eight isolated Broadway
+suites: **480 passed, 2 skipped**. Required checks/build/help and parent diff check
+passed; independent backend/UI review found no remaining material findings. See
+[final evidence](validation.md#deviceinput-validated-offline-user-acceptance-pending)
+for timings, warnings, isolation and the resolved P2s, not live-loading proof.
+`InputPage` exposes Keyboard, Mouse and Touchpad through Devices (`input` page ID)
+in both admitted legacy and existing-pair editors. It uses its own immutable local
+model, not `AppState` live mutation or visual v1/v2 storage. Startup admission stays
+unchanged. No new `Scope`, registry entry or pair journal is added.
+
+#### API / Interfaces
+
+| Interface | Role |
+| --- | --- |
+| `OPTION_SPECS` / `normalize_value` | Closed 15-key type/range/choice contract; finite numbers, exact booleans/integers, bounded XKB token syntax. |
+| `InputConfig(values=())` / `from_mapping` | Frozen sorted unique key/value pairs, only explicit overrides. Variant requires layout; nonempty variant lists must align with layout slots. |
+| `build_text` / `read_text` | Generated marker plus `-- Attune input data v1: ` base64 JSON (`version`, `values`), exact typed library-rendered Lua body, byte-exact regeneration required. No Lua evaluation. |
+| `InputBaseline` / `observe` / `run_observe` | Explicit config/state roots, fixed lexical/resolved path, absent/empty/owned status, exact text/config/hash, immutable own/Git `PathProof` and separate explicit `protected` proofs. Read-only worker defaults to 15 seconds. |
+| `InputReview` / `prepare_review` / `run_prepare_review` | Fresh baseline and complete CURRENT -> GOAL diff/counts/hash bound to exact proposal. Read-only worker defaults to 30 seconds. |
+| `InputSaveResult` / `persist_reviewed` | Direct non-daemon writer, saved/no-op/failed, fresh adoptable baseline only on success, backup path and `may_have_written`. No publication child/CLI. |
+| `InputPage` | Local saved/current configs, labeled read-only hints, schema-backed rows, search/Pending, Reset/Discard and `SavedListSnapshot` undo, exact saved-baseline adoption. |
+| `PendingChangesPage` / `HyprModWindow.save_input_reviewed` | Complete bounded review, revision/context checks and one-use request; `save-input` owner, close veto, typed result validation and Input-local cleanup/locking. |
+| `SettingsPage` | Read-only fixed output/manual integration and Git/Stow guidance. No output-path editing or loader insertion. |
+
+All keys below have the `input:` prefix. The 15 keys occupy 14 rows because
+`kb_layout` and `kb_variant` share one editor.
+
+| Section | Keys and validation |
+| --- | --- |
+| Keyboard | `kb_layout` + `kb_variant`: comma-separated XKB names/positional variants; `kb_options`: raw comma-separated XKB tags; `numlock_by_default`: boolean; `repeat_rate`: integer 0–200; `repeat_delay`: integer 0–2000. |
+| Mouse | `sensitivity`: finite -1–1; `accel_profile`: empty/`flat`/`adaptive`; `left_handed`, `natural_scroll`: booleans; `scroll_factor`: 0.1–2.0 in 0.1 steps. |
+| Touchpad | `touchpad:natural_scroll`, `touchpad:tap-to-click`, `touchpad:disable_while_typing`: booleans; `touchpad:scroll_factor`: 0.1–2.0 in 0.1 steps. |
+
+Scroll limits are conservative, not an assertion that an unverified maximum of 10
+is supported. `kb_options` preserves syntactically admitted unknown tags rather
+than filtering through the XKB catalog. Strings are at most 1,024 characters and
+XKB lists at most 32 tokens. Empty variant slots are positional; an empty variant
+string is permitted with a managed layout. Layout cannot be empty when managed.
+
+#### Data Flow
+
+1. First visit observes owned output off GTK using the bounded worker. Optional
+   `hypr.get_live` queries supply read-only hints; failures cannot replace a valid
+   owned baseline. Owned/current values win, then valid runtime hints, then defaults.
+   Unavailable/incomplete hints and defaults are labeled, not claimed as actual
+   device state. Opening never creates overrides or output/state.
+2. Edits replace only local `InputConfig`. Reset removes an override; Discard restores
+   saved presence/value. Layout/variant edits, Reset and Discard act together with
+   one undo snapshot. Pending may show both keys, but Undo remains one action.
+   Undo/Redo, Pending Revert and whole-page Discard send no input IPC.
+   Visible row origins distinguish **Saved override**, **Draft override**, **Current
+   runtime snapshot** and **Default, not observed**. Unapplied `kb_options` entry text
+   survives unrelated edits without bypassing Apply, and shows **Unapplied text
+   (not in draft)** with its model origin. Only applied text enters the draft/review.
+3. Ctrl+S renders Input separately from appearance/displays, source and additional
+   bindings. Review reobserves exact baseline/routes and includes full prior/proposed
+   bytes, paths and hashes. Oversize refuses rather than truncating authority. Text
+   is limited to 1 MiB, diff to 2 MiB + 65,536 bytes, transport to 32 MiB, JSON depth
+   to 24. Edits invalidate review; exact proposal/baseline, revision and one-use
+   request checks precede save delegation. A new review may refresh only safe known
+   sibling-output leaf evidence as detailed below; own source/Git stays exact.
+4. **Save Reviewed Input** takes the global writer gate as `save-input`, excludes
+   overlapping writers/editing and vetoes closure. Resolve monitor confirmation
+   first. Publication runs directly on a non-daemon thread, never a timeout-killable
+   child. Dedicated state is `$XDG_STATE_HOME/attune/input.lock` and
+   `input-backups/<sha256-of-prior-bytes>.lua` (`~/.local/state` fallback), outside Git;
+   directories are `0700`, lock/backups `0600`.
+5. Under the dedicated advisory lock (five-second acquisition wait), recheck source,
+   routes and protected dependencies, compile-check Lua without executing it, verify
+   and synchronize prior-byte backup, then publish only to the resolved target.
+   Existing empty priors also receive backups; absent creation is exclusive with no
+   prior backup. No-op validates/rechecks and may create state/lock, but no backup/
+   output. Ten-second compile checks do not bound total filesystem time.
+6. Fresh exact post-save text/config/routes/dependencies must verify before baseline
+   adoption. Success clears only Input undo; continued edit/review/Save and reopening
+   use that verified baseline in either editor mode. All four save units preserve
+   the others' drafts, saved baselines and undo, not atomic Save Everything. Errors
+   retain drafts. Post-delegation uncertainty, invalid results or failed adoption
+   lock only Input, not visual scope/journal state or other units. Inspect disk and
+   reopen; no automatic recovery is offered.
+
+#### Edge Cases
+
+- Fixed output is `$XDG_CONFIG_HOME/hypr/attune-input.lua` (`~/.config` fallback).
+  Resolved basename must match and the safe owned writable parent must already
+  exist. Preserve safe existing file/parent Stow links. Reject dangling/cyclic links,
+  hardlinks, unsafe files/parents and protected aliases. Main Lua, generated siblings,
+  source TSV/bridge, registry and state routes are protected through metadata checks,
+  not authored-Lua reads. Own-source or critical route/byte changes refuse; only a
+  new review can refresh safe known sibling-leaf evidence, never a reviewed writer.
+- Output may resolve to a Linux Git/Stow source, but remains a separate machine-side
+  file, never shared appearance v2. The user decides what to commit; Attune never
+  stages. State/backups must stay outside Git, including backup-root Git guards.
+- Nonempty foreign, manually changed or unknown-format output blocks editing.
+  No automatic import, overwrite exception, permission repair or rollback. Keep
+  evidence and manually remediate/reopen. Failure can leave private state/backups.
+- No live input preview, input mutation IPC, automatic loader/include insertion or
+  reload. Save is not loading proof; an already integrated/watched file may reload
+  automatically. Compile-only syntax/type emission checks do not prove Hyprland
+  semantics, hardware effects or runtime option support.
+- No profiles, window layouts, per-device hardware matching, global device-disable
+  control or keymap-file editing. Touchpad disable-while-typing is not disabling the
+  device; touchpad settings may have no effect without touchpad hardware.
+
+#### Example usage
+
+Devices -> edit a local value -> Ctrl+S -> inspect the full Input review ->
+**Save Reviewed Input**. Only after output exists, manually use `dofile` with the
+actual absolute lexical path shown in review in the user's Lua entrypoint, after
+defaults. See the [README example](../README.md#first-input-save-then-optional-manual-loading).
+Future loading/live checks require explicit permission. No executed/live acceptance
+is implied; [offline validation passed, user acceptance remains pending](validation.md#deviceinput-validated-offline-user-acceptance-pending).
+
+#### Sequential independent saves: resolved P2 contract
+
+Safe sequential Saves must not force unrelated drafts to be discarded or reopened.
+Input and bindings baselines separate exact own-source/Git proof from explicit
+`protected` proofs; Source retains its existing separate proofs and strict
+`installed_route`. `same_source` in each of those three backends, using shared
+`same_protection`, allows a **new review** to refresh only regular/absent leaf facts
+for the known sibling outputs: `attune.lua`, the two visual scope files,
+`attune-bindings.lua`, `attune-input.lua` and `keybindings.tsv`. Existing leaves must
+remain safe owned single-link non-executable readable/writable regular files.
+This is not permission to import sibling content or infer its runtime loading.
+
+Own source bytes/config/proof and Git context remain exact. Protected lexical and
+resolved paths, symlink targets, ancestor facts, main configs, bridge and registry
+stay strict; Source's actual installed TSV route stays exact too. Unknown sibling
+names and unsafe/nonregular leaf transitions have no refresh exception.
+
+The freshly prepared review captures complete current evidence. Writers compare
+that full reviewed baseline exactly under lock and through final checks before
+publication, not `same_source` relaxation: **a post-review change invalidates Save**.
+No silent rebase of an already reviewed Save is allowed. Normal post-save checking
+still permits only the writer's own expected replaced regular leaf, with other
+reviewed dependencies unchanged.
+
+GUI completion/delegation retains the page's original baseline object identity,
+proposal and revision checks, local draft and undo. It accepts a newly reviewed
+sibling context only through narrow source matching, not by replacing that page's
+saved baseline. Only its own verified save result is adopted; all other units'
+drafts, saved baselines and undo survive. Final temporary real-publisher GUI
+coverage passed **24 cases**, all **12 ordered unit pairs in legacy and pair modes**,
+each saving all four units. Focused backend coverage passed **684 tests**. These
+support, rather than replace, the final full-suite/eight-suite results above.
+
+#### Related files
+
+`core/input.py`, `pages/input.py`, `core/owned_output.py`, `core/bindings.py`,
+`core/route_approval.py`, `core/persistence.py`, `core/state.py`, `core/undo.py`,
+`core/focused_ui.py`, `ui/options/keyboard.py`, `data/schema/options.json`,
+`pages/pending.py`, `pages/settings.py`, `window.py`.
+Coverage sources include `tests/test_input_persistence.py`, `tests/test_input_page.py`,
+`tests/test_input_page_gui.py` and `tests/test_input_workflow_gui.py`. Final offline
+evidence is linked above; earlier bindings/source/pair checkpoint counts are historical.
+
+`owned_output.py` immediately shares only the concrete bindings/Input route, parent,
+protected-name, lock, backup, compile, publication and verification mechanics for
+two fixed kinds. Pending/window share their corresponding review/writer lifetime.
+This is not a generic plugin/output registry. Each module keeps its own closed
+codec, typed DTOs and review contract. Source TSV keeps its independent writer,
+using relocated safety helpers, the added protected input basename and narrow
+`same_source` matching for new reviews; its
+stable 80-row list and blank-field unassignment guidance are unchanged. Visual
+v1/v2 formats, `Scope`, registry and journals stay closed and unchanged.
 
 ### Existing canonical-pair editor
 

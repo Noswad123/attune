@@ -16,6 +16,7 @@ from gi.repository import Adw, GLib, Gtk
 from hyprland_config import ParseError, value_to_conf
 
 from hyprmod.core import bindings, editor_layout, schema
+from hyprmod.core import input as input_config
 from hyprmod.core.focused_ui import ReviewSnapshot
 from hyprmod.core.pending import ChangeKind, PendingChange
 from hyprmod.core.scoped_review import GroupReviewPlan
@@ -44,6 +45,7 @@ _CATEGORY_ORDER = (
     "Monitors",
     "Source Shortcuts",
     "Keybindings",
+    "Input",
 )
 
 # Visual label and CSS class for each kind of change.
@@ -89,6 +91,20 @@ class PendingChangesPage:
         ) = None
         self._bindings_box: Gtk.Box | None = None
         self._bindings_save_button: Gtk.Button | None = None
+        self._input_review: input_config.InputReview | None = None
+        self._input_source: input_config.InputBaseline | None = None
+        self._input_read_cancel: threading.Event | None = None
+        self._input_save_request: (
+            tuple[
+                input_config.InputReview,
+                input_config.InputConfig,
+                input_config.InputBaseline | None,
+                int,
+            ]
+            | None
+        ) = None
+        self._input_box: Gtk.Box | None = None
+        self._input_save_button: Gtk.Button | None = None
         # Coalesce many quick "dirty" pings (e.g. typing in a spinbutton) into
         # a single rebuild. Without this the page rebuilds at signal speed
         # which is wasteful and can fight scroll position recovery.
@@ -111,8 +127,8 @@ class PendingChangesPage:
         self._content_box = content_box
         content_box.append(
             Gtk.Label(
-                label="Appearance / displays, source shortcuts and additional bindings are three "
-                "independent save units. "
+                label="Appearance / displays, Input, source shortcuts and additional bindings "
+                "are four independent save units. "
                 "Review and save each separately; there is no atomic Save Everything.",
                 xalign=0,
                 wrap=True,
@@ -180,6 +196,15 @@ class PendingChangesPage:
         self._bindings_save_button.connect("clicked", self._on_save_bindings)
         content_box.append(self._bindings_save_button)
 
+        self._input_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        content_box.append(self._input_box)
+        self._input_save_button = Gtk.Button(label="Save Reviewed Input")
+        self._input_save_button.add_css_class("suggested-action")
+        self._input_save_button.set_halign(Gtk.Align.END)
+        self._input_save_button.set_sensitive(False)
+        self._input_save_button.connect("clicked", self._on_save_input)
+        content_box.append(self._input_save_button)
+
         self.refresh()
         return toolbar
 
@@ -190,6 +215,7 @@ class PendingChangesPage:
         self._reviewed = None
         self._pair_review = None
         self._revision += 1
+        self._invalidate_input_review()
         self._bindings_review = None
         self._bindings_save_request = None
         if self._bindings_read_cancel is not None:
@@ -207,6 +233,7 @@ class PendingChangesPage:
 
     def cancel_review(self) -> None:
         self._closed = True
+        self._invalidate_input_review()
         self._bindings_review = None
         self._bindings_save_request = None
         if self._bindings_read_cancel is not None:
@@ -240,45 +267,59 @@ class PendingChangesPage:
         changes = self.collect_changes()
         self._render_changes(changes, groups_box, summary_label, empty_state)
         self._render_diff()
-        self._render_bindings_review()
+        self._render_owned_review(is_input=False)
+        self._render_owned_review(is_input=True)
 
-    def _render_bindings_review(self) -> None:
-        box = self._bindings_box
-        button = self._bindings_save_button
+    def _invalidate_input_review(self) -> None:
+        self._input_review = None
+        self._input_save_request = None
+        if self._input_read_cancel is not None:
+            self._input_read_cancel.set()
+        if self._input_save_button is not None:
+            self._input_save_button.set_sensitive(False)
+
+    def _render_owned_review(self, *, is_input: bool) -> None:
+        box = self._input_box if is_input else self._bindings_box
+        button = self._input_save_button if is_input else self._bindings_save_button
+        label = "Input" if is_input else "Keybindings"
+        cancel_attr = "_input_read_cancel" if is_input else "_bindings_read_cancel"
         if box is None or button is None:
             return
-        self._bindings_review = None
+        if is_input:
+            self._input_review = None
+        else:
+            self._bindings_review = None
         button.set_sensitive(False)
         clear_children(box)
-        page = self._window._managed_bindings_page
+        page = self._window._input_page if is_input else self._window._managed_bindings_page
         if page is None or not page.is_dirty():
             button.set_visible(False)
             return
         button.set_visible(True)
-        box.append(Gtk.Label(label="Keybindings: independent save unit", xalign=0))
+        box.append(Gtk.Label(label=f"{label}: independent save unit", xalign=0))
         baseline = page.baseline
         if baseline is None or page.locked:
             box.append(
                 Gtk.Label(
                     label=page.load_error
-                    or "Keybindings locked. Manually correct the file and reopen Attune.",
+                    or f"{label} locked. Manually correct the file and reopen Attune.",
                     xalign=0,
                     wrap=True,
                 )
             )
             return
-        if self._closed or self._window.editor_locked or self._bindings_read_cancel is not None:
+        if self._closed or self._window.editor_locked or getattr(self, cancel_attr) is not None:
             return
         proposed = page.get_config()
         revision = self._revision
         cancel = threading.Event()
-        self._bindings_read_cancel = cancel
-        box.append(Gtk.Label(label="Preparing complete keybindings review...", xalign=0))
+        setattr(self, cancel_attr, cancel)
+        box.append(Gtk.Label(label=f"Preparing complete {label} review...", xalign=0))
 
         def complete(review, error):
-            if self._bindings_read_cancel is not cancel:
+            if getattr(self, cancel_attr) is not cancel:
                 return GLib.SOURCE_REMOVE
-            self._bindings_read_cancel = None
+            setattr(self, cancel_attr, None)
             if self._closed:
                 return GLib.SOURCE_REMOVE
             if (
@@ -294,13 +335,25 @@ class PendingChangesPage:
             clear_children(box)
             if (
                 error is not None
-                or type(review) is not bindings.BindingsReview
-                or review.baseline != baseline
+                or type(review)
+                is not (input_config.InputReview if is_input else bindings.BindingsReview)
+                or not (
+                    (
+                        type(baseline) is input_config.InputBaseline
+                        and type(review.baseline) is input_config.InputBaseline
+                        and input_config.same_source(baseline, review.baseline)
+                    )
+                    or (
+                        type(baseline) is bindings.BindingsBaseline
+                        and type(review.baseline) is bindings.BindingsBaseline
+                        and bindings.same_source(baseline, review.baseline)
+                    )
+                )
                 or review.proposed != proposed
             ):
                 box.append(
                     Gtk.Label(
-                        label=f"Cannot review keybindings: {error or 'unexpected result'}. "
+                        label=f"Cannot review {label}: {error or 'unexpected result'}. "
                         "Draft retained. Manually correct changed file/routes and reopen Attune.",
                         xalign=0,
                         wrap=True,
@@ -309,12 +362,13 @@ class PendingChangesPage:
                 return GLib.SOURCE_REMOVE
             box.append(
                 Gtk.Label(
-                    label=f"Keybindings only. Fixed output: {baseline.lexical_path}\n"
+                    label=f"{label} only. Fixed output: {baseline.lexical_path}\n"
                     f"Resolved: {baseline.resolved_path}\nPrior status: {baseline.status}\n"
                     f"SHA256: {baseline.sha256} -> "
                     f"{hashlib.sha256(review.proposed_text.encode('utf-8')).hexdigest()}\n"
                     f"Review: {review.review_hash}\n"
-                    "Appearance/displays are saved separately. First load: manually add dofile "
+                    "Other units are saved separately. Only after this file exists, "
+                    "manually add dofile "
                     "with this exact absolute path to your own Lua entrypoint: "
                     f"{baseline.lexical_path}. "
                     "Attune does not insert includes, unbind, apply, execute commands or reload. "
@@ -329,17 +383,40 @@ class PendingChangesPage:
                 review.diff,
                 added_lines=review.added_lines,
                 removed_lines=review.removed_lines,
-                title="Keybindings",
+                title=label,
             )
             box.append(diff)
-            self._bindings_source = baseline
-            self._bindings_review = review
+            if (
+                type(review) is input_config.InputReview
+                and type(baseline) is input_config.InputBaseline
+            ):
+                self._input_source = baseline
+                self._input_review = review
+            elif (
+                type(review) is bindings.BindingsReview
+                and type(baseline) is bindings.BindingsBaseline
+            ):
+                self._bindings_source = baseline
+                self._bindings_review = review
             button.set_sensitive(True)
             return GLib.SOURCE_REMOVE
 
         def work():
             try:
-                review = bindings.run_prepare_review(baseline, proposed, cancel_event=cancel)
+                if (
+                    type(baseline) is input_config.InputBaseline
+                    and type(proposed) is input_config.InputConfig
+                ):
+                    review = input_config.run_prepare_review(
+                        baseline, proposed, cancel_event=cancel
+                    )
+                elif (
+                    type(baseline) is bindings.BindingsBaseline
+                    and type(proposed) is bindings.BindingsConfig
+                ):
+                    review = bindings.run_prepare_review(baseline, proposed, cancel_event=cancel)
+                else:
+                    raise ValueError("Mismatched review request")
             except Exception as exc:
                 GLib.idle_add(complete, None, str(exc))
             else:
@@ -368,6 +445,33 @@ class PendingChangesPage:
         request = self._bindings_save_request
         self._bindings_save_request = None
         page = self._window._managed_bindings_page
+        return (
+            request is not None
+            and request[0] is review
+            and request[1] == proposed
+            and page is not None
+            and request[2] is page.baseline
+            and request[3] == self._revision
+            and not self._closed
+        )
+
+    def _on_save_input(self, _button: Gtk.Button) -> None:
+        review = self._input_review
+        source = self._input_source
+        self._input_review = None
+        if self._input_save_button is not None:
+            self._input_save_button.set_sensitive(False)
+        if review is None:
+            return
+        self._input_save_request = (review, review.proposed, source, self._revision)
+        self._window.save_input_reviewed(review, review.proposed)
+
+    def take_input_save_request(
+        self, review: input_config.InputReview, proposed: input_config.InputConfig
+    ) -> bool:
+        request = self._input_save_request
+        self._input_save_request = None
+        page = self._window._input_page
         return (
             request is not None
             and request[0] is review

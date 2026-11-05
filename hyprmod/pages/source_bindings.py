@@ -183,7 +183,8 @@ class SourceBindingsPage(SectionPage):
                     return GLib.SOURCE_REMOVE
                 if error is None and (
                     type(result) is not source.SourceReview
-                    or result.baseline != baseline
+                    or baseline is None
+                    or not source.same_source(baseline, result.baseline)
                     or result.proposed != proposed
                 ):
                     error = "Unexpected source review context"
@@ -579,7 +580,11 @@ class SourceBindingsPage(SectionPage):
             return
         try:
             self._require_edit()
-            if review.baseline != self.baseline or review.proposed != self.get_config():
+            if (
+                self.baseline is None
+                or not source.same_source(self.baseline, review.baseline)
+                or review.proposed != self.get_config()
+            ):
                 raise ValueError("Source draft changed; review again")
             if not self._window.begin_source_bindings_save():
                 return

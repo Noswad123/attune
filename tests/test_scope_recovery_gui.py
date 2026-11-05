@@ -22,6 +22,7 @@ from hyprmod.core import (
     scoped_review,
     source_bindings,
 )
+from hyprmod.core import input as input_config
 from hyprmod.core.scopes import Scope
 from hyprmod.core.transaction_publication import PublicationResult
 from hyprmod.core.transaction_records import GroupSnapshot, Phase
@@ -58,6 +59,11 @@ def widgets(widget):
 
 @pytest.fixture(autouse=True)
 def no_live_effects(monkeypatch):
+    monkeypatch.setattr(
+        input_config,
+        "persist_reviewed",
+        MagicMock(side_effect=AssertionError("Explicit temporary input publisher required")),
+    )
     monkeypatch.setattr(
         source_bindings,
         "persist_reviewed",

@@ -22,8 +22,9 @@ live behavior remains unverified. Entering a key from blank defaults Enabled on.
 Deliver normal edit, review, Save, and continued editing for an **existing explicitly
 registered canonical pair**, using the mature journaled writer. Do not make automatic
 scoped foreign preservation or migration a prerequisite for that path. Current user
-priority is useful existing Keybindings through approved activation and validation,
-then Device/Input, with cursor, rules, startup and environment later. Additional
+priority includes existing Keybindings live acceptance. Device/Input is now delivered
+and validated offline, pending user input acceptance; Cursor is next
+only after that input acceptance, with rules, startup and environment later. Additional
 managed bindings and source-aware editing are implemented and validated offline;
 source integration deployment is complete with all-80 runtime metadata verified,
 while live shortcut behavior acceptance remains pending. Profiles/layout
@@ -31,6 +32,38 @@ pages remain off scope. Migration is deferred, not the next feature gate. Automa
 foreign preservation is **deferred, nonblocking** work, not a b6 recovery-foundation
 shipping gate. The detailed recovery checkpoints below document support capabilities,
 not an obligation to complete every edge case before shipping main features.
+
+### Independent Input addition
+
+Input is a separate machine-side `$XDG_CONFIG_HOME/hypr/attune-input.lua` with a
+typed closed input v1 record, dedicated `input.lock` and private `input-backups`.
+It is not shared appearance v2, a third `Scope`, registry member or pair journal
+participant. Visual v1/v2 and this ADR's two-scope protocol remain unchanged.
+Safe existing Stow/Git output is allowed with an existing safe parent; the user
+controls commits and Attune never stages. State/backups remain outside Git.
+Bindings and Input share narrow fixed-output safety/review/writer mechanics,
+not a generic framework. Source TSV keeps its separate writer and stable UI.
+
+Appearance/displays, Input, source shortcuts and additional bindings are four
+independent save units preserving each other's drafts, baselines and undo. Input
+uncertainty locks only Input. No input preview/mutation IPC or automatic loader/
+include/reload is added. Manual `dofile` uses the actual absolute path only after
+output exists; persistence is not loading proof. Final parent offline validation
+passed: full pytest **4,632 passed, 483 skipped**; eight isolated Broadway suites
+**480 passed, 2 skipped**. User/live UI and Input acceptance remain unverified and
+require permission, independently of user-key runtime acceptance. See the
+[Input contract](../architecture.md#devices--input) and
+[final evidence and acceptance plan](../validation.md#deviceinput-validated-offline-user-acceptance-pending).
+
+Sequential saves retain each unit's own source/Git baseline, draft and undo. A new
+review may refresh only safe known sibling-output regular/absent leaf proofs;
+paths, symlinks, ancestors, main/bridge/registry and Source installed route stay
+strict. Full reviewed evidence is exact under writer lock/final checks, so a
+post-review change invalidates Save, never silently rebases it. Only the saving
+unit adopts its verified result. Source's narrow `same_source` matching joins its
+safety-helper imports/protected-name update without changing its stable UI. Input
+rows show Saved/Draft/Runtime/Default origins, and unapplied keyboard-options text
+survives unrelated edits while remaining explicitly outside the draft until Apply.
 
 ### Independent managed-bindings addition
 
@@ -68,7 +101,7 @@ authored integration candidate** under `integrations/hyprland/jdawson`, not norm
 application authority over main Lua. It separates 80 stable-ID key declarations
 and descriptions from unchanged callbacks. Existing shortcuts can explicitly open
 the prepared TSV now and edit keys/descriptions/enabled state, preserving base metadata/order.
-Its complete review/Save is a third independent unit, not a visual scope or pair
+Its complete review/Save is an independent unit, not a visual scope or pair
 journal participant; generated managed formats remain unchanged. Normal Attune
 never executes/rewrites authored main or unbinds runtime shortcuts. On 2026-11-02,
 the user-approved three-file deployment installed reviewed copies through the

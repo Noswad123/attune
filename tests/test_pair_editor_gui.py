@@ -29,6 +29,7 @@ from hyprmod.core import (
     source_bindings,
     transaction_publication,
 )
+from hyprmod.core import input as input_config
 from hyprmod.core.scopes import Scope
 from hyprmod.pages.scope_recovery import ScopeRecoveryPage
 from hyprmod.window import HyprModWindow
@@ -59,6 +60,7 @@ def forbid_writes(monkeypatch):
         bindings, "run_observe", MagicMock(side_effect=ValueError("Mock bindings read explicitly"))
     )
     for module, name in (
+        (input_config, "persist_reviewed"),
         (bindings, "persist_reviewed"),
         (source_bindings, "persist_reviewed"),
         (scoped_recovery, "commit_action"),

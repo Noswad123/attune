@@ -82,10 +82,11 @@ The suite isolates HOME and XDG paths; never remove those test safety fixtures.
 For M3.6a's separate opt-in recovery widgets, use the same Broadway environment
 with `tests/test_scope_recovery_gui.py` and `tests/test_pair_editor_gui.py`. Also run
 `tests/test_managed_bindings_gui.py`, `tests/test_keybindings_workflow_gui.py`
-and `tests/test_source_bindings_gui.py` for bindings. All six suites use IPC-disabled
-isolation. Mutators are mocked by default; explicitly real source, managed-bindings
-and pair publishers are allowed only against temporary output/state/store fixtures.
-All six suites' results are in `docs/validation.md`. Focused service/wiring coverage is in
+and `tests/test_source_bindings_gui.py` for bindings, plus `tests/test_input_page_gui.py`
+and `tests/test_input_workflow_gui.py` for Input. All eight suites use IPC-disabled
+isolation. Mutators are mocked by default; explicitly real source, managed-bindings,
+Input and pair publishers are allowed only against temporary output/state/store fixtures.
+All eight suites' results are in `docs/validation.md`. Focused service/wiring coverage is in
 `tests/test_scoped_recovery.py`, `tests/test_layout_guard.py`, and
 `tests/test_startup_layout.py`; run these alongside legacy persistence, restoration,
 and recovery regressions. Coverage is not a claim that final validation passed.
@@ -142,6 +143,48 @@ Things to avoid:
 
 ## Scope
 
+- Device/Input is implemented and validated offline, pending user input acceptance.
+  Devices exposes 15 typed keys in 14 Keyboard/Mouse/Touchpad rows in
+  admitted legacy and pair editors. Keep the closed allowlist in `core/input.py`:
+  paired layouts/variants, raw XKB options preserving admitted unknown tags, numlock,
+  repeat, mouse and touchpad controls. Both scroll factors stay at 0.1–2.0 in 0.1
+  steps, not an unverified 10. No profiles/window layouts, per-device matching,
+  global device-disable or keymap-file editing. Disable-while-typing is not device disable.
+  Input edits/Undo/Reset/Discard are local with no preview or mutation IPC. Opening
+  creates no overrides; owned values precede labeled read-only runtime/default hints.
+  Layout/variant edit/Reset/Discard stay paired in one undo action.
+  Preserve unapplied keyboard-options text across unrelated edits without bypassing
+  Apply. Keep visible Saved/Draft/Runtime/Default origins and explicit unapplied-not-
+  in-draft labeling; runtime/default values are not proof of hardware state.
+- Input uses only dedicated `attune-input.lua`, `input.lock` and private
+  `input-backups`, not shared appearance v2, a third `Scope`, registry or pair journals.
+  Share narrow fixed-output safety/review/writer mechanics immediately with bindings
+  through `core/owned_output.py`, Pending and window orchestration, not a generic
+  plugin framework. Source TSV retains its own writer with safety-helper imports,
+  protected-name updates and narrow `same_source` review matching. Keep visual v1/v2 closed.
+  Require an existing safe parent, preserve Stow links and allow Linux Git output;
+  the user controls commits and Attune never stages. State/backups stay outside Git.
+  Complete bounded review precedes the direct non-daemon writer, global owner
+  exclusion and close veto. Uncertain Input locks only Input and retains other units.
+  Saving any of four units preserves the others' drafts, saved baselines and undo.
+  Normal edit/review/Save/reopen/repeat must work in both admitted editor modes.
+  No automatic loader/include/reload; manual `dofile` uses the actual absolute path
+  only after output exists. Persistence is not loading; watched writes may reload.
+  Final parent offline validation passed; retain its warnings/isolation qualifications
+  separately from earlier counts. Follow the [Input validation and user checklist](docs/validation.md#deviceinput-validated-offline-user-acceptance-pending);
+  future live loading/checks need explicit permission. Cursor follows only after user
+  input acceptance. Existing source UI/last-row empty-field guidance is unchanged.
+- For sequential independent saves, retain each page's original own-source/draft
+  baseline identity and undo. Baselines carry explicit separate `protected` proofs.
+  A new review may refresh only safe known sibling-output regular/absent leaf facts;
+  own source plus Git context, lexical/resolved paths, symlinks/ancestors, main,
+  bridge, registry and `SourceBaseline.installed_route` remain strict. Use narrow
+  `same_source`/`same_protection` matching at review preparation/UI checks, never to
+  silently rebase a reviewed Save. Writers recheck full exact reviewed evidence
+  under lock and immediately before replacement. Post-review change invalidates
+  Save. Preserve proposal/revision/draft/undo checks and adopt only the saving unit's
+  verified result. The 24 real-publisher GUI cases cover all 12 ordered unit pairs
+  in both legacy/pair modes, each saving all four units; keep that regression coverage.
 - Current source UI correction is implemented and validated:
   one stable Keybindings list retains all 80 rows. Every pencil opens Edit Source
   Shortcut; no Delete button, Assign New or Unassigned expander. Use the actual
@@ -153,8 +196,9 @@ Things to avoid:
   UI correction; its supplied final results are in
   [current validation](docs/validation.md#ui-only-correction-final-validation).
   Entering a key from blank defaults Enabled on. Live behavior remains unverified.
-- Product priority is useful existing Keybindings through approved activation and
-  validation, then Device/Input, with cursor, rules, startup, and environment later.
+- Existing Keybindings still need live acceptance. Device/Input is validated offline,
+  pending user input acceptance; Cursor is next only
+  after that input acceptance, with rules, startup, and environment later.
   Additional managed bindings have a validated checkpoint; source-aware editing is
   implemented and validated offline; the approved compatible bridge-only update is
    installed for Disable and unassignment. True Delete/unassignment is implemented and
@@ -164,7 +208,8 @@ Things to avoid:
   pages remain out of scope. Existing-pair validation is an earlier checkpoint,
   not validation of the new bindings work. Migration and automatic foreign repair
   are deferred, nonblocking work, not feature-breadth prerequisites.
-- Managed bindings use only `core/bindings.py` and the dedicated fixed
+- Managed bindings use `core/bindings.py`, shared fixed-output safety in
+  `core/owned_output.py`, and the dedicated fixed
   `attune-bindings.lua` format. Do not add them to visual v1/v2 payloads or pair
   journals. Retain read-only runtime/opaque rows and unknown provenance, conservative
   new/moved-combo conflicts, same-combo local edits, and unknown offline inventory.
@@ -244,7 +289,8 @@ Things to avoid:
   never executable Lua and the trusted bridge needs no JSON dependency.
   Installation/rollback requires separate approval and the ordered plan in
   `docs/validation.md`; watcher auto-reload means no reload IPC is not no live effect.
-- Keep reviewed keybindings and appearance/displays as independent save units,
+- Keep reviewed Input, source shortcuts, additional keybindings and appearance/displays
+  as four independent save units,
   including dirty baselines and undo history. Bindings commit uses its own lock,
   private hash-named backups, route/source rechecks, direct non-daemon lifetime and
   close veto. Uncertain bindings results lock only that unit. First-save guidance

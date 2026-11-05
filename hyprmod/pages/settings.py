@@ -6,6 +6,7 @@ from pathlib import Path
 from gi.repository import Adw, Gtk
 
 from hyprmod.core.bindings import BASENAME
+from hyprmod.core.input import BASENAME as INPUT_BASENAME
 from hyprmod.ui import make_page_layout
 
 
@@ -19,7 +20,7 @@ class SettingsPage:
             title="Attune Integration",
             description=(
                 "Attune previews appearance, displays, and motion live. "
-                "Ctrl+S opens Pending Changes. Appearance/displays and keybindings have "
+                "Ctrl+S opens Pending Changes. Appearance/displays, Input and keybindings have "
                 "independent explicitly reviewed Save actions, not an atomic Save Everything."
             ),
         )
@@ -80,6 +81,31 @@ class SettingsPage:
                 selectable=True,
             )
         )
+        input_path = (
+            (
+                Path(pair.evidence.config_root)
+                if pair is not None
+                else Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+            )
+            / "hypr"
+            / INPUT_BASENAME
+        )
+        group.add(
+            Gtk.Label(
+                label=f"Input has a separate fixed output: {input_path}\n"
+                "Draft only: no live preview. Only after this file exists, manually add dofile "
+                "with this exact absolute path to your own Lua entrypoint after your defaults, "
+                "outside Attune. Attune never inserts an include or sends Input IPC. "
+                "Linux Git/Stow routes may resolve to a Git source: this remains separate from "
+                "appearance output, and Attune does not stage it. "
+                "Watchers may reload automatically "
+                "only if already loaded; saving is not proof of runtime loading.",
+                xalign=0,
+                wrap=True,
+                selectable=True,
+                use_markup=False,
+            )
+        )
         group.add(
             Adw.ActionRow(
                 title="Manual integration",
@@ -96,7 +122,7 @@ class SettingsPage:
                 title="Your configuration stays yours",
                 subtitle=(
                     "Hand-authored bindings, workspaces, autostart, environment, and rules "
-                    "are not edited. Only the dedicated managed keybindings file is editable. "
+                    "are not edited. Input and keybindings use separate dedicated outputs. "
                     "No automatic saves, profiles, migrations, or startup reloads. "
                     "Output-path editing is intentionally unavailable."
                 ),

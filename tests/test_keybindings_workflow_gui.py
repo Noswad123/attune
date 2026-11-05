@@ -19,6 +19,7 @@ from hyprmod.core import (
     source_bindings,
     transaction_publication,
 )
+from hyprmod.core import input as input_config
 from hyprmod.core.undo import OptionChange, SavedListSnapshot
 from hyprmod.pages.scope_recovery import ScopeRecoveryPage
 from hyprmod.ui.diff import ConfigDiffWidget
@@ -75,6 +76,7 @@ def window(request, monkeypatch):
     monkeypatch.setattr("hyprland_socket.get_version", offline)
     monkeypatch.setattr(ScopeRecoveryPage, "ensure_loaded", lambda self: None)
     for module, name in (
+        (input_config, "persist_reviewed"),
         (bindings, "persist_reviewed"),
         (source_bindings, "persist_reviewed"),
         (persistence, "persist_reviewed"),

@@ -49,6 +49,7 @@ class TestFocusedNavigation:
         monkeypatch.setattr(window_module, "Adw", MagicMock())
         for name in (
             "MonitorsPage",
+            "InputPage",
             "ManagedBindingsPage",
             "SourceBindingsPage",
             "PendingChangesPage",

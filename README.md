@@ -3,11 +3,11 @@
 
 ## Overview
 
-Attune is a personal, focused GTK4/libadwaita appearance and managed-keybindings editor for
+Attune is a personal, focused GTK4/libadwaita appearance, input and managed-keybindings editor for
 [Hyprland](https://hyprland.org), forked from
 [BlueManCZ/hyprmod](https://github.com/BlueManCZ/hyprmod) at `b475087`.
-It previews supported changes through compositor IPC and writes compositor
-configuration only after review.
+It previews appearance/display changes through compositor IPC; input and bindings
+stay draft-only. It writes compositor configuration only after review.
 The internal Python namespace remains `hyprmod` intentionally; the public launch
 command is `attune`.
 
@@ -20,6 +20,9 @@ Historical upstream releases remain in [CHANGELOG.md](CHANGELOG.md).
 - General visual options: inner/outer gaps, border size, active/inactive border colors.
 - Decoration, animations, and bezier curves.
 - Monitor configuration with live preview confirmation.
+- Devices: draft-only Keyboard, Mouse and Touchpad controls with independent
+  **Save Reviewed Input** to `attune-input.lua`. Implemented and validated offline;
+  user/live Input acceptance remains unverified. No live input preview or mutation IPC.
 - Attune-owned global keyboard bindings: search, add, edit, and delete local drafts,
   with separately reviewed disk persistence. Implemented and validated with automated
   and isolated GTK checks; live keyboard/loading acceptance remains unverified.
@@ -69,15 +72,17 @@ an already registered v2 appearance/display pair through the mature journaled
 writer. The `legacy-clear` v1 `attune.lua` workflow remains unchanged.
 This visual-pair workflow is not installation or migration: it creates no registry,
 initializes no transaction store, provisions no missing/empty scope target, and edits
-no loader lines. The independent bindings writer can create its own private state.
+no loader lines. Independent bindings and Input writers can create their own private state.
 See [ADR 0001](docs/decisions/0001-shared-local-ownership.md).
 
 ### Roadmap
 
 Additional managed bindings have an automated validated checkpoint, but useful
 editing of existing bindings remains the priority until live behavior is accepted.
-The source-aware integration is deployed with runtime metadata verified. Device/Input follows, with cursor, rules,
-startup, and environment later. Profiles
+The source-aware integration is deployed with runtime metadata verified. Device/Input
+is implemented and validated offline, pending user input acceptance.
+Cursor is next only after that input acceptance, with rules, startup and environment
+later. Profiles
 and layout pages remain out of scope. Manual acceptance remains necessary, but
 migration and automatic scoped foreign-file preservation are deferred and nonblocking,
 not prerequisites for managed bindings or Device/Input.
@@ -148,8 +153,8 @@ native submap. Re-enabling a conflicting combination refuses before changing the
 Search covers descriptions, keys, IDs and context. **Review Source Shortcuts...**
 shows the complete TSV diff, lexical/resolved paths and hashes; the separate
 **Save Reviewed Source Shortcuts** writes only that selected metadata file.
-Source, **Additional bindings** (`attune-bindings.lua`), and appearance/displays
-are three independent save units with separate dirty baselines and undo retention.
+Source, **Additional bindings** (`attune-bindings.lua`), Input (`attune-input.lua`),
+and appearance/displays are four independent save units with separate dirty baselines and undo retention.
 There is no atomic Save Everything. Source uncertainty locks only source editing.
 The actual config root's main/generated/registry routes are protected by metadata-only
 alias checks independently of the selected TSV's location, including Stow sources.
@@ -261,11 +266,11 @@ manual remediation. There is no automatic import or overwrite exception.
   control would default or clamp them. Revert can restore the owned saved combination
   despite runtime overlap, but cannot introduce a duplicate owned combination.
 
-Ctrl+S opens Pending Changes. **Save Reviewed Keybindings**, **Save Reviewed Source
-Shortcuts** and **Save Reviewed Appearance / Displays** are independent save units,
+Ctrl+S opens Pending Changes. **Save Reviewed Keybindings**, **Save Reviewed Input**,
+**Save Reviewed Source Shortcuts** and **Save Reviewed Appearance / Displays** are independent save units,
 not an atomic Save Everything.
 Each successful save adopts only its verified baseline and clears only its own
-undo history; the other unit's dirty state and undo history remain. Changed drafts
+undo history; all other units' drafts, saved baselines and undo history remain. Changed drafts
 invalidate review. Appearance/display save behavior below is otherwise unchanged.
 
 Bindings review shows exact prior/proposed bytes, paths and hashes. Save rechecks
@@ -289,6 +294,68 @@ keyboard or loader semantics checks. See [the validation record](docs/validation
 for warnings, review fixes, and the unexplained empty-file observation during the
 initial run. These counts do not validate the new source-aware feature.
 Earlier pair-editor counts remain historical.
+
+### Devices / Input
+
+**Implemented and validated offline; user/live Input acceptance remains unverified.**
+Final parent results: full pytest **4,632 passed, 483 skipped**; eight isolated
+Broadway suites **480 passed, 2 skipped**. Ruff/format, error-level Pyright, wheel,
+help and parent diff checks passed; independent backend/UI review found no remaining
+material findings. See [final evidence and limits](docs/validation.md#deviceinput-validated-offline-user-acceptance-pending)
+for timings, warnings and isolation. Earlier counts elsewhere are historical.
+The **Devices** page exposes Keyboard, Mouse and Touchpad in admitted legacy and
+existing-pair editors. Its 15 managed keys occupy 14 rows because keyboard layouts
+and variants share one paired editor:
+
+| Section | Managed keys (under `input:`) |
+| --- | --- |
+| Keyboard | `kb_layout` + `kb_variant`, `kb_options`, `numlock_by_default`, `repeat_rate`, `repeat_delay` |
+| Mouse | `sensitivity`, `accel_profile`, `left_handed`, `natural_scroll`, `scroll_factor` |
+| Touchpad | `touchpad:natural_scroll`, `touchpad:tap-to-click`, `touchpad:disable_while_typing`, `touchpad:scroll_factor` |
+
+`kb_options` is raw comma-separated XKB text: syntactically admitted unknown tags
+are preserved, not filtered through a known-options picker. Repeat rate is 0–200,
+delay 0–2000, sensitivity -1–1, and acceleration is empty, `flat` or `adaptive`.
+Both scroll factors are conservatively **0.1–2.0 in 0.1 steps**, not an unverified
+maximum of 10. These validation ranges do not establish live compositor semantics.
+
+Opening the page creates no overrides. Owned saved values take precedence;
+unmanaged controls show labeled read-only runtime hints when available, otherwise
+defaults, not proven device state. Edits, Undo/Redo, Reset and Discard remain local.
+Reset removes an override; Discard restores its saved state. Layout/variant edits,
+Reset and Discard operate together as one undo action. Each row visibly identifies
+Saved override, Draft override, Current runtime snapshot or Default, not observed.
+Unapplied keyboard-options text survives unrelated edits and is labeled **Unapplied
+text (not in draft)**; use its Apply action to enter it into the draft before review.
+
+Ctrl+S prepares the complete Input-only diff. **Save Reviewed Input** writes only
+`$XDG_CONFIG_HOME/hypr/attune-input.lua` (`~/.config` fallback), a typed closed
+`-- Attune input data v1: ` format, separate from shared appearance and visual v1/v2.
+Nonempty output must regenerate byte-exactly; foreign, manually edited or unknown
+content blocks editing. There is no automatic import, repair, loader/include
+insertion, input preview, mutation IPC or reload.
+
+The safe owned writable parent must already exist. Safe existing Stow links are
+preserved; the resolved basename must remain `attune-input.lua`. It may resolve to
+a Linux Git/Stow source, but remains a separate machine-side file: the user decides
+what to commit, and Attune never stages it. Private state stays outside Git at
+`$XDG_STATE_HOME/attune/input.lock` and `input-backups/<sha256>.lua`. Save uses fresh
+route/byte checks, compile-only Lua validation, a direct non-daemon writer, global
+writer-owner exclusion and close veto. Uncertain publication or failed adoption
+retains the draft and locks only Input, without discarding other units' drafts.
+Verified success supports another edit/review/Save and reopening in either editor.
+Sequential saves retain each other unit's own source baseline, draft and undo.
+A new review may refresh only safe known sibling-output regular/absent leaf proofs;
+own source/Git evidence, paths, symlinks, ancestors, main/bridge/registry and the
+source installed route remain strict. Writers require the complete exact reviewed
+evidence under lock and before replacement: a post-review change invalidates Save,
+not silently rebases it. Only that unit's verified result becomes its new baseline.
+
+No profiles, window layouts, per-device hardware matching, global device-disable
+control or keymap-file editing is added. Touchpad disable-while-typing is not device
+disable, and touchpad settings may have no effect without a touchpad. See the
+[Input contract](docs/architecture.md#devices--input) and
+[user acceptance checklist](docs/validation.md#deviceinput-validated-offline-user-acceptance-pending).
 
 ### Existing canonical-pair editor
 
@@ -687,14 +754,18 @@ to `~/.config/hypr/attune.lua`. Settings does not offer path editing.
 7. Existing source shortcuts use explicitly selected TSV metadata, not that generated
    bindings file. **Save Reviewed Source Shortcuts** has its own complete review,
    backup and verified baseline; it preserves the other units' dirty/undo state and
-   does not activate the offline main/bridge/data candidate.
+    does not activate the offline main/bridge/data candidate.
+8. Input observes its dedicated owned baseline and optional read-only runtime hints.
+   Local edits enter a separate complete review; **Save Reviewed Input** publishes
+   and verifies only that output. Saving any of the four units preserves the other
+   units' drafts, saved baselines and undo history. There is no Save Everything.
 
 ## Edge Cases
 
 - **Live preview is not persistence.** Unsaved appearance/display edits can still alter the desktop.
   Saving does not itself force a compositor reload; do not equate the saved file
   with the current runtime state.
-- **Removing an override:** the preview uses the schema default, not your
+- **Removing a visual override:** the preview uses the schema default, not your
   hand-authored fallback for scalar options. Animation and monitor removals leave
   the current live state alone. After saving the removal, explicitly reload your own
   Hyprland configuration to restore the authored baseline. Reloading can also
@@ -721,6 +792,28 @@ to `~/.config/hypr/attune.lua`. Settings does not offer path editing.
   Do not strip the checks or paste hand-authored Lua into a generated file.
 
 ## Example usage
+
+### First Input save, then optional manual loading
+
+1. Open Devices in an admitted legacy or pair editor. Check the runtime-hint/default
+   label; opening alone must not create pending overrides. Edit a keyboard, mouse or
+   touchpad value. There is **no input preview**, including during Undo/Reset/Discard.
+2. Press Ctrl+S, inspect the full Input diff, hashes and lexical/resolved paths, then
+   choose **Save Reviewed Input** if intended. Other units save separately.
+3. Only after the file exists, manually add `dofile` with the **actual absolute path
+   from review** to your own Lua entrypoint after your defaults. At this user's
+   default location only:
+
+   ```lua
+   dofile("/home/jdawson/.config/hypr/attune-input.lua")
+   ```
+
+   Use the actual path if XDG_CONFIG_HOME differs, not a literal shell variable.
+   Attune makes no loader edit and sends no reload. Future live loading/checking
+   requires separate explicit permission. An already watched file may auto-reload;
+   saving does not prove loading or input behavior.
+4. Make another edit/review/Save, then reopen to inspect persisted overrides. These
+   are acceptance instructions, not a report of passing tests or live execution.
 
 ### Inspect installed existing shortcuts or preview prepared mappings
 
@@ -816,6 +909,9 @@ line are separate user opt-ins, never automatic Attune setup steps.
 
 ## Related files
 
+- `hyprmod/core/input.py`, `hyprmod/pages/input.py`: typed Input codec, local drafts
+  and independent reviewed Save. `hyprmod/core/owned_output.py` shares fixed-output
+  safety mechanics with bindings, not a generic plugin or visual-scope framework.
 - `hyprmod/core/source_bindings.py`, `hyprmod/pages/source_bindings.py`: explicit
   source metadata observation, drafting, complete review and independent Save.
 - [Offline integration bundle](integrations/hyprland/jdawson/README.md): candidate

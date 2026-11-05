@@ -28,6 +28,7 @@ from hyprmod.core import (
     source_bindings,
     transaction_publication,
 )
+from hyprmod.core import input as input_config
 from hyprmod.core import recovery as recovery_module
 from hyprmod.core.diagnostics import build_diagnostics_report
 from hyprmod.core.focused_ui import PAGE_IDS
@@ -43,6 +44,11 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture(autouse=True)
 def startup_assessment(monkeypatch, isolated_user_paths):
+    monkeypatch.setattr(
+        input_config,
+        "persist_reviewed",
+        MagicMock(side_effect=AssertionError("Explicit temporary input publisher required")),
+    )
     monkeypatch.setattr(
         source_bindings,
         "persist_reviewed",

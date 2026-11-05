@@ -5,6 +5,155 @@ M0 checks in [ROADMAP.md](../ROADMAP.md) remain pending explicit manual acceptan
 
 ## Current status
 
+### Device/Input: validated offline, user acceptance pending
+
+**Implemented and validated offline. User/live UI and Input acceptance remain
+UNVERIFIED and require explicit permission.** The following are the final validation
+results for this implementation. Earlier
+source/bindings/pair counts below remain historical. Cursor is next only after user
+input acceptance; user-key runtime acceptance is a separate outstanding check.
+
+#### Final validation
+
+| Check | Actual final result |
+| --- | --- |
+| Process-isolated `pytest tests/ -q` | **4,632 passed, 483 skipped, 106 warnings, 787.92 seconds (13:07)** |
+| Eight isolated Broadway suites | **480 passed, 2 skipped, 9,159 warnings, 233.94 seconds (3:53)** |
+| Ruff check `--fix` / formatter | Passed; formatter **218 files unchanged** |
+| Pyright `--level error` | **0 errors, 0 warnings, 0 informations** in that level-filtered output; upgrade-version notice |
+| `uv build --wheel` | Passed: `dist/attune-0.5.0-py3-none-any.whl` |
+| `attune --help` | Passed |
+| `git diff --check` | Passed, including after documentation updates |
+| Independent backend/UI review | **No remaining material findings; P2s resolved** |
+
+The eight suites were `test_gui_smoke.py`, `test_scope_recovery_gui.py`,
+`test_pair_editor_gui.py`, `test_managed_bindings_gui.py`,
+`test_keybindings_workflow_gui.py`, `test_source_bindings_gui.py`,
+`test_input_page_gui.py` and `test_input_workflow_gui.py`, all under `tests/`.
+Broadway ran on **`:12`**, stopped by the cleanup trap. The full suite and GUI suites
+used temporary process `HOME`, `XDG_CONFIG_HOME`, `XDG_STATE_HOME` and `XDG_CACHE_HOME`
+**before Python started**, including HOME
+`/tmp/opencode/attune-bindings-validation-home`, with memory GSettings. The sentinel
+`/tmp/opencode/attune-bindings-validation-home/.config/hypr/attune.lua` was verified
+unchanged after the full suite. GUI compositor IPC was disabled, mutators mocked
+by default, and explicit real publishers used temporary fixtures only.
+
+Pyright's zero-warning output is at `--level error`, **not clearance of suppressed
+warning levels**; the upgrade-version notice is retained as a qualification.
+The pytest/Broadway warning totals above are not claimed clear.
+
+No live input writes, loading, reload or IPC mutation occurred. No staging or commits
+were performed. **Live-file hashes were not remeasured in this run**: historical
+hashes later in this record are not current verification.
+
+#### Resolved P2s
+
+- **Sequential independent saves:** baselines separate exact own-source/Git proof
+  from explicit `protected` evidence. A new review may refresh only safe known
+  sibling-output regular/absent leaf proofs. Own bytes/config/proof and Git context,
+  lexical/resolved paths, symlinks/ancestors, main/bridge/registry and Source's
+  `installed_route` remain strict. Writers require full exact reviewed evidence
+  under lock and at final checks: a post-review change invalidates Save, never
+  silently rebases the reviewed publication. UI keeps original baseline identity,
+  proposal/revision/draft/undo and adopts only its own verified result.
+  **24 real-publisher GUI cases passed**, covering all **12 ordered unit pairs in both legacy
+  and pair modes**, each saving all four units. Focused backend checks: **684 passed**.
+  Source TSV's change includes narrow `same_source` matching in addition to shared
+  safety-helper imports and the protected input filename, not just import changes.
+- **Keyboard options and origins:** unapplied text survives unrelated edits without
+  bypassing or losing Apply. Visible per-row origins distinguish Saved override,
+  Draft override, Current runtime snapshot and Default, not observed. Unapplied text
+  is explicitly labeled **Unapplied text (not in draft)** with the model origin;
+  only applied values enter review. Owned values still take precedence over hints.
+
+#### Overview
+
+Devices exposes draft-only Keyboard, Mouse and Touchpad in both admitted legacy and
+pair editors: 15 keys in 14 rows, with paired keyboard layouts/variants. Raw
+`kb_options` preserves syntactically admitted unknown tags. Mouse and touchpad
+scroll factors are conservatively 0.1–2.0 in 0.1 steps, not an unverified 10.
+There is no live input preview. Touchpad disable-while-typing is not device disable.
+Profiles/window layouts, per-device hardware matching, global device-disable and
+keymap-file editing are excluded. Existing source UI/blank-row guidance is unchanged.
+
+#### API / Interfaces
+
+`core/input.py` owns the closed typed `InputConfig`/baseline/review/result and dedicated
+`attune-input.lua` format. `core/owned_output.py` immediately shares only bindings/
+Input fixed-output safety; Pending/window share review/writer mechanics, not a
+generic framework. Source retains its separate writer with safety-helper imports,
+protected-name updates and narrow `same_source` matching for new reviews. Visual
+v1/v2, `Scope`, registry and journals stay unchanged. See the
+[Input contract](architecture.md#devices--input) for exact keys.
+
+#### Data Flow
+
+Owned-file values are preferred. Unmanaged values show labeled read-only runtime
+hints or fallback defaults, not proven device state. Opening creates no overrides.
+Edit/Reset/Discard/Undo remain local, with layout/variant changes paired in one Undo.
+Ctrl+S prepares the complete bounded Input review; only **Save Reviewed Input**
+starts the direct non-daemon writer with global owner exclusion and close veto.
+Dedicated `input.lock` and private hash-named `input-backups` stay outside Git.
+Verified success adopts only Input; saving any of four units preserves all others'
+drafts, baselines and undo. Uncertain Input locks only Input and retains other units.
+
+#### Edge Cases
+
+Keep regression checks in temporary output/state with process HOME/XDG isolation
+before Python starts. Real publishers belong only in explicit temporary fixtures;
+GTK checks disable compositor IPC and mock runtime hints/mutators. Existing-parent/
+Stow safety, foreign/unknown refusal, stale reviewed evidence, backup/compiler
+failures, repeat saves, writer exclusion, close veto and unit-local uncertainty are
+offline contracts, not live hardware/loading proof. Output may resolve to Linux
+Git/Stow but stays separate machine-side data; user controls commits and Attune never
+stages. State/backups stay outside Git. See the final results and P2 coverage above.
+
+#### Example usage: limited manual acceptance (not yet run)
+
+Use prepared temporary roots, an existing safe output parent and IPC-disabled
+fixtures first. Do not run against watched/user files without explicit approval.
+
+1. In both admitted legacy and pair editors, open Devices. Check Keyboard/Mouse/
+   Touchpad, 14 rows/15 keys, search/Pending navigation, clear **no input preview**
+   wording and labeled unavailable/incomplete hint/default fallback. Opening alone
+   must leave Input clean, with owned values preferred over different runtime hints.
+   Inspect visible per-row Saved/Draft/Runtime/Default origins. Leave keyboard-options
+   text unapplied, edit another row, then Apply: text must survive and be labeled
+   not in draft until applied, without loss or accidental inclusion in review.
+2. Change layout/variant together; exercise Reset, Discard, Pending Revert and one
+   Undo/Redo for the pair. Try raw admitted unknown XKB options. Exercise numlock,
+   repeat, mouse and touchpad rows without input mutation IPC. Check both scroll
+   factors reject values outside 0.1–2.0 or off the 0.1 step.
+3. Leave drafts in Input, source, additional bindings and visuals. Inspect the full
+   Input-only diff, exact lexical/resolved paths and hashes. Edit again and confirm
+   review invalidation. Save Reviewed Input to temporary output, repeat edit/review/
+   Save and reopen. Confirm typed values and override removals persist. Repeat each
+   other unit's Save and check all unsaved units' drafts, baselines and undo survive.
+4. In temporary fixtures, check safe existing Stow links and resolved Git output,
+   missing-parent refusal, foreign/manually edited/unknown data, stale bytes/routes,
+   missing validator and backup failure. Exercise close veto/owner exclusion and
+   uncertain Input outcomes: retain the draft, lock Input only, do not clear others.
+5. Inspect Settings/review guidance: manual `dofile` must use the actual absolute
+   path, **only after output exists**. No automatic include/loader/reload or live
+   mutation. A watched write may nevertheless reload; saved is not loaded.
+
+**Separate future load check, explicit permission required:** after user review and
+approval of a safe loading/rollback plan, manually integrate the existing output
+after authored defaults using its actual absolute path. Deliberately load and check
+supported options, configuration errors and actual keyboard/mouse/touchpad behavior;
+record hardware, unavailable settings and watcher observations. Do not infer any of
+these from compile-only syntax checks or offline saves. No such check is claimed here.
+
+#### Related files
+
+`hyprmod/core/input.py`, `hyprmod/core/owned_output.py`, `hyprmod/core/bindings.py`,
+`hyprmod/pages/input.py`, `hyprmod/pages/pending.py`, `hyprmod/pages/settings.py`,
+`hyprmod/window.py`; `tests/test_input_persistence.py`, `tests/test_input_page.py`,
+`tests/test_input_page_gui.py`, `tests/test_input_workflow_gui.py`. Final parent
+evidence, warning/isolation qualifications and effects limits are recorded above.
+
+### Source shortcut UI correction: earlier validated checkpoint
+
 **UI correction: implemented and validated in code and isolated GTK tests.** The unified
 **Keybindings** list retains all 80 rows in stable order. Every pencil opens
 **Edit Source Shortcut**; there is no Delete button, Assign New or Unassigned expander.
@@ -61,8 +210,8 @@ The on-disk capability guard passes; disabled-key runtime behavior is not yet te
 The user-approved three-file source integration was **deployed on 2026-11-02**;
 read-only runtime inspection observed all 80 expected descriptions with unchanged
 keys, flags and native contexts and zero config errors. Live shortcut **behavior
-remains user-untested**; M0 is not blanket complete. Useful existing bindings acceptance
-remains the priority before Device/Input. Additional managed bindings retain their
+remains user-untested**; M0 is not blanket complete. Device/Input is now delivered
+and validated offline, pending user input acceptance. Additional managed bindings retain their
 earlier automated/isolated GTK checkpoint, not new live loading/capture acceptance.
 Profiles/layout pages remain out of scope.
 
@@ -448,7 +597,9 @@ During that historical automated validation, no live keymaps or authored main we
 no runtime callbacks invoked, and no activation, staging or commits performed.
 Those effects describe the automated checkpoint, not the later approved deployment
 below. Offline equivalence remains distinct from live shortcut behavior acceptance.
-Device/Input waits until the user's keybinding integration is accepted.
+At that historical checkpoint, Device/Input was planned after keybinding acceptance.
+It is now implemented and validated offline, pending user input acceptance
+as recorded at the top; live shortcut acceptance remains separately pending.
 
 This docs-only pass ran no shell, tests, app or compositor commands and changed no
 source/tests. The results above record supplied validation, not new

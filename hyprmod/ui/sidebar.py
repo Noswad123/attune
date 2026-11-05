@@ -199,6 +199,9 @@ class Sidebar:
         display = new_category("Displays")
         add_row(display, "monitors", "Monitors", MONITORS_ICON)
 
+        devices = new_category("Devices")
+        add_row(devices, "input", "Input", "input-mouse-symbolic")
+
         bindings = new_category("Keybindings")
         add_row(bindings, "binds", "Keybindings", "input-keyboard-symbolic")
 

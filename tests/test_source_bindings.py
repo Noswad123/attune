@@ -20,6 +20,7 @@ PROTECTED = (
     "hypr/hyprland.conf",
     "hypr/attune.lua",
     "hypr/attune-bindings.lua",
+    "hypr/attune-input.lua",
     "hypr/keybindings-bridge.lua",
     "hypr/attune-appearance.lua",
     "hypr/attune-displays.lua",

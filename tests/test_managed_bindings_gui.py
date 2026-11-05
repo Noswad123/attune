@@ -13,6 +13,7 @@ from hyprland_socket import MOD_BITS, Bind
 from hyprmod.binds import DISPATCHER_CATEGORIES
 from hyprmod.binds.dialog import BindEditDialog
 from hyprmod.core import bindings, source_bindings
+from hyprmod.core import input as input_config
 from hyprmod.core.ownership import SavedList
 from hyprmod.pages.managed_bindings import ManagedBindingsPage
 from tests.test_keybindings_workflow_gui import open_bindings
@@ -28,6 +29,11 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture
 def widgets(monkeypatch):
+    monkeypatch.setattr(
+        input_config,
+        "persist_reviewed",
+        Mock(side_effect=AssertionError("Explicit temporary input publisher required")),
+    )
     monkeypatch.setattr(
         source_bindings,
         "persist_reviewed",

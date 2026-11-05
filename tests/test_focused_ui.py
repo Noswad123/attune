@@ -59,6 +59,7 @@ class TestFocusedSchema:
             "animations",
             "monitors",
             "binds",
+            "input",
             "pending",
             "health",
             "backups",

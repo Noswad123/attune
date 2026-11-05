@@ -8,6 +8,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Device/Input: implemented and validated offline
+
+- Add draft-only Devices controls for Keyboard, Mouse and Touchpad: 15 typed keys
+  in 14 rows, paired layouts/variants, raw XKB options preserving admitted unknown
+  tags, numlock/repeat, mouse acceleration/sensitivity/handedness/scroll and touchpad
+  natural scroll/tap/disable-while-typing/scroll. Both scroll factors are limited to
+  0.1–2.0 in 0.1 steps, not an unverified maximum of 10.
+- Add independent **Save Reviewed Input** in legacy and pair editors, with complete
+  bounded review, dedicated `attune-input.lua`, `input.lock` and private hash-named
+  backups. Safe parent must exist; Stow links survive and Linux Git output is allowed
+  without staging. Owned values precede labeled read-only runtime/default hints;
+  opening creates no overrides. Layout/variant Reset/Discard share one Undo.
+  Row origins visibly distinguish Saved/Draft/Runtime/Default. Unapplied keyboard
+  options survive unrelated edits and are labeled not in draft until Apply.
+- Share narrow fixed-output safety, review and direct non-daemon writer mechanics
+  immediately between bindings and Input, with global writer exclusion/close veto.
+  Uncertain Input locks only Input; each of four saves preserves other units'
+  drafts, baselines and undo. New reviews refresh only safe known sibling-output
+  regular/absent leaf proofs, keeping own source/Git, paths/symlinks/ancestors,
+  main/bridge/registry and Source installed route strict. Writers require full exact
+  reviewed evidence under lock/final checks; post-review changes invalidate Save,
+  never silently rebase it. UI retains original baseline identity and draft/revision/
+  undo until adopting only its own verified result. Source TSV additionally uses
+  narrow `same_source` matching alongside safety-helper imports/protected names;
+  its stable 80-row/empty-field workflow is unchanged.
+- No input preview/mutation IPC, automatic loader/include/reload, profiles, window
+  layouts, per-device hardware matching, global device-disable or keymap-file editing.
+  Visual v1/v2, registry scopes and pair journals are unchanged. Manual `dofile` uses
+  the actual absolute path only after output exists; saved does not mean loaded.
+- Final parent validation passed: process-isolated full pytest **4,632 passed, 483
+  skipped, 106 warnings, 787.92 seconds (13:07)**; eight isolated Broadway suites
+  **480 passed, 2 skipped, 9,159 warnings, 233.94 seconds (3:53)**. Ruff check `--fix`
+  passed, formatter **218 files unchanged**. Pyright `--level error` reported **0
+  errors, 0 warnings, 0 informations**, not clearance of warnings suppressed by that
+  level; an upgrade-version notice remained. Wheel `dist/attune-0.5.0-py3-none-any.whl`,
+  launcher help and parent `git diff --check` passed. Independent backend/UI review
+  found no remaining material findings; P2s resolved. Sequential real-publisher GUI
+  coverage passed 24 cases; focused backend 684 passed. Full evidence and isolation:
+  [validation](docs/validation.md#deviceinput-validated-offline-user-acceptance-pending).
+- User/live UI and Input acceptance remain **unverified**, requiring permission;
+  user-key runtime acceptance remains separate. No live input writes/loading/reload
+  or IPC mutation, staging or commits. Live hashes were not remeasured in this run.
+  Cursor is next only after user input acceptance. This docs pass records supplied
+  parent results, not newly executed checks. Older counts below are historical.
+
 ### Source shortcut UI correction: implemented and validated
 
 - Keep all 80 rows in one stable Keybindings list. Every pencil opens Edit Source
