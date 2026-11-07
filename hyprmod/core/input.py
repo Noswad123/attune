@@ -1,4 +1,4 @@
-"""Reviewed keyboard, mouse and touchpad overrides. No runtime IPC or Lua evaluation."""
+"""Reviewed device and cursor overrides. No runtime IPC or Lua evaluation."""
 
 import argparse
 import base64
@@ -34,7 +34,7 @@ class OptionSpec:
     minimum: int | float | None = None
     maximum: int | float | None = None
     step: float | None = None
-    choices: tuple[str, ...] = ()
+    choices: tuple[str | int, ...] = ()
 
 
 OPTION_SPECS = MappingProxyType(
@@ -54,9 +54,18 @@ OPTION_SPECS = MappingProxyType(
         "input:sensitivity": OptionSpec(float, 0.0, -1, 1),
         "input:scroll_factor": OptionSpec(float, 1.0, 0.1, 2.0, 0.1),
         "input:touchpad:scroll_factor": OptionSpec(float, 1.0, 0.1, 2.0, 0.1),
+        "cursor:no_warps": OptionSpec(bool, False),
+        "cursor:persistent_warps": OptionSpec(bool, False),
+        "cursor:warp_on_change_workspace": OptionSpec(int, 0, 0, 2, choices=(0, 1, 2)),
+        "cursor:zoom_factor": OptionSpec(float, 1.0, 1, 10),
+        "cursor:inactive_timeout": OptionSpec(float, 0.0, 0, 20),
+        "cursor:hide_on_key_press": OptionSpec(bool, False),
+        "cursor:hide_on_touch": OptionSpec(bool, True),
+        "cursor:hide_on_tablet": OptionSpec(bool, False),
     }
 )
 INPUT_KEYS = frozenset(OPTION_SPECS)
+CURSOR_KEYS = frozenset(key for key in INPUT_KEYS if key.startswith("cursor:"))
 DEFAULTS = MappingProxyType({key: spec.default for key, spec in OPTION_SPECS.items()})
 _XKB_NAME = r"[A-Za-z0-9_][A-Za-z0-9_-]{0,63}"
 _OPTION_TAG = r"[A-Za-z0-9_][A-Za-z0-9_:+.-]{0,127}"
@@ -79,6 +88,8 @@ def normalize_value(key: str, value: Scalar) -> Scalar:
             value = 0.0
     elif type(value) is not spec.value_type:
         raise ValueError("Incorrect input option type")
+    if spec.choices and value not in spec.choices:
+        raise ValueError("Unknown input choice")
     if type(value) is int or type(value) is float:
         if spec.minimum is not None and value < spec.minimum:
             raise ValueError("Input number below minimum")
@@ -91,8 +102,6 @@ def normalize_value(key: str, value: Scalar) -> Scalar:
     if type(value) is str:
         if len(value) > 1024:
             raise ValueError("Input string exceeds limit")
-        if spec.choices and value not in spec.choices:
-            raise ValueError("Unknown input choice")
         if key in {"input:kb_layout", "input:kb_variant", "input:kb_options"}:
             pattern = _OPTION_TAG if key == "input:kb_options" else _XKB_NAME
             tokens = value.split(",")

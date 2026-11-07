@@ -62,7 +62,12 @@ class TestInputDraft:
         assert not model.is_dirty() and not model.locked
         assert model.get_config() == InputConfig()
         assert {entry["key"] for entry in model.get_search_entries()} == backend.INPUT_KEYS
-        assert all(entry["_group_id"] == "input" for entry in model.get_search_entries())
+        assert all(
+            entry["_group_id"] == entry["key"].split(":")[0] for entry in model.get_search_entries()
+        )
+        assert len(model._options) == 23
+        assert sum(len(options) for _label, options in model._sections) == 15
+        assert sum(len(options) for _label, options in model._cursor_sections) == 8
         assert window.mock_calls == []
 
     def test_preserves_raw_owned_values_after_unrelated_edit(self, page):
@@ -146,6 +151,9 @@ class TestInputDraft:
             ("input:repeat_rate", 0),
             ("input:sensitivity", 0.0),
             ("input:kb_options", ""),
+            ("cursor:no_warps", False),
+            ("cursor:warp_on_change_workspace", 0),
+            ("cursor:inactive_timeout", 0.0),
         ],
     )
     def test_value_origin_uses_membership_not_truthiness(self, page, key, value):
@@ -173,6 +181,13 @@ class TestInputDraft:
             ("input:left_handed", "no"),
             ("input:follow_mouse", 1),
             ("input:touchpad:tap_to_click", False),
+            ("cursor:no_warps", 0),
+            ("cursor:warp_on_change_workspace", True),
+            ("cursor:warp_on_change_workspace", 3),
+            ("cursor:zoom_factor", 0.9),
+            ("cursor:zoom_factor", float("nan")),
+            ("cursor:inactive_timeout", 20.1),
+            ("cursor:size", 24),
         ],
     )
     def test_invalid_typed_values_are_atomic(self, page, key, value):
@@ -267,7 +282,7 @@ class TestInputLoading:
         window.hypr.get_live.side_effect = get_live
         model.ensure_loaded()
         drain_until(lambda: not model._loading)
-        assert window.hypr.get_live.call_count == 15
+        assert window.hypr.get_live.call_count == len(backend.INPUT_KEYS)
         assert model._state.get("input:left_handed").live_value is False
         assert dict(model.get_config().values)["input:sensitivity"] == 0.0
         assert not model.is_dirty() and "incomplete" in model._hint_status

@@ -20,9 +20,12 @@ Historical upstream releases remain in [CHANGELOG.md](CHANGELOG.md).
 - General visual options: inner/outer gaps, border size, active/inactive border colors.
 - Decoration, animations, and bezier curves.
 - Monitor configuration with live preview confirmation.
-- Devices: draft-only Keyboard, Mouse and Touchpad controls with independent
-  **Save Reviewed Input** to `attune-input.lua`. Implemented and validated offline;
-  user/live Input acceptance remains unverified. No live input preview or mutation IPC.
+- Devices: draft-only Keyboard, Mouse and Touchpad controls, 15 keys in 14 rows.
+- Cursor: eight native controls in eight rows, implemented with final validation
+  pending. Devices and Cursor share **Save Reviewed Input** to `attune-input.lua`,
+  not separate saves. The user accepted the Input checkpoint and approved Cursor
+  work; this does not prove live loading or device behavior. No input/cursor preview
+  or mutation IPC. See [Cursor validation status](docs/validation.md#cursor-implemented-final-validation-pending).
 - Attune-owned global keyboard bindings: search, add, edit, and delete local drafts,
   with separately reviewed disk persistence. Implemented and validated with automated
   and isolated GTK checks; live keyboard/loading acceptance remains unverified.
@@ -80,9 +83,9 @@ See [ADR 0001](docs/decisions/0001-shared-local-ownership.md).
 Additional managed bindings have an automated validated checkpoint, but useful
 editing of existing bindings remains the priority until live behavior is accepted.
 The source-aware integration is deployed with runtime metadata verified. Device/Input
-is implemented and validated offline, pending user input acceptance.
-Cursor is next only after that input acceptance, with rules, startup and environment
-later. Profiles
+has a historical offline-validated checkpoint accepted by the user. Cursor work was
+then approved and is implemented, pending final validation. Rules, startup and
+environment remain separately scoped later work, not automatic expansion. Profiles
 and layout pages remain out of scope. Manual acceptance remains necessary, but
 migration and automatic scoped foreign-file preservation are deferred and nonblocking,
 not prerequisites for managed bindings or Device/Input.
@@ -297,12 +300,13 @@ Earlier pair-editor counts remain historical.
 
 ### Devices / Input
 
-**Implemented and validated offline; user/live Input acceptance remains unverified.**
-Final parent results: full pytest **4,632 passed, 483 skipped**; eight isolated
+**Historical Devices-only offline checkpoint, now accepted by the user.**
+Its final results were full pytest **4,632 passed, 483 skipped**; eight isolated
 Broadway suites **480 passed, 2 skipped**. Ruff/format, error-level Pyright, wheel,
 help and parent diff checks passed; independent backend/UI review found no remaining
 material findings. See [final evidence and limits](docs/validation.md#deviceinput-validated-offline-user-acceptance-pending)
-for timings, warnings and isolation. Earlier counts elsewhere are historical.
+for timings, warnings and isolation. These results do not validate the Cursor
+extension or prove live loading/device behavior. Cursor final validation is pending.
 The **Devices** page exposes Keyboard, Mouse and Touchpad in admitted legacy and
 existing-pair editors. Its 15 managed keys occupy 14 rows because keyboard layouts
 and variants share one paired editor:
@@ -328,7 +332,7 @@ Saved override, Draft override, Current runtime snapshot or Default, not observe
 Unapplied keyboard-options text survives unrelated edits and is labeled **Unapplied
 text (not in draft)**; use its Apply action to enter it into the draft before review.
 
-Ctrl+S prepares the complete Input-only diff. **Save Reviewed Input** writes only
+Ctrl+S prepares the complete combined Devices/Cursor diff. **Save Reviewed Input** writes only
 `$XDG_CONFIG_HOME/hypr/attune-input.lua` (`~/.config` fallback), a typed closed
 `-- Attune input data v1: ` format, separate from shared appearance and visual v1/v2.
 Nonempty output must regenerate byte-exactly; foreign, manually edited or unknown
@@ -342,7 +346,8 @@ what to commit, and Attune never stages it. Private state stays outside Git at
 `$XDG_STATE_HOME/attune/input.lock` and `input-backups/<sha256>.lua`. Save uses fresh
 route/byte checks, compile-only Lua validation, a direct non-daemon writer, global
 writer-owner exclusion and close veto. Uncertain publication or failed adoption
-retains the draft and locks only Input, without discarding other units' drafts.
+retains the draft and locks both Devices and Cursor as one Input unit, without
+discarding other units' drafts.
 Verified success supports another edit/review/Save and reopening in either editor.
 Sequential saves retain each other unit's own source baseline, draft and undo.
 A new review may refresh only safe known sibling-output regular/absent leaf proofs;
@@ -356,6 +361,50 @@ control or keymap-file editing is added. Touchpad disable-while-typing is not de
 disable, and touchpad settings may have no effect without a touchpad. See the
 [Input contract](docs/architecture.md#devices--input) and
 [user acceptance checklist](docs/validation.md#deviceinput-validated-offline-user-acceptance-pending).
+
+### Cursor
+
+Cursor exposes only the following native `cursor:` options in admitted legacy and
+pair editors. Final validation is pending; this is not a live acceptance claim.
+
+| Key | Type / allowed values | Default |
+| --- | --- | --- |
+| `no_warps` | Boolean | `false` |
+| `persistent_warps` | Boolean | `false` |
+| `warp_on_change_workspace` | Integer: 0 Disable, 1 Enable, 2 Force | `0` |
+| `zoom_factor` | Finite float, 1–10 | `1.0` |
+| `inactive_timeout` | Finite float, 0–20 seconds; 0 never hides | `0.0` |
+| `hide_on_key_press` | Boolean | `false` |
+| `hide_on_touch` | Boolean | `true` |
+| `hide_on_tablet` | Boolean | `false` |
+
+Zoom and timeout use locale-aware numeric entries with explicit **Apply** and
+round-trip float display, without a one-decimal restriction or GTK spin rounding/
+epsilon. The +/− buttons use decimal arithmetic to step by 0.1 and apply. Typed
+text stays outside the draft/review until Apply and survives unrelated edits and
+Undo/Redo; whole-unit Discard and saved-baseline adoption replace it authoritatively.
+Backend floats may be any finite value within bounds, without a grid restriction;
+the public library emission proof can still reject unrepresentable precision
+rather than rewrite it. Types, defaults
+and ranges were checked against `hyprland-schema` 0.7.1's Hyprland v0.56.1 bundle
+and the matching [upstream source](https://raw.githubusercontent.com/hyprwm/Hyprland/v0.56.1/src/config/values/ConfigValues.cpp),
+not every running version or actual device state.
+
+Opening either view creates no overrides. Both share one draft, baseline, read-only
+observation and undo owner. Saved/Draft/Runtime/Default labels describe origins,
+not proven loading. Search, Pending navigation and sidebar badges distinguish the
+views, but Input dirty state is counted once. Editing either invalidates the full
+combined review. **Save Reviewed Input** saves both views and adopts their shared
+baseline; whole-unit Input Discard restores both. Per-row Discard affects that row.
+There is no Cursor-only save or fifth output. The other three units retain their
+drafts, baselines and undo.
+
+The closed Input allowlist is now 23 keys. Existing Devices-only canonical bytes
+and the input v1 record remain unchanged, but older Attune rejects the new Cursor
+keys: this is not downgrade compatibility. Theme/size, environment, `set_cursor`,
+GSettings, hardware and rendering controls are excluded; the inherited theme picker
+remains inactive. See the [shared architecture contract](docs/architecture.md#cursor-shared-input-view)
+and [limited acceptance checklist](docs/validation.md#cursor-implemented-final-validation-pending).
 
 ### Existing canonical-pair editor
 
@@ -755,8 +804,8 @@ to `~/.config/hypr/attune.lua`. Settings does not offer path editing.
    bindings file. **Save Reviewed Source Shortcuts** has its own complete review,
    backup and verified baseline; it preserves the other units' dirty/undo state and
     does not activate the offline main/bridge/data candidate.
-8. Input observes its dedicated owned baseline and optional read-only runtime hints.
-   Local edits enter a separate complete review; **Save Reviewed Input** publishes
+8. Devices and Cursor share Input's owned baseline and optional read-only runtime hints.
+   Local edits enter one complete combined review; **Save Reviewed Input** publishes
    and verifies only that output. Saving any of the four units preserves the other
    units' drafts, saved baselines and undo history. There is no Save Everything.
 
@@ -795,11 +844,13 @@ to `~/.config/hypr/attune.lua`. Settings does not offer path editing.
 
 ### First Input save, then optional manual loading
 
-1. Open Devices in an admitted legacy or pair editor. Check the runtime-hint/default
+1. Open Devices or Cursor in an admitted legacy or pair editor. Check the runtime-hint/default
    label; opening alone must not create pending overrides. Edit a keyboard, mouse or
-   touchpad value. There is **no input preview**, including during Undo/Reset/Discard.
-2. Press Ctrl+S, inspect the full Input diff, hashes and lexical/resolved paths, then
-   choose **Save Reviewed Input** if intended. Other units save separately.
+   touchpad or allowlisted Cursor value. There is **no input/cursor preview**,
+   including during Undo/Reset/Discard.
+2. Press Ctrl+S, inspect the full combined Devices/Cursor diff, hashes and
+   lexical/resolved paths, then choose **Save Reviewed Input** if intended. This
+   saves both views together; the other three units save separately.
 3. Only after the file exists, manually add `dofile` with the **actual absolute path
    from review** to your own Lua entrypoint after your defaults. At this user's
    default location only:

@@ -93,6 +93,8 @@ class SettingsPage:
         group.add(
             Gtk.Label(
                 label=f"Input has a separate fixed output: {input_path}\n"
+                "Devices and Cursor share one draft and save unit. Save Reviewed Input writes "
+                "both together to this single file and clears both drafts atomically. "
                 "Draft only: no live preview. Only after this file exists, manually add dofile "
                 "with this exact absolute path to your own Lua entrypoint after your defaults, "
                 "outside Attune. Attune never inserts an include or sends Input IPC. "

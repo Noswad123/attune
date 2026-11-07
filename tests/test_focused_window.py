@@ -80,6 +80,38 @@ class TestFocusedNavigation:
         source_page = cast(MagicMock, window_module.SourceBindingsPage)
         source_page.return_value.ensure_loaded.assert_not_called()
         source_page.return_value.bind_lifecycle.assert_called_once_with(win)
+        input_page = cast(MagicMock, window_module.InputPage)
+        input_page.assert_called_once()
+        input_page.return_value.build.assert_called_once()
+        input_page.return_value.build_cursor.assert_called_once()
+        input_page.return_value.bind_lifecycle.assert_called_once_with(win)
+
+    @pytest.mark.parametrize("group_id", ["input", "cursor"])
+    def test_shared_input_navigation_loads_and_highlights(self, group_id):
+        win = MagicMock()
+        win._page_titles = {"input": "Input", "cursor": "Cursor"}
+        win._monitors_page = None
+        win.show_page = MethodType(HyprModWindow.show_page, win)
+        win._page_stack.get_visible_child_name.return_value = group_id
+        key = f"{group_id}:no_warps" if group_id == "cursor" else "input:kb_options"
+        HyprModWindow.navigate(win, group_id, option_key=key)
+        win._input_page.ensure_loaded.assert_called_once_with()
+        win._input_page.highlight_option.assert_called_once_with(key)
+        win._sidebar.select_row.assert_called_once_with(group_id)
+
+    def test_input_and_cursor_badges_count_shared_pending_once(self):
+        win = MagicMock()
+        win.app_state.options = {}
+        win._animations_page = win._monitors_page = None
+        win._managed_bindings_page = win._source_bindings_page = None
+        win._input_page.iter_pending_changes.return_value = [
+            MagicMock(navigate_to="input"),
+            MagicMock(navigate_to="cursor"),
+            MagicMock(navigate_to="cursor"),
+        ]
+        HyprModWindow._update_sidebar_badges(win)
+        win._sidebar.update_badges.assert_called_once_with({"input": 1, "cursor": 2, "pending": 3})
+        win._pending_chips.set_count.assert_called_once_with(3)
 
     def test_health_navigation_ensures_lazy_load(self):
         win = MagicMock()

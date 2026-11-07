@@ -1,5 +1,9 @@
 """Scalar option rows: bool switch, int/float spinners, vec2 pair of spinners."""
 
+import locale
+import math
+from decimal import Decimal
+
 from gi.repository import Adw, Gtk
 
 from hyprmod.ui.managed_row import make_spin_float_row, make_spin_int_row
@@ -69,6 +73,54 @@ class SpinFloatOptionRow(OptionRow):
 
     def _set_widget_value(self, value):
         self._spin.set_value(float(value))
+
+
+class PreciseFloatOptionRow(OptionRow):
+    """Explicit numeric Apply with decimal steps, independent of GTK spin tolerances."""
+
+    row: Adw.EntryRow
+
+    def __init__(self, option, value, on_change, on_reset, on_discard=None):
+        row = Adw.EntryRow(title=option.get("label", option["key"]))
+        row.set_show_apply_button(True)
+        super().__init__(row, option, on_change, on_reset, on_discard)
+        self._set_widget_value(value)
+        step = option["step"]
+        for direction, icon, action in (
+            (-1, "list-remove-symbolic", "Decrease"),
+            (1, "list-add-symbolic", "Increase"),
+        ):
+            button = Gtk.Button(icon_name=icon, valign=Gtk.Align.CENTER)
+            button.set_tooltip_text(f"{action} by {step} and apply")
+            button.add_css_class("flat")
+            button.connect("clicked", lambda _button, d=direction: self.apply_increment(d))
+            row.add_suffix(button)
+        self._change_handler_id = row.connect("apply", lambda _row: self.apply_increment(0))
+
+    def apply_increment(self, direction: int):
+        try:
+            value = locale.atof(self.row.get_text())
+            if not math.isfinite(value) or not self.option["min"] <= value <= self.option["max"]:
+                raise ValueError("Number outside range")
+            if direction:
+                value = float(Decimal(str(value)) + direction * Decimal(str(self.option["step"])))
+            if not math.isfinite(value) or not self.option["min"] <= value <= self.option["max"]:
+                raise ValueError("Number outside range")
+        except ValueError:
+            self.flash_error()
+            self.row.set_tooltip_text(
+                f"Enter a finite number from {self.option['min']} to {self.option['max']}. "
+                "Not applied."
+            )
+            return
+        if value != self._value:
+            self._emit_change(value)
+        else:
+            self.set_value_silent(value)
+
+    def _set_widget_value(self, value):
+        self._value = float(value)
+        self.row.set_text(locale.localize(repr(self._value), grouping=False))
 
 
 class Vec2OptionRow(OptionRow):

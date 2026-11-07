@@ -1,6 +1,6 @@
 # Attune roadmap
 
-Updated: 2026-11-03 UTC
+Updated: 2026-11-05 UTC
 
 ## Direction
 
@@ -41,13 +41,16 @@ The approved Delete-capable bridge-only deployment completed on 2026-11-03 UTC:
 installed `1d1023aa...` supports both capabilities, with main Lua and mappings unchanged.
 Installed-default pencil/clear/Update Pending/Review Source/Save Source needs no
 deployment. No user data was deleted or disabled by this documentation pass.
-**Device/Input is implemented and validated offline, pending user input acceptance.**
-Full pytest: **4,632 passed, 483 skipped**; eight isolated Broadway suites:
+**Current Cursor delivery: implemented, final validation pending.** The user accepted
+the Input checkpoint ("so far so good") and approved Cursor work with "continue"
+after Cursor was proposed next. This is not live Input loading/device proof.
+Historical Devices-only full pytest: **4,632 passed, 483 skipped**; eight isolated Broadway suites:
 **480 passed, 2 skipped**. Required checks/build/help and parent diff check passed;
 independent backend/UI review found no remaining material findings. Existing-shortcut
 live acceptance remains pending independently. Earlier counts below are historical.
-Cursor is next only after user input acceptance; rules, startup and environment
-follow later. Profiles and layout pages remain off scope. Canonical-pair editing has an
+Those counts do not validate Cursor. See [pending final checks](docs/validation.md#cursor-implemented-final-validation-pending).
+Rules, startup and environment remain separately scoped later work, not automatic
+expansion. Profiles and layout pages remain off scope. Canonical-pair editing has an
 earlier validated checkpoint; its results do not validate the new bindings feature.
 Live acceptance remains pending. Migration and automatic scoped foreign preservation
 are parked, nonblocking work, not prerequisites for feature breadth.
@@ -59,7 +62,17 @@ Implemented in the development checkout:
   Independent reviewed Save to `attune-input.lua`, dedicated lock/private backups,
   existing-parent/Stow safety and unit-local uncertainty. No input preview, mutation
   IPC, automatic loader/include/reload, or visual v1/v2/registry/journal expansion.
-  Final parent offline validation passed; user/live Input acceptance remains unverified.
+  Historical offline validation passed; the user accepted the checkpoint, not live loading/device proof.
+- Cursor: eight native keys/eight widgets, draft-only, sharing Input's single owner,
+  combined review/Save/Discard/baseline/undo, output, lock and backups. The closed
+  Input allowlist is 23 keys; no fifth save unit, visual scope, registry or journal.
+  Zoom/timeout use precise locale-aware entries with explicit Apply and decimal 0.1
+  +/− steps that apply, without a one-decimal grid. Unapplied numeric text survives
+  unrelated edits/Undo/Redo outside review; Discard/saved adoption are authoritative.
+  Backend finite/bounded floats retain public library emission-proof refusal for
+  unrepresentable precision. Other float spin rows remain unchanged.
+  Theme/size/environment, `set_cursor`, GSettings and hardware/render controls are
+  excluded. Final validation remains pending; no live behavior is claimed.
 - Existing shortcuts tab with Open Prepared Source Mappings, key/description/enabled
   TSV edits, complete source review and independent Save. IDs/context/submap/base flags/
   order and authored actions remain unchanged. Candidate main/bridge/80 stable IDs
@@ -115,10 +128,12 @@ Product order now takes precedence over the historical M-number sequence:
    The UI correction is implemented and validated. Next: user pencil/clear/
    Update Pending/Review Source/Save Source against installed defaults and live acceptance.
    Earlier additional-binding checks do not establish this acceptance.
-2. Device/Input: implemented and validated offline; complete user input acceptance
-   using the [limited checklist](docs/validation.md#deviceinput-validated-offline-user-acceptance-pending).
-3. Cursor is next only after user input acceptance. Rules, startup and environment
-   remain separately scoped later slices.
+2. Device/Input: historical offline checkpoint accepted by the user. Keep its
+   [evidence and limits](docs/validation.md#deviceinput-validated-offline-user-acceptance-pending),
+   without inferring live loading/device verification.
+3. Cursor: approved and implemented, pending final checks and the
+   [limited checklist](docs/validation.md#cursor-implemented-final-validation-pending).
+   Rules, startup and environment remain separately scoped later slices.
 
 Do not add profiles/layout pages or require more migration/foreign-repair machinery
 before these features. Existing mutating live checks still require explicit permission.
@@ -242,6 +257,9 @@ restore snapshot TSV over later edits.
 
 ### Device/Input: validated offline, user acceptance pending
 
+Historical Devices-only checkpoint. The user subsequently accepted this checkpoint
+and approved Cursor work; these counts are not current Cursor validation or live proof.
+
 Devices exposes Keyboard, Mouse and Touchpad in both admitted legacy and pair editors.
 Local edit/review/**Save Reviewed Input**/reopen/repeat uses a typed closed dedicated
 `attune-input.lua`, not shared appearance v2 or a third registry scope. Bindings and
@@ -250,7 +268,7 @@ source retains its independent TSV workflow with safety-helper imports, protecte
 name updates and narrow `same_source` review matching. All four save units retain
 the others' drafts/baselines/undo.
 
-- Implemented: 15 allowlisted keys in 14 rows, paired layout/variant operations and
+- Implemented at this checkpoint: 15 Devices keys in 14 rows, paired layout/variant operations and
   one Undo, raw unknown XKB option preservation, labeled read-only runtime/default
   fallbacks with owned data preferred, no overrides merely from opening the page.
 - Implemented: complete bounded worker review, direct non-daemon writer, global
@@ -272,9 +290,13 @@ the others' drafts/baselines/undo.
 - [x] Preserve unapplied keyboard-options text across unrelated edits, without
   bypassing Apply. Visible row origins distinguish Saved/Draft/Runtime/Default and
   explicitly label unapplied text as not in the draft.
-- [ ] Complete user input acceptance, then consider Cursor. Manual `dofile` uses the
-  actual absolute path only after output exists. Future live loading/checks require
-  explicit permission; persistence is not loading and no live success is claimed.
+- [x] User checkpoint acceptance ("so far so good"), followed by approval to proceed
+  with Cursor ("continue"). This is scope approval, not live loading/device proof.
+- [ ] Complete final Cursor validation and record actual results. Devices and Cursor
+  must share one complete review/Save with edit invalidation from either view, one
+  dirty/undo unit and shared locking on uncertainty, retaining all other units.
+  Manual `dofile` uses the actual absolute path only after output exists. Future live
+  loading/checks require explicit permission; persistence is not loading.
 
 No live input preview/mutations, automatic include/reload, profiles, window layouts,
 per-device hardware matching, global device disable or keymap-file editing. Touchpad

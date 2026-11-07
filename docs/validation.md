@@ -5,13 +5,118 @@ M0 checks in [ROADMAP.md](../ROADMAP.md) remain pending explicit manual acceptan
 
 ## Current status
 
+### Cursor: implemented, final validation pending
+
+#### Overview
+
+The user accepted the Input checkpoint with "so far so good". After Cursor was
+proposed next, "continue" approved that narrow work. This is not proof that live
+Input output was loaded or actual devices verified. Cursor code is implemented;
+final validation results are pending. No current pass/skip totals or completion
+claim is made. The Devices-only **4,632/483** full and **480/2** GUI results below
+are historical, not validation of the Cursor extension. Rules, startup and
+environment remain later, separately scoped work.
+
+#### API / Interfaces
+
+The closed Input allowlist is 23 keys: Devices retains 15 keys/14 widgets and Cursor
+adds eight native keys/eight widgets. Exact types, ranges and defaults are in the
+[shared Cursor contract](architecture.md#cursor-shared-input-view). These were
+checked against `hyprland-schema` 0.7.1's bundled Hyprland v0.56.1 catalog and the
+matching [upstream source](https://raw.githubusercontent.com/hyprwm/Hyprland/v0.56.1/src/config/values/ConfigValues.cpp),
+not every running version. Zoom/timeout now use `PreciseFloatOptionRow` entries:
+explicit Apply, locale-aware round-trip display and decimal-arithmetic 0.1 +/−
+buttons that apply. There is no one-decimal restriction or GTK spin rounding/
+epsilon. Backend floats remain finite/bounded without a grid restriction; public
+library emission proof may reject unrepresentable precision rather than rewrite it.
+Other float spin rows are unchanged.
+
+#### Data Flow
+
+One `InputPage` owns Devices and Cursor, including one read-only observation,
+draft/baseline, `_input_page` undo snapshots and dirty contribution. Separate
+widgets/search/Pending navigation/badges do not create a fifth save unit.
+**Save Reviewed Input** consumes the full combined review, invalidated by edits in
+either view, and saves/adopts both together to `attune-input.lua` with the existing
+lock/backups. Whole-unit Input Discard restores both. Uncertainty locks both views
+as one unit, retaining the other three units' drafts/baselines/undo.
+
+#### Final checks awaiting results
+
+| Evidence to record | Status |
+| --- | --- |
+| Full-tree Ruff check/format and Pyright, including level/warning qualifications | Pending final results |
+| Process HOME/XDG-isolated full pytest, exact counts/warnings/timing | Pending final results |
+| IPC-disabled isolated GUI suites, including Cursor suites; exact results/isolation/cleanup | Pending final results |
+| Backend/UI review findings and resolutions | Pending final results |
+| Wheel, launcher help and diff checks | Pending final results |
+
+Record actual outcomes here only when available, including failures, skipped or
+unrun checks. Preserve process HOME/XDG isolation before Python starts, temporary
+real publishers only, warning qualifications and effects limits. Source inspection
+and existing test cases are not passing execution results. No live-loading/device
+acceptance is established by this record.
+
+Focused checks of decimal steps from defaults and saved fractional values through
+real temporary reviewed Save were reported passing, without supplied totals here.
+This is focused evidence only, not final-suite validation or live acceptance.
+
+#### Edge Cases
+
+Opening either view must create no overrides; Saved/Draft/Runtime/Default origins
+must not imply actual device/loading proof. Devices-only canonical bytes remain
+frozen under input v1, but older Attune rejects new Cursor keys, so this is not
+downgrade compatibility. Theme/size/environment, `set_cursor`, GSettings and
+hardware/render controls are excluded; the inherited theme picker stays inactive.
+There is no preview/mutation IPC or automatic include/reload. A watched save can
+nevertheless reload, so live-path writes/loading require separate explicit approval.
+
+#### Example usage: limited manual checklist (pending)
+
+Use prepared temporary HOME/XDG roots, an existing safe output parent and
+IPC-disabled fixtures first. This checklist authorizes no watched/live writes.
+
+1. In both admitted editor modes, open Devices and Cursor in either order. Check
+   14 Devices widgets/15 keys and eight Cursor widgets/keys, origins, no overrides
+   from opening and one observation. Search/Pending must navigate to the correct
+   view; badges must not double-count Input dirty state.
+2. Edit values in both views; exercise per-row Reset/Discard, shared Undo/Redo and
+   whole-unit Input Discard. Preserve unapplied XKB text across Cursor edits.
+   Check workspace warp integer choices and zoom/timeout locale-aware precision,
+   explicit Apply and decimal 0.1 +/− steps through real temporary reviewed Save,
+   starting from defaults and saved fractions. Unapplied numeric text must stay out
+   of draft/review across unrelated edits/Undo/Redo; whole-unit Discard and saved
+   adoption must refresh it authoritatively. Check bounds without mutation IPC.
+   Backend finite in-range non-step floats remain admitted, subject to separate
+   public library emission proof, with refusal rather than precision rewriting.
+3. Inspect one full combined review, then edit in either view and confirm the old
+   review cannot Save. Save Reviewed Input to temporary output, repeat and reopen;
+   both views must adopt the verified baseline and clear only shared Input undo.
+   Other units' saves must preserve the combined draft/baseline/undo and vice versa.
+4. With temporary fixtures, exercise stale/foreign/unknown output refusal,
+   Stow/existing-parent safety, writer exclusion/close veto and uncertain publication
+   or failed adoption: retain drafts, lock both views, leave other units intact.
+5. Check manual `dofile` guidance uses the actual absolute path only after output
+   exists. Any later live load/device check needs explicit approval and a safe
+   rollback plan; record version, actual effects and untested cases separately.
+
+#### Related files
+
+`hyprmod/core/input.py`, `hyprmod/pages/input.py`, `hyprmod/pages/pending.py`,
+`hyprmod/window.py`, `hyprmod/ui/options/numeric.py`; `tests/test_cursor_input.py`,
+`tests/test_cursor_page_gui.py`, `tests/test_cursor_workflow_gui.py` and the existing
+Input persistence/page/workflow regressions. These are coverage locations, not
+reported final results.
+
 ### Device/Input: validated offline, user acceptance pending
 
-**Implemented and validated offline. User/live UI and Input acceptance remain
-UNVERIFIED and require explicit permission.** The following are the final validation
-results for this implementation. Earlier
-source/bindings/pair counts below remain historical. Cursor is next only after user
-input acceptance; user-key runtime acceptance is a separate outstanding check.
+**Historical Devices-only checkpoint.** At this checkpoint user acceptance was
+pending; the user subsequently accepted it and approved Cursor work as recorded
+above. Live loading/device verification remains unproven and requires explicit
+permission. The following final results retain their original Devices-only scope,
+warnings and isolation qualifications, not current Cursor validation. Earlier
+source/bindings/pair counts below remain historical; user-key runtime acceptance
+is a separate outstanding check.
 
 #### Final validation
 
@@ -210,8 +315,9 @@ The on-disk capability guard passes; disabled-key runtime behavior is not yet te
 The user-approved three-file source integration was **deployed on 2026-11-02**;
 read-only runtime inspection observed all 80 expected descriptions with unchanged
 keys, flags and native contexts and zero config errors. Live shortcut **behavior
-remains user-untested**; M0 is not blanket complete. Device/Input is now delivered
-and validated offline, pending user input acceptance. Additional managed bindings retain their
+remains user-untested**; M0 is not blanket complete. Device/Input's offline checkpoint
+has since been accepted by the user; Cursor final validation is pending as recorded
+at the top, without live loading/device proof. Additional managed bindings retain their
 earlier automated/isolated GTK checkpoint, not new live loading/capture acceptance.
 Profiles/layout pages remain out of scope.
 
@@ -598,8 +704,9 @@ no runtime callbacks invoked, and no activation, staging or commits performed.
 Those effects describe the automated checkpoint, not the later approved deployment
 below. Offline equivalence remains distinct from live shortcut behavior acceptance.
 At that historical checkpoint, Device/Input was planned after keybinding acceptance.
-It is now implemented and validated offline, pending user input acceptance
-as recorded at the top; live shortcut acceptance remains separately pending.
+Its offline checkpoint has since been accepted by the user and Cursor work approved,
+with final Cursor validation pending as recorded at the top. Neither establishes
+live loading/device proof; live shortcut acceptance remains separately pending.
 
 This docs-only pass ran no shell, tests, app or compositor commands and changed no
 source/tests. The results above record supplied validation, not new

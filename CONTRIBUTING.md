@@ -83,10 +83,13 @@ For M3.6a's separate opt-in recovery widgets, use the same Broadway environment
 with `tests/test_scope_recovery_gui.py` and `tests/test_pair_editor_gui.py`. Also run
 `tests/test_managed_bindings_gui.py`, `tests/test_keybindings_workflow_gui.py`
 and `tests/test_source_bindings_gui.py` for bindings, plus `tests/test_input_page_gui.py`
-and `tests/test_input_workflow_gui.py` for Input. All eight suites use IPC-disabled
+and `tests/test_input_workflow_gui.py` for Input, plus `tests/test_cursor_page_gui.py`
+and `tests/test_cursor_workflow_gui.py` for the shared Cursor view. These suites use IPC-disabled
 isolation. Mutators are mocked by default; explicitly real source, managed-bindings,
 Input and pair publishers are allowed only against temporary output/state/store fixtures.
-All eight suites' results are in `docs/validation.md`. Focused service/wiring coverage is in
+Historical eight-suite Input results and pending Cursor results are distinguished in
+`docs/validation.md`. Cursor backend coverage is in `tests/test_cursor_input.py`.
+Focused service/wiring coverage is in
 `tests/test_scoped_recovery.py`, `tests/test_layout_guard.py`, and
 `tests/test_startup_layout.py`; run these alongside legacy persistence, restoration,
 and recovery regressions. Coverage is not a claim that final validation passed.
@@ -143,9 +146,27 @@ Things to avoid:
 
 ## Scope
 
-- Device/Input is implemented and validated offline, pending user input acceptance.
+- The user accepted the offline-validated Device/Input checkpoint ("so far so good")
+  and then approved Cursor work with "continue" after Cursor was proposed next.
+  This permits the narrow Cursor slice, not a claim of live Input loading or device
+  verification. Cursor is implemented, pending final validation. Rules, startup and
+  environment remain separately scoped later work, with no automatic expansion.
   Devices exposes 15 typed keys in 14 Keyboard/Mouse/Touchpad rows in
-  admitted legacy and pair editors. Keep the closed allowlist in `core/input.py`:
+  admitted legacy and pair editors. The closed allowlist in `core/input.py` now has
+  23 keys, including eight native Cursor keys in eight widgets:
+  `no_warps`, `persistent_warps`, integer `warp_on_change_workspace` (0/1/2),
+  `zoom_factor` (finite 1–10), `inactive_timeout` (finite 0–20, 0 never),
+  `hide_on_key_press`, `hide_on_touch`, `hide_on_tablet`, all under `cursor:`.
+  Boolean defaults are false except hide-on-touch true; warp defaults to 0, zoom
+  to 1.0 and timeout to 0.0. Only these two Cursor floats use `PreciseFloatOptionRow`:
+  locale-aware round-trip `Adw.EntryRow` display, explicit Apply and decimal 0.1
+  +/− buttons that apply, not a one-decimal grid or GTK spin rounding/epsilon.
+  Preserve unapplied numeric text outside draft/review across unrelated edits and
+  Undo/Redo; whole-unit Discard and saved adoption are authoritative. Backend floats
+  stay finite/bounded without step restriction. Retain public library typed-emission
+  proof, refusing unrepresentable precision rather than rewriting or hand-emitting it.
+  Leave existing `SpinFloatOptionRow` behavior unchanged; do not generalize this
+  two-row widget into a framework. Keep the existing Devices keys:
   paired layouts/variants, raw XKB options preserving admitted unknown tags, numlock,
   repeat, mouse and touchpad controls. Both scroll factors stay at 0.1–2.0 in 0.1
   steps, not an unverified 10. No profiles/window layouts, per-device matching,
@@ -156,6 +177,17 @@ Things to avoid:
   Preserve unapplied keyboard-options text across unrelated edits without bypassing
   Apply. Keep visible Saved/Draft/Runtime/Default origins and explicit unapplied-not-
   in-draft labeling; runtime/default values are not proof of hardware state.
+- Cursor is a separate widget from `InputPage.build_cursor()`, not a second state
+  owner. Devices/Cursor share one observation, draft, baseline and `_input_page`
+  undo snapshots. Search/Pending/badges navigate their own views, dirty counted once.
+  Edits in either invalidate the full combined review. Save Reviewed Input saves
+  and adopts both views together; whole-unit Input Discard restores both. Preserve
+  the other three units' drafts/baselines/undo. Uncertainty locks both views as one
+  unit, not the others. Keep Devices-only canonical bytes and the input v1 record
+  frozen; older Attune rejects new Cursor keys, so do not claim downgrade support.
+  No theme/size/environment, `set_cursor`, GSettings or hardware/render controls;
+  the inherited theme picker remains inactive. See the
+  [Cursor contract](docs/architecture.md#cursor-shared-input-view).
 - Input uses only dedicated `attune-input.lua`, `input.lock` and private
   `input-backups`, not shared appearance v2, a third `Scope`, registry or pair journals.
   Share narrow fixed-output safety/review/writer mechanics immediately with bindings
@@ -170,10 +202,11 @@ Things to avoid:
   Normal edit/review/Save/reopen/repeat must work in both admitted editor modes.
   No automatic loader/include/reload; manual `dofile` uses the actual absolute path
   only after output exists. Persistence is not loading; watched writes may reload.
-  Final parent offline validation passed; retain its warnings/isolation qualifications
-  separately from earlier counts. Follow the [Input validation and user checklist](docs/validation.md#deviceinput-validated-offline-user-acceptance-pending);
-  future live loading/checks need explicit permission. Cursor follows only after user
-  input acceptance. Existing source UI/last-row empty-field guidance is unchanged.
+  Historical Devices-only final validation passed; retain its warnings/isolation
+  qualifications and counts as history, not Cursor evidence. Record final Cursor
+  results only once available under [Cursor validation](docs/validation.md#cursor-implemented-final-validation-pending).
+  Future live loading/checks need explicit permission. Existing source UI/last-row
+  empty-field guidance is unchanged.
 - For sequential independent saves, retain each page's original own-source/draft
   baseline identity and undo. Baselines carry explicit separate `protected` proofs.
   A new review may refresh only safe known sibling-output regular/absent leaf facts;
@@ -196,9 +229,10 @@ Things to avoid:
   UI correction; its supplied final results are in
   [current validation](docs/validation.md#ui-only-correction-final-validation).
   Entering a key from blank defaults Enabled on. Live behavior remains unverified.
-- Existing Keybindings still need live acceptance. Device/Input is validated offline,
-  pending user input acceptance; Cursor is next only
-  after that input acceptance, with rules, startup, and environment later.
+- Existing Keybindings still need live acceptance. The user accepted the Input
+  checkpoint and approved narrow Cursor work, implemented pending final validation;
+  neither establishes live loading/device behavior. Rules, startup and environment
+  remain later, separately approved slices.
   Additional managed bindings have a validated checkpoint; source-aware editing is
   implemented and validated offline; the approved compatible bridge-only update is
    installed for Disable and unassignment. True Delete/unassignment is implemented and

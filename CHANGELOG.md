@@ -8,7 +8,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Cursor: implemented, final validation pending
+
+- Add eight draft-only native Cursor controls: `no_warps`, `persistent_warps`,
+  integer `warp_on_change_workspace` (0 Disable / 1 Enable / 2 Force), `zoom_factor`
+  (1–10), `inactive_timeout` (0–20 seconds, 0 never), and hide-on-key/touch/tablet.
+  Defaults are false for booleans except hide-on-touch true, workspace warp 0,
+  zoom 1.0 and timeout 0.0. Zoom/timeout now use `PreciseFloatOptionRow` entries with
+  explicit Apply, locale-aware round-trip display and decimal-arithmetic 0.1 +/−
+  buttons that apply. No one-decimal restriction or GTK spin rounding/epsilon.
+  Unapplied numeric text stays outside draft/review across unrelated edits/Undo/Redo;
+  whole-unit Discard and saved adoption replace it. Existing float spin rows are
+  unchanged. Backend floats remain finite/bounded without a grid restriction;
+  public library emission proof may reject precision, never silently rewrite it.
+  Types/defaults/ranges
+  were checked against schema 0.7.1's v0.56.1 bundle and matching upstream source,
+  not every running compositor version.
+- Expand the closed `InputConfig` allowlist from 15 to 23 keys. Devices retains
+  15 keys/14 widgets; Cursor has eight keys/eight widgets. One `InputPage` owns both
+  views, observations, draft/baseline and undo. Search/Pending/badges navigate each
+  view without double-counting Input dirty state. Editing either invalidates review;
+  **Save Reviewed Input** reviews/saves/adopts both together through the existing
+  `attune-input.lua`, lock and backups. Whole-unit Discard restores both; uncertainty
+  locks both views, not the other three save units. No fifth output or visual scope.
+- Preserve Devices-only canonical bytes and input v1. Older Attune rejects Cursor
+  keys; no downgrade compatibility is claimed. Opening creates no overrides, hints
+  retain Saved/Draft/Runtime/Default labels, and there is no preview/mutation IPC or
+  automatic loader/reload. Theme/size/environment, `set_cursor`, GSettings and
+  hardware/render controls remain excluded; inherited theme picker stays inactive.
+- The user accepted the Input checkpoint ("so far so good") and then approved Cursor
+  work with "continue". This is scope approval, not live-loading/device proof.
+  Final Cursor checks and results remain pending in
+  [validation](docs/validation.md#cursor-implemented-final-validation-pending).
+  Devices-only counts below are historical, not current Cursor results.
+
 ### Device/Input: implemented and validated offline
+
+Historical Devices-only checkpoint. User checkpoint acceptance and subsequent Cursor
+scope approval are recorded above; live loading/device behavior remains unproven.
 
 - Add draft-only Devices controls for Keyboard, Mouse and Touchpad: 15 typed keys
   in 14 rows, paired layouts/variants, raw XKB options preserving admitted unknown
@@ -47,11 +84,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   found no remaining material findings; P2s resolved. Sequential real-publisher GUI
   coverage passed 24 cases; focused backend 684 passed. Full evidence and isolation:
   [validation](docs/validation.md#deviceinput-validated-offline-user-acceptance-pending).
-- User/live UI and Input acceptance remain **unverified**, requiring permission;
+- At this checkpoint user/live UI and Input acceptance remained **unverified**;
   user-key runtime acceptance remains separate. No live input writes/loading/reload
   or IPC mutation, staging or commits. Live hashes were not remeasured in this run.
-  Cursor is next only after user input acceptance. This docs pass records supplied
-  parent results, not newly executed checks. Older counts below are historical.
+  At that checkpoint Cursor required user input acceptance, now supplied as described
+  above. These results do not validate the Cursor extension. Older counts below are historical.
 
 ### Source shortcut UI correction: implemented and validated
 

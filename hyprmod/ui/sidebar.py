@@ -201,6 +201,7 @@ class Sidebar:
 
         devices = new_category("Devices")
         add_row(devices, "input", "Input", "input-mouse-symbolic")
+        add_row(devices, "cursor", "Cursor", "hyprmod-cursor-symbolic")
 
         bindings = new_category("Keybindings")
         add_row(bindings, "binds", "Keybindings", "input-keyboard-symbolic")

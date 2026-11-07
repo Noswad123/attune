@@ -46,6 +46,7 @@ _CATEGORY_ORDER = (
     "Source Shortcuts",
     "Keybindings",
     "Input",
+    "Cursor",
 )
 
 # Visual label and CSS class for each kind of change.
@@ -297,6 +298,15 @@ class PendingChangesPage:
             return
         button.set_visible(True)
         box.append(Gtk.Label(label=f"{label}: independent save unit", xalign=0))
+        if is_input:
+            box.append(
+                Gtk.Label(
+                    label="Devices and Cursor share this complete review. Save Reviewed Input "
+                    "writes both together to attune-input.lua and clears both drafts atomically.",
+                    xalign=0,
+                    wrap=True,
+                )
+            )
         baseline = page.baseline
         if baseline is None or page.locked:
             box.append(

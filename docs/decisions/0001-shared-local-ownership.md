@@ -22,9 +22,10 @@ live behavior remains unverified. Entering a key from blank defaults Enabled on.
 Deliver normal edit, review, Save, and continued editing for an **existing explicitly
 registered canonical pair**, using the mature journaled writer. Do not make automatic
 scoped foreign preservation or migration a prerequisite for that path. Current user
-priority includes existing Keybindings live acceptance. Device/Input is now delivered
-and validated offline, pending user input acceptance; Cursor is next
-only after that input acceptance, with rules, startup and environment later. Additional
+priority includes existing Keybindings live acceptance. The user accepted the
+offline-validated Input checkpoint and approved narrow Cursor work, now implemented
+pending final validation. This is not proof of live Input loading/device behavior.
+Rules, startup and environment remain separately scoped later work. Additional
 managed bindings and source-aware editing are implemented and validated offline;
 source integration deployment is complete with all-80 runtime metadata verified,
 while live shortcut behavior acceptance remains pending. Profiles/layout
@@ -33,7 +34,7 @@ foreign preservation is **deferred, nonblocking** work, not a b6 recovery-founda
 shipping gate. The detailed recovery checkpoints below document support capabilities,
 not an obligation to complete every edge case before shipping main features.
 
-### Independent Input addition
+### Independent Input addition, shared Devices/Cursor unit
 
 Input is a separate machine-side `$XDG_CONFIG_HOME/hypr/attune-input.lua` with a
 typed closed input v1 record, dedicated `input.lock` and private `input-backups`.
@@ -44,16 +45,40 @@ controls commits and Attune never stages. State/backups remain outside Git.
 Bindings and Input share narrow fixed-output safety/review/writer mechanics,
 not a generic framework. Source TSV keeps its separate writer and stable UI.
 
-Appearance/displays, Input, source shortcuts and additional bindings are four
-independent save units preserving each other's drafts, baselines and undo. Input
-uncertainty locks only Input. No input preview/mutation IPC or automatic loader/
+The closed `InputConfig` allowlist now has 23 keys: Devices' existing 15 keys/14
+widgets plus eight native Cursor keys/eight widgets. One `InputPage` owns both
+views; `build_cursor()` adds a widget, not another draft/baseline/undo owner.
+**Save Reviewed Input** requires the complete combined Devices/Cursor review,
+invalidated by edits in either view, and saves/adopts both together. Whole-unit
+Input Discard restores both, while per-row Discard remains local to that row.
+Devices-only canonical bytes and the input v1 record stay unchanged, but older
+Attune rejects the new Cursor keys: no downgrade compatibility is implied.
+
+Zoom/timeout's two precise numeric entries require explicit Apply, preserve float
+precision in locale-aware round-trip display and offer decimal 0.1 +/− steps that
+apply. Unapplied text is outside draft/review and survives unrelated edits/Undo/Redo;
+whole-unit Discard and saved adoption remain authoritative. Backend finite/bounded
+floats have no grid restriction, but public library emission proof may refuse
+precision rather than rewrite it. Existing float spin rows remain unchanged; this
+small widget adds no generic framework or new ownership boundary.
+
+Appearance/displays, Input (Devices and Cursor), source shortcuts and additional
+bindings remain four independent save units preserving each other's drafts,
+baselines and undo. No fifth output, scope, registry member or pair journal is
+added. Input uncertainty locks both views, not other units. No input/cursor
+preview/mutation IPC or automatic loader/
 include/reload is added. Manual `dofile` uses the actual absolute path only after
-output exists; persistence is not loading proof. Final parent offline validation
-passed: full pytest **4,632 passed, 483 skipped**; eight isolated Broadway suites
-**480 passed, 2 skipped**. User/live UI and Input acceptance remain unverified and
-require permission, independently of user-key runtime acceptance. See the
+output exists; persistence is not loading proof. Historical Devices-only offline
+validation passed: full pytest **4,632 passed, 483 skipped**; eight isolated Broadway
+suites **480 passed, 2 skipped**. The user accepted that checkpoint ("so far so good")
+and approved Cursor work with "continue" after Cursor was proposed next, not live
+loading/device verification. Cursor final validation remains pending. Theme/size,
+environment, `set_cursor`, GSettings and hardware/render controls are excluded;
+the inherited theme picker remains inactive. See the
 [Input contract](../architecture.md#devices--input) and
-[final evidence and acceptance plan](../validation.md#deviceinput-validated-offline-user-acceptance-pending).
+[Cursor contract](../architecture.md#cursor-shared-input-view),
+[historical Input evidence](../validation.md#deviceinput-validated-offline-user-acceptance-pending)
+and [pending Cursor checks](../validation.md#cursor-implemented-final-validation-pending).
 
 Sequential saves retain each unit's own source/Git baseline, draft and undo. A new
 review may refresh only safe known sibling-output regular/absent leaf proofs;

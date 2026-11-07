@@ -9,7 +9,7 @@ Upstream attribution and GPL-3.0-or-later licensing are retained in [LICENSE](..
 
 The supported GUI is constrained before page construction, state registration,
 and search indexing. It exposes general visual options (gaps, border size/colors),
-decoration, animations/beziers, monitors, Devices, managed Keybindings, Pending Changes,
+decoration, animations/beziers, monitors, Devices, Cursor, managed Keybindings, Pending Changes,
 and read-only Settings.
 Health is an independent read-only utility, also available from startup recovery.
 Backup inspection is another independent read-only utility. Its separate disk
@@ -414,12 +414,13 @@ live keyboard semantics or new mutator CLI is claimed.
 
 #### Overview
 
-**Implemented and validated offline; user/live UI and Input acceptance remain unverified.**
-Final parent full pytest: **4,632 passed, 483 skipped**; eight isolated Broadway
+**Historical Devices-only offline checkpoint, subsequently accepted by the user.**
+Its final full pytest: **4,632 passed, 483 skipped**; eight isolated Broadway
 suites: **480 passed, 2 skipped**. Required checks/build/help and parent diff check
 passed; independent backend/UI review found no remaining material findings. See
 [final evidence](validation.md#deviceinput-validated-offline-user-acceptance-pending)
-for timings, warnings, isolation and the resolved P2s, not live-loading proof.
+for timings, warnings, isolation and the resolved P2s, not live-loading proof or
+validation of the Cursor extension. Cursor is implemented, final validation pending.
 `InputPage` exposes Keyboard, Mouse and Touchpad through Devices (`input` page ID)
 in both admitted legacy and existing-pair editors. It uses its own immutable local
 model, not `AppState` live mutation or visual v1/v2 storage. Startup admission stays
@@ -429,17 +430,17 @@ unchanged. No new `Scope`, registry entry or pair journal is added.
 
 | Interface | Role |
 | --- | --- |
-| `OPTION_SPECS` / `normalize_value` | Closed 15-key type/range/choice contract; finite numbers, exact booleans/integers, bounded XKB token syntax. |
+| `OPTION_SPECS` / `normalize_value` | Closed 23-key type/range/choice contract: 15 Devices keys plus eight Cursor keys; finite numbers, exact booleans/integers, bounded XKB token syntax. |
 | `InputConfig(values=())` / `from_mapping` | Frozen sorted unique key/value pairs, only explicit overrides. Variant requires layout; nonempty variant lists must align with layout slots. |
 | `build_text` / `read_text` | Generated marker plus `-- Attune input data v1: ` base64 JSON (`version`, `values`), exact typed library-rendered Lua body, byte-exact regeneration required. No Lua evaluation. |
 | `InputBaseline` / `observe` / `run_observe` | Explicit config/state roots, fixed lexical/resolved path, absent/empty/owned status, exact text/config/hash, immutable own/Git `PathProof` and separate explicit `protected` proofs. Read-only worker defaults to 15 seconds. |
 | `InputReview` / `prepare_review` / `run_prepare_review` | Fresh baseline and complete CURRENT -> GOAL diff/counts/hash bound to exact proposal. Read-only worker defaults to 30 seconds. |
 | `InputSaveResult` / `persist_reviewed` | Direct non-daemon writer, saved/no-op/failed, fresh adoptable baseline only on success, backup path and `may_have_written`. No publication child/CLI. |
-| `InputPage` | Local saved/current configs, labeled read-only hints, schema-backed rows, search/Pending, Reset/Discard and `SavedListSnapshot` undo, exact saved-baseline adoption. |
+| `InputPage` | Single owner of Devices and Cursor saved/current configs, labeled read-only hints, schema-backed rows, search/Pending, Reset/Discard and `_input_page` `SavedListSnapshot` undo, exact combined saved-baseline adoption. `build()` and `build_cursor()` return separate widgets, not separate models. |
 | `PendingChangesPage` / `HyprModWindow.save_input_reviewed` | Complete bounded review, revision/context checks and one-use request; `save-input` owner, close veto, typed result validation and Input-local cleanup/locking. |
 | `SettingsPage` | Read-only fixed output/manual integration and Git/Stow guidance. No output-path editing or loader insertion. |
 
-All keys below have the `input:` prefix. The 15 keys occupy 14 rows because
+All Devices keys below have the `input:` prefix. These 15 keys occupy 14 rows because
 `kb_layout` and `kb_variant` share one editor.
 
 | Section | Keys and validation |
@@ -456,7 +457,8 @@ string is permitted with a managed layout. Layout cannot be empty when managed.
 
 #### Data Flow
 
-1. First visit observes owned output off GTK using the bounded worker. Optional
+1. First visit to either Devices or Cursor observes owned output once off GTK using
+   the shared bounded worker lifecycle. Optional
    `hypr.get_live` queries supply read-only hints; failures cannot replace a valid
    owned baseline. Owned/current values win, then valid runtime hints, then defaults.
    Unavailable/incomplete hints and defaults are labeled, not claimed as actual
@@ -470,11 +472,12 @@ string is permitted with a managed layout. Layout cannot be empty when managed.
    survives unrelated edits without bypassing Apply, and shows **Unapplied text
    (not in draft)** with its model origin. Only applied text enters the draft/review.
 3. Ctrl+S renders Input separately from appearance/displays, source and additional
-   bindings. Review reobserves exact baseline/routes and includes full prior/proposed
+   bindings. The Input review combines Devices and Cursor, never a Cursor-only save.
+   Review reobserves exact baseline/routes and includes full prior/proposed
    bytes, paths and hashes. Oversize refuses rather than truncating authority. Text
    is limited to 1 MiB, diff to 2 MiB + 65,536 bytes, transport to 32 MiB, JSON depth
-   to 24. Edits invalidate review; exact proposal/baseline, revision and one-use
-   request checks precede save delegation. A new review may refresh only safe known
+   to 24. Edits in either view invalidate review; exact proposal/baseline, revision
+   and one-use request checks precede save delegation. A new review may refresh only safe known
    sibling-output leaf evidence as detailed below; own source/Git stays exact.
 4. **Save Reviewed Input** takes the global writer gate as `save-input`, excludes
    overlapping writers/editing and vetoes closure. Resolve monitor confirmation
@@ -489,12 +492,13 @@ string is permitted with a managed layout. Layout cannot be empty when managed.
    prior backup. No-op validates/rechecks and may create state/lock, but no backup/
    output. Ten-second compile checks do not bound total filesystem time.
 6. Fresh exact post-save text/config/routes/dependencies must verify before baseline
-   adoption. Success clears only Input undo; continued edit/review/Save and reopening
+   adoption. Success adopts the combined Devices/Cursor baseline and clears their
+   shared Input undo; continued edit/review/Save and reopening
    use that verified baseline in either editor mode. All four save units preserve
    the others' drafts, saved baselines and undo, not atomic Save Everything. Errors
    retain drafts. Post-delegation uncertainty, invalid results or failed adoption
-   lock only Input, not visual scope/journal state or other units. Inspect disk and
-   reopen; no automatic recovery is offered.
+   lock both Devices and Cursor as one Input unit, not visual scope/journal state or
+   other units. Inspect disk and reopen; no automatic recovery is offered.
 
 #### Edge Cases
 
@@ -521,12 +525,96 @@ string is permitted with a managed layout. Layout cannot be empty when managed.
 
 #### Example usage
 
-Devices -> edit a local value -> Ctrl+S -> inspect the full Input review ->
-**Save Reviewed Input**. Only after output exists, manually use `dofile` with the
-actual absolute lexical path shown in review in the user's Lua entrypoint, after
+Devices or Cursor -> edit a local value -> Ctrl+S -> inspect the full combined
+Devices/Cursor review -> **Save Reviewed Input**, saving both together. Only after
+output exists, manually use `dofile` with the actual absolute lexical path shown
+in review in the user's Lua entrypoint, after
 defaults. See the [README example](../README.md#first-input-save-then-optional-manual-loading).
-Future loading/live checks require explicit permission. No executed/live acceptance
-is implied; [offline validation passed, user acceptance remains pending](validation.md#deviceinput-validated-offline-user-acceptance-pending).
+Future loading/live checks require explicit permission. The
+[Devices-only offline checkpoint](validation.md#deviceinput-validated-offline-user-acceptance-pending)
+is historical; [Cursor final validation is pending](validation.md#cursor-implemented-final-validation-pending).
+
+#### Cursor: shared Input view
+
+##### Overview
+
+The user accepted the Input checkpoint ("so far so good"), then approved Cursor
+work with "continue" after Cursor was proposed next. This authorizes the narrow
+slice, not a claim of live Input loading or actual device verification. Cursor is
+implemented, pending final validation. Rules/startup/environment are later slices.
+
+##### API / Interfaces
+
+`CURSOR_KEYS` selects eight of `INPUT_KEYS`' 23 closed keys. Cursor has eight widgets;
+Devices retains 15 keys in 14 widgets. All Cursor keys use the `cursor:` prefix:
+
+| Key | Type / range | Default |
+| --- | --- | --- |
+| `no_warps`, `persistent_warps` | Boolean | `false` |
+| `warp_on_change_workspace` | Integer: 0 Disable, 1 Enable, 2 Force | `0` |
+| `zoom_factor` | Finite float, 1–10 | `1.0` |
+| `inactive_timeout` | Finite float, 0–20 seconds; 0 never hides | `0.0` |
+| `hide_on_key_press`, `hide_on_tablet` | Boolean | `false` |
+| `hide_on_touch` | Boolean | `true` |
+
+Only zoom/timeout use `PreciseFloatOptionRow`, an `Adw.EntryRow` with explicit
+Apply and locale-aware round-trip float display. It preserves loaded/typed float
+precision without GTK spin rounding/epsilon or a one-decimal restriction. +/−
+buttons use decimal arithmetic for 0.1 steps and apply the result. Existing
+`SpinFloatOptionRow` behavior is unchanged; this is a small two-row widget, not a
+generic framework. Backend normalization admits any finite in-range float with no
+grid restriction, but `build_text` still requires public library typed-emission
+proof: unrepresentable precision can refuse rather than be rewritten. No hand
+emitter bypasses that proof. Types/defaults/ranges were checked against
+`hyprland-schema` 0.7.1's bundled Hyprland v0.56.1 catalog and matching
+[upstream ConfigValues.cpp](https://raw.githubusercontent.com/hyprwm/Hyprland/v0.56.1/src/config/values/ConfigValues.cpp).
+This is version-specific source evidence, not support proof for every running version.
+
+##### Data Flow
+
+`window.py` constructs one `InputPage` and adds its `build()` and `build_cursor()`
+widgets to separate stack pages. Both use the same baseline, local `InputConfig`,
+read-only observation, revision notification and `_input_page` undo snapshots.
+Search and Pending rows navigate to `input` or `cursor`; sidebar badges are
+view-specific, while the shared dirty contribution is counted only once.
+
+Typed numeric text is labeled unapplied and excluded from draft/review until Apply.
+It survives unrelated edits and unrelated Undo/Redo. Whole-unit Discard and verified
+saved-baseline adoption authoritatively refresh the entries from the shared model.
+
+Opening either view creates no overrides. Saved/Draft overrides precede labeled
+Runtime/Default hints, which do not prove actual cursor state. Edits, Reset,
+Discard and Undo send no preview/mutation IPC. Per-row Discard restores that row;
+whole-unit Input Discard restores Devices and Cursor together. Any edit in either
+view invalidates the complete combined review. **Save Reviewed Input** publishes
+both through the same `attune-input.lua`, `input.lock` and `input-backups`, then
+adopts their verified shared baseline and clears shared undo. Uncertainty locks
+both views as one unit. The other three units retain their draft/baseline/undo.
+
+##### Edge Cases
+
+Devices-only canonical bytes remain frozen and the input v1 record is unchanged.
+Older Attune rejects newly admitted Cursor keys; unchanged version/old bytes do
+not imply downgrade compatibility. There are still four save units, no fifth
+output, new `Scope`, registry member or pair journal. Theme/size/environment,
+`set_cursor`, GSettings, hardware and rendering controls are excluded; the inherited
+`CursorPage` theme picker is inactive. Save does not insert a loader or reload;
+watched writes may nevertheless reload. No live device/loading proof is claimed.
+
+##### Example usage
+
+Edit one Devices value and one Cursor value, open Pending, inspect the full shared
+diff and choose **Save Reviewed Input** only if both changes are intended. There is
+no save filtered to the visible page. Use temporary isolated fixtures for validation;
+manual loading of an existing output needs separate explicit permission.
+
+##### Related files
+
+`core/input.py`, `pages/input.py`, `pages/pending.py`, `window.py`, `core/focused_ui.py`,
+`ui/options/numeric.py`, `data/schema/options.json`; `tests/test_cursor_input.py`,
+`tests/test_cursor_page_gui.py`, `tests/test_cursor_workflow_gui.py`, and the frozen
+Devices-only codec fixture in `tests/test_input_persistence.py`. See
+[pending checks and acceptance limits](validation.md#cursor-implemented-final-validation-pending).
 
 #### Sequential independent saves: resolved P2 contract
 
@@ -556,10 +644,11 @@ GUI completion/delegation retains the page's original baseline object identity,
 proposal and revision checks, local draft and undo. It accepts a newly reviewed
 sibling context only through narrow source matching, not by replacing that page's
 saved baseline. Only its own verified save result is adopted; all other units'
-drafts, saved baselines and undo survive. Final temporary real-publisher GUI
+drafts, saved baselines and undo survive. Historical Devices-only temporary real-publisher GUI
 coverage passed **24 cases**, all **12 ordered unit pairs in legacy and pair modes**,
 each saving all four units. Focused backend coverage passed **684 tests**. These
-support, rather than replace, the final full-suite/eight-suite results above.
+support the historical Devices-only full-suite/eight-suite results above, not
+current Cursor validation.
 
 #### Related files
 

@@ -48,7 +48,7 @@ def built(page, monkeypatch):
 class TestInputWidgets:
     def test_real_rows_domains_and_no_global_registration(self, built):
         model, window, entries, _toolbar = built
-        assert set(model._rows) == backend.INPUT_KEYS
+        assert set(model._rows) == backend.INPUT_KEYS - backend.CURSOR_KEYS
         assert len({id(row) for row in model._rows.values()}) == 14
         assert isinstance(model._rows["input:kb_layout"], KeyboardLayoutsOptionRow)
         assert model._rows["input:kb_layout"] is model._rows["input:kb_variant"]
@@ -62,6 +62,8 @@ class TestInputWidgets:
         for key in ("input:repeat_rate", "input:repeat_delay"):
             assert isinstance(model._rows[key], SpinIntOptionRow)
         for key, spec in backend.OPTION_SPECS.items():
+            if key in backend.CURSOR_KEYS:
+                continue
             if spec.minimum is not None:
                 row = model._rows[key]
                 assert isinstance(row, (SpinFloatOptionRow, SpinIntOptionRow))
@@ -208,6 +210,19 @@ class TestInputWidgets:
         raw.emit("apply")
         assert dict(model.get_config().values)["input:kb_options"] == "custom:preserved"
 
+    def test_building_cursor_preserves_existing_input_draft_and_unapplied_text(self, built):
+        model, window, entries, _toolbar = built
+        model.set_keyboard_sources("no", "")
+        raw = model._rows["input:kb_options"].row
+        assert isinstance(raw, Adw.EntryRow)
+        raw.set_text("caps:escape")
+        before, count = model.get_config(), len(entries)
+        model.build_cursor()
+        assert model.get_config() == before and len(entries) == count
+        assert raw.get_text() == "caps:escape"
+        assert set(model._rows) == backend.INPUT_KEYS
+        assert window.hypr.mock_calls == []
+
     @pytest.mark.parametrize("buffer", ["caps:escape", "invalid token"])
     def test_unapplied_options_survive_unrelated_edits_without_bypassing_apply(self, built, buffer):
         model, window, entries, _toolbar = built
@@ -246,7 +261,10 @@ class TestInputWidgets:
         model, window, entries, _toolbar = built
         seed(model, {"input:kb_options": "custom:saved"})
         model._refresh()
-        model.set_value("input:left_handed", True)
+        model.set_value(
+            "input:kb_options" if action == "undo" else "input:left_handed",
+            "custom:draft" if action == "undo" else True,
+        )
         row = model._rows["input:kb_options"].row
         assert isinstance(row, Adw.EntryRow)
         row.set_text("caps:escape")

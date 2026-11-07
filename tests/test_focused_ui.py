@@ -60,6 +60,7 @@ class TestFocusedSchema:
             "monitors",
             "binds",
             "input",
+            "cursor",
             "pending",
             "health",
             "backups",

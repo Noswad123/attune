@@ -479,6 +479,10 @@ class HyprModWindow(Adw.ApplicationWindow):
             self._input_page.build(header=self._make_page_header("Input")), "input"
         )
         self._page_titles["input"] = "Input"
+        self._page_stack.add_named(
+            self._input_page.build_cursor(header=self._make_page_header("Cursor")), "cursor"
+        )
+        self._page_titles["cursor"] = "Cursor"
         self._input_page.bind_lifecycle(self)
         self._search_page_builder.add_entries(self._input_page.get_search_entries())
 
@@ -783,7 +787,9 @@ class HyprModWindow(Adw.ApplicationWindow):
         if self._source_bindings_page is not None:
             counts["binds"] += sum(1 for _ in self._source_bindings_page.iter_pending_changes())
         if self._input_page is not None:
-            counts["input"] += self._input_page.pending_change_count()
+            for change in self._input_page.iter_pending_changes():
+                if change.navigate_to is not None:
+                    counts[change.navigate_to] += 1
 
         # The pending-changes chip totals everything else
         counts["pending"] = sum(counts.values())
@@ -971,7 +977,7 @@ class HyprModWindow(Adw.ApplicationWindow):
                 self._health_page.ensure_loaded()
             if gid == "backups" and self._backups_page is not None:
                 self._backups_page.ensure_loaded()
-            if gid == "input" and self._input_page is not None:
+            if gid in {"input", "cursor"} and self._input_page is not None:
                 self._input_page.ensure_loaded()
             if gid == "binds" and self._managed_bindings_page is not None:
                 self._managed_bindings_page.ensure_loaded()
@@ -1005,7 +1011,7 @@ class HyprModWindow(Adw.ApplicationWindow):
         self.show_page(group_id)
         if self._page_stack.get_visible_child_name() == group_id:
             self._sidebar.select_row(group_id)
-            if group_id == "input" and option_key and self._input_page is not None:
+            if group_id in {"input", "cursor"} and option_key and self._input_page is not None:
                 self._input_page.highlight_option(option_key)
 
     def _on_sidebar_selected(self, group_id: str):

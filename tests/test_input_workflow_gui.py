@@ -98,7 +98,12 @@ class TestInputWorkflow:
             w for w in widgets(toolbar) if isinstance(w, Adw.PreferencesGroup) and w.get_title()
         ]
         assert len(groups) == 3
-        assert len({id(row) for row in page._rows.values()}) == 14
+        device_keys = backend.INPUT_KEYS - backend.CURSOR_KEYS
+        assert len({id(page._rows[key]) for key in device_keys}) == 14
+        assert len({id(page._rows[key]) for key in backend.CURSOR_KEYS}) == 8
+        device_widgets = list(widgets(toolbar))
+        assert all(page._rows[key].row in device_widgets for key in device_keys)
+        assert all(page._rows[key].row not in device_widgets for key in backend.CURSOR_KEYS)
         assert set(page._rows) == backend.INPUT_KEYS
         assert not backend.INPUT_KEYS.intersection(window.app_state.options)
         assert not backend.INPUT_KEYS.intersection(window.options_flat)

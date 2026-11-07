@@ -1,5 +1,6 @@
-"""Draft-only keyboard, mouse and touchpad overrides, independent of visual state."""
+"""Shared draft-only Devices and Cursor overrides, independent of visual state."""
 
+import locale
 import os
 import threading
 import weakref
@@ -17,6 +18,7 @@ from hyprmod.core.undo import SavedListSnapshot
 from hyprmod.pages.section import SectionPage
 from hyprmod.ui import make_inline_hint, make_page_layout
 from hyprmod.ui.options import KeyboardLayoutsOptionRow, OptionRow, create_option_row
+from hyprmod.ui.options.numeric import PreciseFloatOptionRow
 
 _LAYOUT_KEYS = ("input:kb_layout", "input:kb_variant")
 
@@ -55,6 +57,7 @@ class InputPage(SectionPage):
         self._rows: dict[str, OptionRow] = {}
         self._origin_labels: dict[str, Gtk.Label] = {}
         self._status: Adw.ActionRow | None = None
+        self._cursor_status: Adw.ActionRow | None = None
         self._started = False
         self._loading = False
         self._closed = False
@@ -62,55 +65,80 @@ class InputPage(SectionPage):
         self._cancel = threading.Event()
         self._config_root = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
         self._state_root = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state"))
-        group = next(g for g in schema.load_schema()["groups"] if g["id"] == "input")
         self._sections = []
+        self._cursor_sections = []
         self._options: dict[str, dict] = {}
-        for section in group["sections"]:
-            options = []
-            for original in section["options"]:
-                key = original["key"]
-                if key not in backend.INPUT_KEYS:
-                    continue
-                option = dict(original)
-                spec = backend.OPTION_SPECS[key]
-                option["default"] = spec.default
-                if spec.minimum is not None:
-                    option["min"], option["max"] = spec.minimum, spec.maximum
-                if spec.step is not None:
-                    option["step"] = spec.step
-                if key == "input:kb_options":
-                    option.pop("source", None)
-                    option.pop("multi", None)
-                    option["type"] = "string"
-                    option["description"] = (
-                        "Raw XKB options, comma separated. Examples: grp:alt_shift_toggle,"
-                        "caps:escape. Existing unknown options are preserved."
-                    )
-                self._options[key] = option
-                options.append(option)
-            if options:
-                self._sections.append((section["label"], options))
+        groups = [g for g in schema.load_schema()["groups"] if g["id"] in {"input", "cursor"}]
+        for group in groups:
+            sections = self._sections if group["id"] == "input" else self._cursor_sections
+            for section in group["sections"]:
+                options = []
+                for original in section["options"]:
+                    key = original["key"]
+                    if key not in backend.INPUT_KEYS:
+                        continue
+                    option = dict(original)
+                    spec = backend.OPTION_SPECS[key]
+                    option["default"] = spec.default
+                    if spec.minimum is not None:
+                        option["min"], option["max"] = spec.minimum, spec.maximum
+                    if spec.step is not None:
+                        option["step"] = spec.step
+                    if key in {"cursor:zoom_factor", "cursor:inactive_timeout"}:
+                        option["step"] = 0.1
+                        option["preserve_precision"] = True
+                    if key == "input:kb_options":
+                        option.pop("source", None)
+                        option.pop("multi", None)
+                        option["type"] = "string"
+                        option["description"] = (
+                            "Raw XKB options, comma separated. Examples: grp:alt_shift_toggle,"
+                            "caps:escape. Existing unknown options are preserved."
+                        )
+                    self._options[key] = option
+                    options.append(option)
+                if options:
+                    sections.append((section["label"], options))
 
     def build(self, header=None):
-        toolbar, _page_box, content, _scrolled = make_page_layout(header=header or Adw.HeaderBar())
-        content.append(
-            make_inline_hint(
-                "Draft only. No input preview or reload. Save Reviewed Input writes dedicated "
-                "attune-input.lua, which must be loaded manually after it exists. "
-                "Touchpad settings may not apply without a touchpad device."
-            )
-        )
-        status_group = Adw.PreferencesGroup()
         self._status = Adw.ActionRow(title="Input not loaded")
-        status_group.add(self._status)
+        return self._build_view(
+            self._sections,
+            self._status,
+            "Draft only. No input preview or reload. Save Reviewed Input writes Devices and "
+            "Cursor together to dedicated attune-input.lua, which must be loaded manually after "
+            "it exists. Touchpad settings may not apply without a touchpad device.",
+            header,
+        )
+
+    def build_cursor(self, header=None):
+        self._cursor_status = Adw.ActionRow(title="Input not loaded")
+        return self._build_view(
+            self._cursor_sections,
+            self._cursor_status,
+            "Draft only. No cursor preview or reload. Cursor shares the Input draft: "
+            "Save Reviewed Input writes Devices and Cursor together to attune-input.lua and "
+            "clears both drafts atomically. Load it manually only after it exists. "
+            "Runtime hints do not prove loading or actual cursor state.",
+            header,
+        )
+
+    def _build_view(self, sections, status, hint, header):
+        toolbar, _page_box, content, _scrolled = make_page_layout(header=header or Adw.HeaderBar())
+        content.append(make_inline_hint(hint))
+        status_group = Adw.PreferencesGroup()
+        status_group.add(status)
         content.append(status_group)
-        for label, options in self._sections:
+        for label, options in sections:
             group = Adw.PreferencesGroup(title=label)
             for option in options:
                 key = option["key"]
                 if option.get("managed_by"):
                     continue
-                row = create_option_row(
+                factory = (
+                    PreciseFloatOptionRow if option.get("preserve_precision") else create_option_row
+                )
+                row = factory(
                     option,
                     backend.DEFAULTS[key],
                     self._on_change,
@@ -132,7 +160,7 @@ class InputPage(SectionPage):
                     row.row.connect("changed", lambda _entry: self._refresh(()))
                 group.add(row.row)
             content.append(group)
-        self._refresh()
+        self._refresh(tuple(option["key"] for _label, options in sections for option in options))
         toolbar.connect("map", lambda _widget: self.ensure_loaded())
         return toolbar
 
@@ -295,8 +323,16 @@ class InputPage(SectionPage):
         saved = InputConfig(tuple(baselines))
         if saved != self._saved or list(checked.values) != items:
             raise ValueError("Input snapshot refers to a different saved baseline")
+        current, restored = dict(self._current.values), dict(checked.values)
+        keys = {
+            key
+            for key in current.keys() | restored.keys()
+            if (key in current) != (key in restored) or current.get(key) != restored.get(key)
+        }
+        if keys.intersection(_LAYOUT_KEYS):
+            keys.update(_LAYOUT_KEYS)
         self._current = checked
-        self._refresh()
+        self._refresh(tuple(keys))
         self._notify_dirty()
 
     def adopt_saved(self, baseline: InputBaseline):
@@ -356,20 +392,25 @@ class InputPage(SectionPage):
         for key in sorted(current.keys() | saved.keys()):
             if (key in current) == (key in saved) and current.get(key) == saved.get(key):
                 continue
+            is_cursor = key in backend.CURSOR_KEYS
             yield PendingChange(
-                category="Input",
+                category="Cursor" if is_cursor else "Input",
                 title=self._options[key].get("label", key),
                 subtitle=f"{saved.get(key, 'Unmanaged')!r} -> {current.get(key, 'Unmanaged')!r}",
                 kind="removed" if key not in current else "modified" if key in saved else "added",
                 revert=lambda k=key: self._on_discard(k),
-                navigate_to="input",
-                icon="input-keyboard-symbolic",
+                navigate_to="cursor" if is_cursor else "input",
+                icon="hyprmod-cursor-symbolic" if is_cursor else "input-keyboard-symbolic",
             )
 
     def get_search_entries(self) -> list[dict]:
         return [
-            dict(option, _group_id="input", _group_label="Devices", _section_label=label)
-            for label, options in self._sections
+            dict(option, _group_id=group_id, _group_label=group_label, _section_label=label)
+            for group_id, group_label, sections in (
+                ("input", "Devices", self._sections),
+                ("cursor", "Cursor", self._cursor_sections),
+            )
+            for label, options in sections
             for option in options
         ]
 
@@ -393,8 +434,10 @@ class InputPage(SectionPage):
         return "Current runtime snapshot" if key in self._hints else "Default, not observed"
 
     def _refresh(self, keys: tuple[str, ...] | None = None):
-        if self._status is not None:
-            self._status.set_title(
+        for status in (self._status, self._cursor_status):
+            if status is None:
+                continue
+            status.set_title(
                 "Input locked"
                 if self.locked
                 else "Loading input..."
@@ -403,7 +446,7 @@ class InputPage(SectionPage):
                 if self.baseline is not None
                 else "Input not loaded"
             )
-            self._status.set_subtitle(self.load_error or self._hint_status)
+            status.set_subtitle(self.load_error or self._hint_status)
         for key, row in self._rows.items():
             if key == _LAYOUT_KEYS[1]:
                 continue
@@ -422,9 +465,12 @@ class InputPage(SectionPage):
                     )
                 else:
                     origin = self._value_origin(key)
-                if isinstance(row.row, Adw.EntryRow) and row.row.get_text() != str(
-                    state.live_value
-                ):
+                rendered = (
+                    locale.localize(repr(float(state.live_value)), grouping=False)
+                    if isinstance(row, PreciseFloatOptionRow)
+                    else str(state.live_value)
+                )
+                if isinstance(row.row, Adw.EntryRow) and row.row.get_text() != rendered:
                     origin = f"Unapplied text (not in draft)\nModel: {origin}"
                 self._origin_labels[key].set_label(origin)
                 row.row.set_tooltip_text(f"{row.option.get('description', '')}\n{origin}".strip())
