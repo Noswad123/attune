@@ -21,6 +21,11 @@ Historical upstream releases remain in [CHANGELOG.md](CHANGELOG.md).
 - Decoration, animations, and bezier curves.
 - Monitor configuration with live preview confirmation.
 - Devices: draft-only Keyboard, Mouse and Touchpad controls, 15 keys in 14 rows.
+- Bluetooth: **Devices -> Bluetooth -> Open Bluetooth Manager** opens Blueman in a
+  separate window for discovery, pairing and connections. Requires `blueman-manager`
+  on PATH (Arch/CachyOS: install `blueman`). Attune does not install it, start services
+  or change Bluetooth state itself. Blueman actions are live, not Input drafts or
+  Pending Changes. Native Bluetooth controls and embedded Blueman are not included.
 - Cursor: eight native controls in eight rows, implemented with final validation
   pending. Devices and Cursor share **Save Reviewed Input** to `attune-input.lua`,
   not separate saves. The user accepted the Input checkpoint and approved Cursor

@@ -79,6 +79,8 @@ ATTUNE_GUI_SMOKE=1 GDK_BACKEND=broadway BROADWAY_DISPLAY=:8 GSK_RENDERER=cairo \
 Stop the Broadway daemon when finished. These tests cover page construction,
 review/save/reopen, and foreign-file recovery, not live monitor/HDR correctness.
 The suite isolates HOME and XDG paths; never remove those test safety fixtures.
+Run `tests/test_bluetooth_page_gui.py` in the same Broadway environment for the
+external Blueman handoff; all executable lookups and launches must remain mocked.
 For M3.6a's separate opt-in recovery widgets, use the same Broadway environment
 with `tests/test_scope_recovery_gui.py` and `tests/test_pair_editor_gui.py`. Also run
 `tests/test_managed_bindings_gui.py`, `tests/test_keybindings_workflow_gui.py`
@@ -497,7 +499,11 @@ Things to avoid:
 - Do not bypass review, parse/execute main Lua to discover defaults, insert
   includes, enable auto-save/startup reload, or silently register desktop files.
 - Discuss larger changes with the fork owner; an upstream issue is not required.
-- System settings (Wi-Fi, Bluetooth, printing, etc.) remain out of scope.
+- The user-approved Bluetooth exception is a Devices page with an explicit external
+  `blueman-manager` launch. Keep it independent of Input drafts, Pending Changes,
+  writer locks and editor uncertainty. No automatic launches, package installation,
+  service control, discovery, pairing or native/embedded Bluetooth UI in Attune.
+  Other system settings (Wi-Fi, printing, etc.) remain out of scope.
 
 ## The `hyprland-*` library stack
 

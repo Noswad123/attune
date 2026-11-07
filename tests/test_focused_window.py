@@ -50,6 +50,7 @@ class TestFocusedNavigation:
         for name in (
             "MonitorsPage",
             "InputPage",
+            "BluetoothPage",
             "ManagedBindingsPage",
             "SourceBindingsPage",
             "PendingChangesPage",

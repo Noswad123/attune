@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Bluetooth manager handoff
+
+- Add **Devices -> Bluetooth -> Open Bluetooth Manager** to launch the optional
+  `blueman-manager` in its own window. Show missing-executable installation guidance
+  and immediate launch errors, with retry after installation. Opening the page does
+  not launch anything. Pairing and connections stay in Blueman, separate from Input
+  drafts and reviewed saves; Attune installs no packages and controls no services.
+
 ### Cursor: implemented, final validation pending
 
 - Add eight draft-only native Cursor controls: `no_warps`, `persistent_warps`,

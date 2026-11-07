@@ -32,6 +32,7 @@ from hyprmod.core.undo import OptionChange, PairedOptionChange, SavedListSnapsho
 from hyprmod.pages.animations import AnimationsPage
 from hyprmod.pages.backups import BackupsPage
 from hyprmod.pages.binds import BindsPage
+from hyprmod.pages.bluetooth import BluetoothPage
 from hyprmod.pages.cursor import CursorPage
 from hyprmod.pages.health import HealthPage
 from hyprmod.pages.input import InputPage
@@ -251,7 +252,7 @@ class HyprModWindow(Adw.ApplicationWindow):
 
     def _set_editor_sensitive(self, sensitive: bool) -> None:
         for name in self._page_titles:
-            if name not in {"health", "backups", "scope-recovery", "settings"}:
+            if name not in {"health", "backups", "scope-recovery", "settings", "bluetooth"}:
                 page = self._page_stack.get_child_by_name(name)
                 if page is not None:
                     page.set_sensitive(sensitive)
@@ -487,6 +488,11 @@ class HyprModWindow(Adw.ApplicationWindow):
         self._search_page_builder.add_entries(self._input_page.get_search_entries())
 
         # Standalone pages have no separate dirty/undo state.
+        bluetooth_page = BluetoothPage()
+        self._page_stack.add_named(
+            bluetooth_page.build(header=self._make_page_header("Bluetooth")), "bluetooth"
+        )
+        self._page_titles["bluetooth"] = "Bluetooth"
         self._health_page = HealthPage(config.managed_path())
         self._page_stack.add_named(
             self._health_page.build(header=self._make_page_header("Legacy v1 Health")), "health"

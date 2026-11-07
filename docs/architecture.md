@@ -37,6 +37,22 @@ supporting contracts, not a requirement to finish every foreign-recovery edge ca
 
 ## API / Interfaces
 
+### Bluetooth manager handoff
+
+`BluetoothPage` is an independent utility under Devices in both normal editor
+layouts. Only **Open Bluetooth Manager** resolves `blueman-manager` on PATH and
+starts it with a fixed argument vector through `Gio.Subprocess`, without a shell
+or waiting for exit. Opening/navigating the page has no external effects. The
+manager owns its separate window and lifetime; closing Attune does not stop it.
+Missing-executable guidance and immediate spawn errors are visible and retryable.
+Spawn success is labeled as a launch request, not proof of a visible window,
+working BlueZ service, pairing or connection.
+
+The launcher has no config model, dirty state, undo, output or writer ownership.
+Editor uncertainty does not disable it. Blueman handles live device actions and
+authorization; Attune does not install packages, control services, access BlueZ,
+embed Blueman or add Bluetooth operations to Pending Changes/Save Reviewed Input.
+
 ### Existing source shortcuts
 
 #### Overview

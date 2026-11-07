@@ -596,6 +596,8 @@ keybinding rewrites. Missing helpers leave the rest of Attune usable.
   here rather than documenting them as available features.
 - No automatic commits, pushes, loader edits, service installation, startup
   repair, or privileged operations. Preserve upstream attribution and licensing.
-- Wi-Fi, Bluetooth, printing, package management, arbitrary authored-keybinding editing,
+- Bluetooth has a narrow approved external Blueman launcher under Devices. Native
+  pairing controls, embedding Blueman and Bluetooth service management remain out of scope.
+- Wi-Fi, printing, package management, arbitrary authored-keybinding editing,
   profiles/layout pages, and
   a replacement desktop shell remain outside this roadmap.

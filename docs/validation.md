@@ -5,6 +5,49 @@ M0 checks in [ROADMAP.md](../ROADMAP.md) remain pending explicit manual acceptan
 
 ## Current status
 
+### Bluetooth manager handoff: validated offline
+
+The approved narrow addition is **Devices -> Bluetooth -> Open Bluetooth Manager**.
+It opens external Blueman only on explicit activation, with missing-PATH guidance,
+immediate spawn-error feedback and retry. No embedded/native Bluetooth controls,
+package installation, service control, BlueZ access or new save unit were added.
+
+Validation used the existing project `.venv` on Python 3.14.8. `uv` was unavailable
+on PATH and the previously documented temporary uv executable was absent, so the
+equivalent installed tools were invoked directly:
+
+- `.venv/bin/ruff check --fix hyprmod/ tests/`: passed.
+- `.venv/bin/ruff format hyprmod/ tests/`: 223 files unchanged.
+- `.venv/bin/pyright --pythonpath /home/jdawson/Projects/attune/.venv/bin/python hyprmod/ tests/`:
+  zero errors, 205 GI missing-module-source warnings. The initial invocation without
+  explicit interpreter selection failed dependency resolution; the command above
+  corrected the environment rather than suppressing diagnostics.
+- Absolute `.venv/bin/python -m pytest tests/ -v`: **4,713 passed, 563 skipped,
+  126 warnings in 800.01 seconds**. An earlier 600-second attempt timed out around
+  89% and is not counted as a pass; the complete rerun used a longer bound.
+- Five opt-in Broadway suites (`test_bluetooth_page_gui.py`, `test_gui_smoke.py`,
+  `test_pair_editor_gui.py`, `test_cursor_page_gui.py`, `test_cursor_workflow_gui.py`):
+  **140 passed, 2 skipped, 2,431 warnings in 69.88 seconds**. The skips are existing
+  unchanged/restoration combinations. Warnings include GI/Python asyncio and GTK
+  deprecations, not a warning-free result.
+- Focused navigation/policy tests: **44 passed, 1 warning in 0.51 seconds**.
+- Self-review, independent read-only diff review and `git diff --check`: no material
+  findings or whitespace errors.
+
+Process HOME, XDG_CONFIG_HOME, XDG_STATE_HOME and XDG_CACHE_HOME were prepared under
+`/tmp/opencode/attune-bluetooth-validation` and set before Python started. Tests
+retained per-test isolation. GTK used localhost-only Broadway with Cairo rendering;
+test daemons were stopped after use. GUI compositor IPC stayed disabled and Bluetooth
+executable lookup/spawning was mocked. The tests cover explicit launch, missing
+executable, literal error text, retry, paths containing spaces, sidebar navigation,
+editor-lock independence and preservation of existing draft/undo state.
+
+`blueman-manager` was not found on PATH in this environment. No real manager was
+launched, package installed, service controlled, or device discovered/paired/connected.
+Live Hyprland UI presentation and Bluetooth behavior remain unverified. These results
+do not close the broader Cursor final-validation checklist below or establish live
+Input/Cursor acceptance.
+
 ### Cursor: implemented, final validation pending
 
 #### Overview

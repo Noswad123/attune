@@ -838,6 +838,35 @@ class TestWidgetSmoke:
         assert "health" in window._sidebar._rows_by_id
         assert not window.has_dirty()
 
+    def test_bluetooth_handoff_is_explicit_and_independent_of_editor_lock(self, app, monkeypatch):
+        lookup = MagicMock(return_value="/usr/bin/blueman-manager")
+        launch = MagicMock()
+        monkeypatch.setattr(GLib, "find_program_in_path", lookup)
+        monkeypatch.setattr(Gio.Subprocess, "new", launch)
+        window = HyprModWindow(application=app)
+        window._sidebar.select_row("bluetooth")
+        assert window._page_stack.get_visible_child_name() == "bluetooth"
+        page = window._page_stack.get_child_by_name("bluetooth")
+        assert page is not None
+        button = next(
+            widget
+            for widget in _widgets(page)
+            if isinstance(widget, Gtk.Button) and widget.get_label() == "Open Bluetooth Manager"
+        )
+        launch.assert_not_called()
+        window._on_option_changed("decoration:rounding", 17)
+        saved = dict(window.saved_values)
+        undo = list(window._undo._undo_stack)
+        window._set_editor_sensitive(False)
+        assert page.get_sensitive() and button.is_sensitive()
+        button.emit("clicked")
+        launch.assert_called_once_with(["/usr/bin/blueman-manager"], Gio.SubprocessFlags.NONE)
+        assert window.has_dirty()
+        assert window.saved_values == saved
+        assert list(window._undo._undo_stack) == undo
+        assert not config.managed_path().exists()
+        window._set_editor_sensitive(True)
+
     def test_offline_edit_review_save_and_reopen(self, app):
         window = HyprModWindow(application=app)
         window._on_option_changed("decoration:rounding", 17)

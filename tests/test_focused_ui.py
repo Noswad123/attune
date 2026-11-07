@@ -61,6 +61,7 @@ class TestFocusedSchema:
             "binds",
             "input",
             "cursor",
+            "bluetooth",
             "pending",
             "health",
             "backups",
